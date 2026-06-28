@@ -44,9 +44,42 @@ function iconActionBtn(onclick, type, label) {
   return `<button class="icon-action-btn${danger}" onclick="${onclick}" title="${esc(label)}" aria-label="${esc(label)}">${ACTION_ICON[type]}</button>`;
 }
 
+window.aiiensIsAdminEditing = function aiiensIsAdminEditing() {
+  const regInput = document.getElementById('aimeasy-reg-name');
+  if (regInput && regInput.dataset.editId) return true;
+
+  const branchInput = document.getElementById('aimeasy-branch-name');
+  if (branchInput && branchInput.dataset.editId) return true;
+
+  const uniInput = document.getElementById('uni-name');
+  if (uniInput && uniInput.dataset.editId) return true;
+
+  const subadminModal = document.getElementById('create-subadmin-modal');
+  if (subadminModal && (subadminModal.classList.contains('open') || subadminModal.dataset.editIndex)) return true;
+
+  return false;
+};
+
 function setCrudSubmitButton(buttonId, isEdit, { createLabel = 'Create', editLabel = 'Save Changes' } = {}) {
   const btn = document.getElementById(buttonId);
   if (btn) btn.textContent = isEdit ? editLabel : createLabel;
+
+  const cancelId = buttonId + '-cancel';
+  let cancelBtn = document.getElementById(cancelId);
+  if (isEdit) {
+    if (!cancelBtn && btn) {
+      let onclickCall = '';
+      if (buttonId === 'aimeasy-branch-submit') onclickCall = 'aimeasyCancelBranchEdit()';
+      else if (buttonId === 'uni-save-btn') onclickCall = 'aiiensCancelUniversityEdit()';
+      else if (buttonId === 'aimeasy-reg-submit') onclickCall = 'aimeasyCancelRegulationEdit()';
+
+      if (onclickCall) {
+        btn.insertAdjacentHTML('afterend', ` <button class="btn btn-ghost btn-sm" id="${cancelId}" onclick="${onclickCall}">Cancel</button>`);
+      }
+    }
+  } else {
+    if (cancelBtn) cancelBtn.remove();
+  }
 }
 
 function clearCrudEditState(inputId, buttonId, { createLabel = 'Create' } = {}) {
@@ -54,9 +87,36 @@ function clearCrudEditState(inputId, buttonId, { createLabel = 'Create' } = {}) 
   if (input) {
     input.value = '';
     delete input.dataset.editId;
+    delete input.dataset.editIndex;
+  }
+  if (inputId === 'uni-name') {
+    const uniCode = document.getElementById('uni-code');
+    if (uniCode) uniCode.value = '';
+    const uniState = document.getElementById('uni-state');
+    if (uniState) uniState.value = '';
+    const uniStatus = document.getElementById('uni-status');
+    if (uniStatus) uniStatus.value = 'Active';
   }
   setCrudSubmitButton(buttonId, false, { createLabel });
 }
+
+window.aimeasyCancelBranchEdit = async function aimeasyCancelBranchEdit() {
+  clearCrudEditState('aimeasy-branch-name', 'aimeasy-branch-submit');
+  if (typeof window.aiiensRenderBranchList === 'function') {
+    await window.aiiensRenderBranchList();
+  }
+};
+
+window.aiiensCancelUniversityEdit = async function aiiensCancelUniversityEdit() {
+  clearCrudEditState('uni-name', 'uni-save-btn');
+  if (typeof refreshUniversityCache === 'function') {
+    await refreshUniversityCache();
+  }
+  if (typeof window.aiiensRenderUniversities === 'function') {
+    window.aiiensRenderUniversities();
+  }
+  await refreshCatalogUi(document);
+};
 
 async function refreshCatalogUi(root = document) {
   await refreshCatalog();
@@ -675,6 +735,10 @@ function patchUniversities() {
   };
 
   window.aiiensRenderUniversities = async function aiiensRenderUniversitiesDb() {
+    if (window.aiiensIsAdminEditing && window.aiiensIsAdminEditing()) {
+      console.log('[Aiiens Admin] Skipping aiiensRenderUniversities because Admin is editing.');
+      return;
+    }
     const list = document.getElementById('university-list');
     if (!list) return;
     const rows = await refreshUniversityCache();
@@ -871,6 +935,10 @@ function patchBranches() {
   window.__aiiensBranchRows = [];
 
   window.aiiensRenderBranchList = async function aiiensRenderBranchListDb() {
+    if (window.aiiensIsAdminEditing && window.aiiensIsAdminEditing()) {
+      console.log('[Aiiens Admin] Skipping aiiensRenderBranchList because Admin is editing.');
+      return;
+    }
     const list = document.getElementById('aimeasy-branch-list');
     if (!list) return;
 

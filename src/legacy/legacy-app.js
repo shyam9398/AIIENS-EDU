@@ -9715,6 +9715,10 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   };
 
   function refreshActiveAdminSurfaces() {
+    if (window.aiiensIsAdminEditing && window.aiiensIsAdminEditing()) {
+      console.log('[Aiiens Admin] Skipping refreshActiveAdminSurfaces because Admin is editing.');
+      return;
+    }
     const screen = activeScreen();
     if (screen === 'screen-subadmin') {
       const section = document.querySelector('#screen-subadmin .admin-nav-item.active')?.id?.replace('sa-nav-', '') || 'dashboard';
@@ -9732,6 +9736,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     if (screen === 'screen-app') updateStudentDashboardMetrics?.();
   }
   window.aiiensRefreshActiveAdminSurfaces = refreshActiveAdminSurfaces;
+  window.refreshActiveAdminSurfaces = refreshActiveAdminSurfaces;
 
   addToRecentlyOpened = function addToRecentlyOpenedPerStudent(name, code, icon, id) {
     const subjects = getStudentAssignedSubjects?.() || [];
@@ -10006,7 +10011,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   }
 
   function regulationManagerPanel(regulations = cachedRegulations()) {
-    return `<div class="card manage-panel regulation-panel card-soft-mint" id="aimeasy-regulation-manager">
+    return `<div class="card manage-panel regulation-panel card-soft-mint glass-panel" id="aimeasy-regulation-manager">
       <div class="manage-panel-head">
         <div><h3>Regulation Management</h3><span>Academic regulation options</span></div>
       </div>

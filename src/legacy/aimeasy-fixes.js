@@ -89,10 +89,20 @@ window.v10Esc = window.v10Esc || function(str) {
   function setRegulationSubmitMode(isEdit) {
     if (typeof window.aiiensSetCrudSubmitButton === 'function') {
       window.aiiensSetCrudSubmitButton('aimeasy-reg-submit', isEdit);
-      return;
+    } else {
+      const btn = document.getElementById('aimeasy-reg-submit');
+      if (btn) btn.textContent = isEdit ? 'Save Changes' : 'Create';
     }
     const btn = document.getElementById('aimeasy-reg-submit');
-    if (btn) btn.textContent = isEdit ? 'Save Changes' : 'Create';
+    const cancelId = 'aimeasy-reg-cancel';
+    let cancelBtn = document.getElementById(cancelId);
+    if (isEdit) {
+      if (!cancelBtn && btn) {
+        btn.insertAdjacentHTML('afterend', ` <button class="btn btn-ghost btn-sm" id="${cancelId}" onclick="aimeasyCancelRegulationEdit()">Cancel</button>`);
+      }
+    } else {
+      if (cancelBtn) cancelBtn.remove();
+    }
   }
 
   async function fetchRegulationRows() {
@@ -147,13 +157,16 @@ window.v10Esc = window.v10Esc || function(str) {
   }
 
   async function refreshRegulationUI() {
+    if (window.aiiensIsAdminEditing && window.aiiensIsAdminEditing()) {
+      console.log('[Aiiens Admin] Skipping refreshRegulationUI because Admin is editing.');
+      return;
+    }
     try {
       if (window.APP?.adminType) {
         installRegulationManager?.();
       }
       await renderRegulationList?.();
       await window.aiiensRefreshAllCatalogDropdowns?.(document);
-      window.aiiensRefreshActiveAdminSurfaces?.();
     } catch (e) {
       // ignore
     }
@@ -233,6 +246,10 @@ window.v10Esc = window.v10Esc || function(str) {
   }
 
   async function renderRegulationList() {
+    if (window.aiiensIsAdminEditing && window.aiiensIsAdminEditing()) {
+      console.log('[Aiiens Admin] Skipping renderRegulationList because Admin is editing.');
+      return;
+    }
     const list = document.getElementById('aimeasy-regulation-list');
     if (!list) return;
     const rows = await fetchRegulationRows();
@@ -335,6 +352,16 @@ window.v10Esc = window.v10Esc || function(str) {
     input.dataset.editId = row.id;
     setRegulationSubmitMode(true);
     input.focus();
+  };
+
+  window.aimeasyCancelRegulationEdit = function aimeasyCancelRegulationEdit() {
+    const input = document.getElementById('aimeasy-reg-name');
+    if (input) {
+      input.value = '';
+      delete input.dataset.editId;
+    }
+    setRegulationSubmitMode(false);
+    window.aimeasyRefreshRegulationUI?.();
   };
 
 
