@@ -9565,6 +9565,20 @@ window.renderCRDashboard = async function renderCRDashboardWorkflow() {
   </div>`;
 };
 
+function regulationManagerPanel() {
+  return `<div class="card manage-panel regulation-panel card-soft-mint" id="aimeasy-regulation-manager">
+    <div class="manage-panel-head">
+      <div><h3>Regulation Management</h3><span>Academic regulation options</span></div>
+    </div>
+    <p class="manage-helper">Created regulations are shown to Sub Admin, Creator, and Student filters.</p>
+    <div class="regulation-create-row">
+      <input class="input" id="aimeasy-reg-name" placeholder="e.g. R24">
+      <button class="btn btn-primary btn-sm" id="aimeasy-reg-submit" onclick="aimeasyAddRegulation()">Create</button>
+    </div>
+    <div id="aimeasy-regulation-list" class="v10-items manage-list regulation-list"></div>
+  </div>`;
+}
+
 window.renderCRAddContent = async function renderCRAddContentWorkflow() {
   const content = document.getElementById('cr-content');
   if (!content) return;
@@ -9743,6 +9757,20 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     });
     write(studentRecentKey(), list.slice(0, 5));
   };
+
+  function regulationManagerPanel() {
+      return `\u003cdiv class=\"card manage-panel regulation-panel card-soft-mint\" id=\"aimeasy-regulation-manager\"\u003e
+        \u003cdiv class=\"manage-panel-head\"\u003e
+          \u003cdiv\u003e\u003ch3\u003eRegulation Management\u003c/h3\u003e\u003cspan\u003eAcademic regulation options\u003c/span\u003e\u003c/div\u003e
+        \u003c/div\u003e
+        \u003cp class=\"manage-helper\"\u003eCreated regulations are shown to Sub Admin, Creator, and Student filters.\u003c/p\u003e
+        \u003cdiv class=\"regulation-create-row\"\u003e
+          \u003cinput class=\"input\" id=\"aimeasy-reg-name\" placeholder=\"e.g. R24\"\u003e
+          \u003cbutton class=\"btn btn-primary btn-sm\" id=\"aimeasy-reg-submit\" onclick=\"aimeasyAddRegulation()\"\u003eCreate\u003c/button\u003e
+        \u003c/div\u003e
+        \u003cdiv id=\"aimeasy-regulation-list\" class=\"v10-items manage-list regulation-list\"\u003e\u003c/div\u003e
+      \u003c/div\>`;
+    }
 
   const previousUpdateStudentDashboardMetrics = updateStudentDashboardMetrics;
   updateStudentDashboardMetrics = function updateStudentDashboardMetricsProduction() {
@@ -10357,6 +10385,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     window.aimeasyUpdateRegulationDropdowns?.(document);
     window.aiiensUpdateUniversityDropdowns?.(document);
     window.aiiensRenderBranchList?.();
+    window.aimeasyRefreshRegulationUI?.();
   }
 
   function subAdminRow(sa, index) {
