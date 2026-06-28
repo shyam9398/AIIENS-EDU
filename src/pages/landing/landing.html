@@ -1,0 +1,146 @@
+<div class="screen active" id="screen-landing">
+  <div class="landing-bg-orb orb1"></div>
+  <div class="landing-bg-orb orb2"></div>
+  <div class="landing-bg-orb orb3"></div>
+
+  <div style="width:100%;display:flex;flex-direction:column;">
+    <header class="landing-header">
+      <div class="logo">
+        <div class="logo-icon">A</div>
+        AIIENS Edu
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="admin-dropdown-wrap" id="admin-dropdown-wrap">
+          <button class="admin-icon-btn" id="admin-icon-btn" onclick="toggleAdminDropdown(event)" title="Admin Access" aria-label="Admin login">
+            <span class="professional-icon nav-login-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M7.5 10V8a4.5 4.5 0 0 1 9 0v2" />
+                <rect x="5.5" y="10" width="13" height="10" rx="2.5" />
+                <path d="M12 14v2.5" />
+              </svg>
+            </span>
+          </button>
+          <div class="admin-dropdown" id="admin-dropdown" onclick="event.stopPropagation()">
+            <button class="admin-dropdown-item" onclick="openAdminLogin('admin')">
+              <span class="mini-professional-icon admin-mini-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3 18 5.5v5.2c0 4-2.5 7.6-6 9.3-3.5-1.7-6-5.3-6-9.3V5.5L12 3Z" />
+                  <path d="M9.5 12.1 11.2 14l3.7-4" />
+                </svg>
+              </span> Admin Login
+            </button>
+            <button class="admin-dropdown-item" onclick="openAdminLogin('subadmin')">
+              <span class="mini-professional-icon subadmin-mini-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="3.2" />
+                  <path d="M6.8 19c.7-3 2.6-4.6 5.2-4.6s4.5 1.6 5.2 4.6" />
+                </svg>
+              </span> Sub Admin Login
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="landing-hero">
+      <div class="landing-eyebrow">
+        <span>*</span> AI-Powered Learning Ecosystem
+      </div>
+      <h1 class="landing-title">
+        Learn Smarter, Achieve More in Less Time
+      </h1>
+      <p class="landing-sub">
+        The intelligent academic platform that helps students learn faster, perform better, achieve their goals, and never waste time searching for resources.
+      </p>
+
+      <div class="role-cards">
+        <div class="role-card student" id="role-student" onclick="selectRoleAndNavigate('student')">
+          <div class="role-icon professional-icon student-professional-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M3 8.5 12 4l9 4.5-9 4.5L3 8.5Z" />
+              <path d="M6.5 11.2v4.1c1.6 1.3 3.5 2 5.5 2s3.9-.7 5.5-2v-4.1" />
+              <path d="M20 9.5v5" />
+            </svg>
+          </div>
+          <div class="role-label">Student</div>
+          <div class="role-desc">Let's jump into AIIENS Edu to learn smarter and faster.</div>
+        </div>
+        <div class="role-card teacher" id="role-creator" onclick="selectRoleAndNavigate('content_creator')">
+          <div class="role-icon professional-icon creator-professional-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M7 4.5h7l3 3V19a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 6 19V6A1.5 1.5 0 0 1 7.5 4.5Z" />
+              <path d="M14 4.5V8h3.5" />
+              <path d="M9 12h4.5" />
+              <path d="M9 15h3" />
+              <path d="m14.3 16.8 3.7-3.7 1.2 1.2-3.7 3.7-1.6.4.4-1.6Z" />
+            </svg>
+          </div>
+          <div class="role-label">Content Creator</div>
+          <div class="role-desc">Upload your content to reach more students and make learning accessible at scale.</div>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-item">
+          <div class="stat-num" id="stat-students">0</div>
+          <div class="stat-label">Students</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num" id="stat-subjects">0</div>
+          <div class="stat-label">Subjects</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num" id="stat-pyqs">0</div>
+          <div class="stat-label">Creators</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-num" id="stat-satisfaction">0</div>
+          <div class="stat-label">Regulations</div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="landing-footer">
+      <div class="landing-footer-brand">
+        <div class="logo">
+          <div class="logo-icon">A</div>
+          AIIENS Edu
+        </div>
+        <p>AI-powered academic support for students, content creators, and institutions. Built for focused learning, organized preparation, and trusted curriculum delivery.</p>
+        <div class="footer-meta-list">
+          <span>JNTU-focused learning</span>
+          <span>AI study support</span>
+          <span>Creator-led content</span>
+        </div>
+      </div>
+
+      <nav class="landing-footer-links" aria-label="Company links">
+        <div class="landing-footer-heading">Company</div>
+        <button type="button" onclick="showScreen('screen-about')">About Us</button>
+        <button type="button" onclick="showScreen('screen-contact')">Contact Us</button>
+        <button type="button" onclick="showScreen('screen-privacy-security')">Privacy and Policies</button>
+        <span>Mission</span>
+        <span>Academic Support</span>
+      </nav>
+
+      <nav class="landing-footer-links" aria-label="Learning links">
+        <div class="landing-footer-heading">Learning</div>
+        <span>Subject Tracking</span>
+        <span>PYQ Practice</span>
+        <span>Unit-wise Notes</span>
+        <span>Smart Revision</span>
+        <span>Performance Insights</span>
+      </nav>
+
+      <nav class="landing-footer-links" aria-label="Platform links">
+        <div class="landing-footer-heading">Platform</div>
+        <span>Student Workspace</span>
+        <span>Content Creator Portal</span>
+        <span>Admin Management</span>
+        <span>Secure Data Sync</span>
+        <span>Institution-ready Tools</span>
+      </nav>
+    </footer>
+
+  </div>
+</div>

@@ -1,0 +1,25 @@
+<div class="modal-overlay" id="admin-login-modal">
+  <div class="modal admin-login-modal">
+    <div class="admin-modal-header">
+      <div class="admin-modal-icon" id="admin-modal-icon">🛡️</div>
+      <div class="admin-modal-title" id="admin-modal-title">Admin Login</div>
+      <div class="admin-modal-sub" id="admin-modal-sub">Enter your credentials to access the admin dashboard</div>
+    </div>
+    <div class="input-group">
+      <label>User ID</label>
+      <input class="input" id="admin-userid" placeholder="Enter User ID" type="text">
+    </div>
+    <div class="input-group">
+      <label>Password</label>
+      <input class="input" id="admin-password" placeholder="Enter Password" type="password">
+    </div>
+    <div id="admin-login-err" style="display:none;font-size:0.82rem;color:var(--red);margin-bottom:12px;padding:8px 12px;background:var(--red-light);border-radius:var(--radius-sm);">
+      ❌ Invalid credentials. Please try again.
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:0.5rem;">
+      <button class="btn btn-ghost" onclick="closeAdminLogin()">Cancel</button>
+      <button class="btn btn-lavender" onclick="submitAdminLogin()">Login →</button>
+    </div>
+  </div>
+</div>

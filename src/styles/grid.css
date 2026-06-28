@@ -1,0 +1,32 @@
+/* src/styles/grid.css */
+/* Responsive grid system */
+/* Utility classes */
+.grid {
+  display: grid;
+  gap: var(--spacing-4, 0.5rem);
+}
+/* Auto‑fit columns with min‑max */
+.grid-auto {
+  grid-template-columns: repeat(auto-fit, minmax(min(280px,100%), 1fr));
+}
+/* Fixed column counts at breakpoints */
+@media (min-width: 640px) {
+  .grid-sm-2 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 768px) {
+  .grid-md-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-md-3 { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1024px) {
+  .grid-lg-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-lg-4 { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 1440px) {
+  .grid-xl-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-xl-5 { grid-template-columns: repeat(5, 1fr); }
+}
+/* Gap utilities */
+.gap-2 { gap: var(--spacing-2, 0.25rem); }
+.gap-4 { gap: var(--spacing-4, 0.5rem); }
+.gap-6 { gap: var(--spacing-6, 0.75rem); }
+.gap-8 { gap: var(--spacing-8, 1rem); }
