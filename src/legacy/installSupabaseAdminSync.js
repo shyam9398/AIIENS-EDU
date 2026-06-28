@@ -684,7 +684,37 @@ function patchUniversities() {
     };
     let error;
     if (editId) {
+      const { data: oldData } = await supabase.from('universities').select('name').eq('id', editId).maybeSingle();
+      const oldName = oldData?.name;
+      
       ({ error } = await updateUniversity(editId, payload));
+      
+      if (!error && oldName && oldName !== name) {
+        try {
+          const updates = [
+            supabase.from('subjects').update({ university_name: name }).eq('university_name', oldName),
+            supabase.from('sub_admin_accounts').update({ university: name }).eq('university', oldName),
+            supabase.from('profiles').update({ university_name: name }).eq('university_name', oldName),
+            supabase.from('regulations').update({ university: name }).eq('university', oldName)
+          ];
+          const results = await Promise.all(updates);
+          const hasError = results.find(r => r.error);
+          if (hasError) {
+             throw new Error('Cascade update failed: ' + hasError.error.message);
+          }
+        } catch (updateErr) {
+          console.error('[UniversityRename] Cascade failed, rolling back...', updateErr);
+          await updateUniversity(editId, { name: oldName });
+          const rollbacks = [
+            supabase.from('subjects').update({ university_name: oldName }).eq('university_name', name),
+            supabase.from('sub_admin_accounts').update({ university: oldName }).eq('university', name),
+            supabase.from('profiles').update({ university_name: oldName }).eq('university_name', name),
+            supabase.from('regulations').update({ university: oldName }).eq('university', name)
+          ];
+          await Promise.all(rollbacks);
+          error = updateErr;
+        }
+      }
     } else {
       ({ error } = await createUniversity(payload));
     }

@@ -480,13 +480,13 @@ function syncCurrentRoute() {
 }
 export function installBrowserNavigation() {
   if (window.__aimeasyBrowserNavigationInstalled) return;
-  window.addEventListener('popstate', async () => {
-    console.log('[NAVIGATION] Back button pressed');
-    console.log('[AUTH] Session preserved');
-    await applyRoute(normalizeHash());
-  });
+  let lastHandledHash = null;
 
-  window.addEventListener('hashchange', async () => {
+  async function handleNavigationEvent() {
+    const currentHash = normalizeHash();
+    if (currentHash === lastHandledHash && !isOAuthCallbackHash()) return;
+    lastHandledHash = currentHash;
+
     if (isOAuthCallbackHash()) {
       oauthNavigationHandled = true;
       window.showLoading?.('Completing Google sign-in...');
@@ -494,7 +494,17 @@ export function installBrowserNavigation() {
       return;
     }
 
-    await applyRoute(normalizeHash());
+    await applyRoute(currentHash);
+  }
+
+  window.addEventListener('popstate', async () => {
+    console.log('[NAVIGATION] popstate triggered');
+    await handleNavigationEvent();
+  });
+
+  window.addEventListener('hashchange', async () => {
+    console.log('[NAVIGATION] hashchange triggered');
+    await handleNavigationEvent();
   });
 
   window.addEventListener('aimeasy:auth-bootstrap-complete', () => {

@@ -60,7 +60,7 @@ body { overflow-x: hidden; }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-family: var(--font); font-size: 15px; color: var(--text); }
-body { background: var(--page-bg); min-height: 100vh; overflow-x: hidden; }
+body { background: var(--page-bg); min-height: 100vh; min-height: 100dvh; overflow-x: hidden; }
 
 /* Prevent accidental horizontal overflow on small screens */
 img, video, canvas, svg { max-width: 100%; height: auto; }
@@ -76,6 +76,47 @@ h4 { font-size: 1rem; font-weight: 600; }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 10px; }
+
+/* --- BRANDING --- */
+.aiiens-brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.aiiens-brand-logo-svg {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+}
+.aiiens-brand-text {
+  font-family: 'Plus Jakarta Sans', 'Inter', 'SF Pro Display', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+}
+.aiiens-brand-white {
+  color: #FFFFFF;
+}
+.aiiens-brand-grad {
+  background: linear-gradient(135deg, #2563EB, #06B6D4, #10B981);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+/* Adjust logo icon size for smaller contexts */
+.aiiens-brand-wrap.small .aiiens-brand-logo-svg { width: 30px; height: 30px; }
+.aiiens-brand-wrap.small .aiiens-brand-text { font-size: 1.05rem; gap: 4px; }
+
+/* ─── TOAST NOTIFICATIONS ─── */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideInLeft { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes slideInRight { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 
 /* ─── ANIMATIONS ─── */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
@@ -129,13 +170,17 @@ h4 { font-size: 1rem; font-weight: 600; }
 .screen {
   display: none;
   opacity: 0;
-  transition: opacity 1s ease;
 }
 .screen.active {
   display: flex;
   flex-direction: column;
   flex: 1;
   opacity: 1;
+  animation: screenFadeIn 0.2s ease forwards;
+}
+@keyframes screenFadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 #screen-intro {
@@ -856,10 +901,13 @@ body.intro-playing .screen:not(#screen-intro) {
 .nav-item {
   display: flex; align-items: center; gap: 12px;
   padding: 11px 16px; margin: 3px 12px; border-radius: var(--radius-md);
-  cursor: pointer; transition: var(--transition); white-space: nowrap;
+  cursor: pointer; transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease; white-space: nowrap;
   overflow: hidden; position: relative; color: var(--text2);
+  min-height: 48px;
 }
-.nav-item:hover { background: rgba(255, 255, 255, 0.04); color: var(--text); transform: translateX(3px); }
+@media (hover: hover) and (pointer: fine) {
+  .nav-item:hover { background: rgba(255, 255, 255, 0.04); color: var(--text); transform: translateX(3px); }
+}
 .nav-item.active {
   background: rgba(99, 102, 241, 0.1);
   color: var(--primary);
@@ -2104,10 +2152,13 @@ body { position: relative; }
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px; border-radius: var(--radius-sm);
   font-size: 0.88rem; font-weight: 600; cursor: pointer;
-  transition: var(--transition); color: var(--text2);
+  transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease; color: var(--text2);
   margin-bottom: 3px; position: relative;
+  min-height: 48px;
 }
-.admin-nav-item:hover { background: var(--primary-light); color: var(--primary); }
+@media (hover: hover) and (pointer: fine) {
+  .admin-nav-item:hover { background: var(--primary-light); color: var(--primary); }
+}
 .admin-nav-item.active { background: var(--primary-light); color: var(--primary); }
 .admin-nav-badge {
   margin-left: auto; background: var(--amber); color: #fff;
