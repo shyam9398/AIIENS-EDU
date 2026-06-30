@@ -9694,7 +9694,12 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const hash = `#${path}`;
     if (window.location.hash !== hash) {
       const nextIndex = (window.history.state?.aimeasyIndex ?? 0) + 1;
-      window.history.pushState({ aimeasyPath: path, aimeasyIndex: nextIndex }, '', hash);
+      window.__aimeasyRouterWritingHistory = true;
+      try {
+        window.history.pushState({ aimeasyPath: path, aimeasyIndex: nextIndex }, '', hash);
+      } finally {
+        window.__aimeasyRouterWritingHistory = false;
+      }
     }
   };
 
@@ -9706,10 +9711,21 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   const normalizeSASection = (section) => SA_ROUTE_TO_SECTION[section] || section || 'dashboard';
   const adminRouteFor = (section) => ADMIN_SECTION_TO_ROUTE[section] || section || 'dashboard';
   const saRouteFor = (section) => SA_SECTION_TO_ROUTE[section] || section || 'dashboard';
+  const sectionFromHash = (portal) => {
+    const parts = String(window.location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
+    if (parts[0] !== portal || !parts[1]) return '';
+    if (portal === 'admin') return normalizeAdminSection(parts[1]);
+    if (portal === 'subadmin') {
+      if (['units', 'topics'].includes(parts[1])) return 'subjects';
+      return normalizeSASection(parts[1]);
+    }
+    return '';
+  };
 
   window.aiiensNormalizeAdminRoute = function aiiensNormalizeAdminRoute(path) {
     const parts = String(path || '').split('/').filter(Boolean);
     if (parts[0] === 'admin' && parts[1]) return '/admin/' + adminRouteFor(normalizeAdminSection(parts[1]));
+    if (parts[0] === 'subadmin' && ['units', 'topics'].includes(parts[1])) return '/' + parts.join('/');
     if (parts[0] === 'subadmin' && parts[1]) return '/subadmin/' + saRouteFor(normalizeSASection(parts[1]));
     return path;
   };
@@ -9721,13 +9737,23 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     }
     const screen = activeScreen();
     if (screen === 'screen-subadmin') {
-      const section = document.querySelector('#screen-subadmin .admin-nav-item.active')?.id?.replace('sa-nav-', '') || 'dashboard';
+      if (window._v10SAUnitId && window._v10SASubj && typeof v10SAUnitDetail === 'function') {
+        v10SAUnitDetail(window._v10SASubj.id, window._v10SAUnitId);
+        return;
+      }
+      if (window._v10SASubj && typeof v10SAUnitsPage === 'function') {
+        v10SAUnitsPage(window._v10SASubj);
+        return;
+      }
+      const section = document.querySelector('#screen-subadmin .admin-nav-item.active')?.id?.replace('sa-nav-', '') || sectionFromHash('subadmin');
+      if (!section) return;
       if (section === 'dashboard') renderSubAdminDashboardProduction();
       if (section === 'subjects' && typeof v10SASubjects === 'function') v10SASubjects();
       if (section === 'view' && typeof renderSASection === 'function') renderSASection('view');
     }
     if (screen === 'screen-admin') {
-      const section = document.querySelector('#screen-admin .admin-nav-item.active')?.id?.replace('admin-nav-', '') || 'dashboard';
+      const section = document.querySelector('#screen-admin .admin-nav-item.active')?.id?.replace('admin-nav-', '') || sectionFromHash('admin');
+      if (!section) return;
       if (section === 'dashboard') renderAdminDashboardProduction();
       if (section === 'create') renderAdminCreateManageProduction();
       if (section === 'subjects' && typeof v10AdminSubjects === 'function') v10AdminSubjects();
@@ -11595,6 +11621,12 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   }
 
   function ensureLiveWorkshopSurfaces() {
+    const appShell = document.querySelector('.aimeasy-app');
+    const footer = appShell?.querySelector('.site-footer');
+    const leakedScreen = document.body.querySelector(':scope > #screen-live-workshops');
+    if (appShell && leakedScreen) {
+      appShell.insertBefore(leakedScreen, footer || null);
+    }
     const roleCards = document.querySelector('.role-cards');
     if (roleCards && !document.getElementById('role-live-workshops')) {
       roleCards.insertAdjacentHTML('beforeend', `
@@ -11614,7 +11646,9 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       window.updateLandingStats?.();
     }
     if (!document.getElementById('screen-live-workshops')) {
-      document.body.insertAdjacentHTML('beforeend', `
+      const host = appShell || document.body;
+      const position = appShell && footer ? 'beforebegin' : 'beforeend';
+      const html = `
         <div class="screen live-workshop-screen" id="screen-live-workshops">
           <div class="live-workshop-shell">
             <header class="live-workshop-topbar">
@@ -11623,7 +11657,9 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
             </header>
             <main id="live-workshop-content"></main>
           </div>
-        </div>`);
+        </div>`;
+      if (appShell && footer) footer.insertAdjacentHTML(position, html);
+      else host.insertAdjacentHTML(position, html);
     }
     const adminNav = document.querySelector('#screen-admin nav');
     if (adminNav && !document.getElementById('admin-nav-liveworkshops')) {

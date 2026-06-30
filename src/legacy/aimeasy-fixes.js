@@ -587,6 +587,21 @@ window.v10Esc = window.v10Esc || function(str) {
       </div>`;
   }
 
+  function pushOwnedHashRoute(path) {
+    const hash = `#${path}`;
+    if (window.location.hash === hash) return;
+    window.__aimeasyRouterWritingHistory = true;
+    try {
+      window.history.pushState(
+        { aimeasyPath: path, aimeasyIndex: (window.history.state?.aimeasyIndex ?? 0) + 1 },
+        '',
+        hash,
+      );
+    } finally {
+      window.__aimeasyRouterWritingHistory = false;
+    }
+  }
+
   window.adminNavigateBack = function adminNavigateBack() {
     const isDashboardActive = document.getElementById('admin-nav-dashboard')?.classList.contains('active');
     if (isDashboardActive) {
@@ -865,18 +880,14 @@ window.v10Esc = window.v10Esc || function(str) {
         if (title) title.textContent = 'Sub Admin Dashboard';
         renderSubAdminDashboardLive();
         addMenuIcons();
-        if (window.location.hash !== '#/subadmin/dashboard') {
-          window.location.hash = '#/subadmin/dashboard';
-        }
+        pushOwnedHashRoute('/subadmin/dashboard');
         return;
       }
       if (mappedSection === 'skillup') {
         closeSASidebar?.();
         skillUpComingSoon();
         addMenuIcons();
-        if (window.location.hash !== '#/subadmin/skillup') {
-          window.location.hash = '#/subadmin/skillup';
-        }
+        pushOwnedHashRoute('/subadmin/skillup');
         return;
       }
       originalSwitchSASection?.(mappedSection);
@@ -1418,8 +1429,17 @@ window.v10Esc = window.v10Esc || function(str) {
   window.__v10UnitTopicsCache = window.__v10UnitTopicsCache || {};
 
   window.v10LoadUnitTopicsFromDb = async function (subjId, unitId) {
-    const subj = window._v10SASubj || {};
-    const unit = { id: unitId, dbUnitId: unitId, name: unitLabel?.(unitId) || `Unit ${unitId}` };
+    const subj = window._v10SASubj
+      || window._v11AdminSubj
+      || window._v11CrSubj
+      || findSubjectById?.(subjId)
+      || {};
+    const unit = window.v10UnitForDb?.(unitId) || {
+      id: unitId,
+      dbUnitId: subj?.dbUnitIds?.[unitId] || unitId,
+      name: unitLabel?.(unitId) || `Unit ${unitId}`,
+      sort_order: unitNumber?.(unitId) || 1,
+    };
     const cacheKey = `${subjId}:${unitId}`;
     if (!window.aimeasyFetchUnitRoadmap) return window.__v10UnitTopicsCache[cacheKey] || [];
     const { data, error } = await window.aimeasyFetchUnitRoadmap({
@@ -1504,8 +1524,17 @@ window.v10Esc = window.v10Esc || function(str) {
   };
 
   window.v10RefreshRoadmapListInPlace = async function (subjId, unitId) {
-    const subj = window._v10SASubj || {};
-    const dbUnitObj = { id: unitId, name: unitLabel?.(unitId) || `Unit ${unitId}`, sort_order: unitNumber?.(unitId) || 1 };
+    const subj = window._v10SASubj
+      || window._v11AdminSubj
+      || window._v11CrSubj
+      || findSubjectById?.(subjId)
+      || {};
+    const dbUnitObj = window.v10UnitForDb?.(unitId) || {
+      id: unitId,
+      name: unitLabel?.(unitId) || `Unit ${unitId}`,
+      sort_order: unitNumber?.(unitId) || 1,
+      dbUnitId: subj?.dbUnitIds?.[unitId] || unitId,
+    };
     await window.v10ReloadUnitRoadmapFromDb?.(subjId, unitId, { ...subj, dbSubjectId: subjId }, dbUnitObj);
     const topics = await window.v10LoadUnitTopicsFromDb(subjId, unitId);
     const savedEl = document.getElementById(`v10-saved-roadmap-${unitId}`);
@@ -2911,6 +2940,31 @@ window.v10Esc = window.v10Esc || function(str) {
     };
   }
 
+  function aimeasyFindTopic(ctx, topicRef) {
+    const topics = Array.isArray(ctx?.topics) ? ctx.topics : [];
+    const ref = String(topicRef ?? '');
+    const byId = topics.find((topic) => {
+      const identities = [
+        topic?.id,
+        topic?.dbContentId,
+        topic?.topicId,
+        topic?.dbTopicId,
+        topic?.legacyTopicId,
+      ].filter((value) => value !== undefined && value !== null);
+      return identities.some((value) => String(value) === ref);
+    });
+    if (byId) return byId;
+    const numericIndex = Number(topicRef);
+    if (Number.isInteger(numericIndex) && numericIndex >= 0 && numericIndex < topics.length) {
+      return topics[numericIndex];
+    }
+    return null;
+  }
+
+  function aimeasyTopicDbId(topic, fallback) {
+    return topic?.dbContentId || topic?.id || topic?.topicId || topic?.dbTopicId || fallback || '';
+  }
+
   async function aimeasyRefreshRoadmapSurfaces(subjId, unitId, context) {
     const ctx = context || await aimeasyResolveRoadmapContext(subjId, unitId);
     await window.v10RefreshRoadmapListInPlace?.(subjId, unitId);
@@ -2928,7 +2982,7 @@ window.v10Esc = window.v10Esc || function(str) {
     window.v10CloseAllPopups?.() || window.v11CloseAllPopups?.();
     const esc = window.v10Esc || ((s) => String(s || ''));
     const ctx = await aimeasyResolveRoadmapContext(subjId, unitId);
-    const topic = ctx.topics.find(t => String(t.id || t.dbContentId) === String(topicId));
+    const topic = aimeasyFindTopic(ctx, topicId);
     if (!topic) { showToast('Topic not found', 'red'); return; }
     const videos = Array.isArray(topic.videos) ? topic.videos : [];
     const video = videos[0] || {};
@@ -2969,8 +3023,8 @@ window.v10Esc = window.v10Esc || function(str) {
     const supabase = window.__AIMEASY_SUPABASE__;
     if (!supabase) { showToast('Supabase is not available.', 'red'); return; }
     const ctx = await aimeasyResolveRoadmapContext(subjId, unitId);
-    const topic = ctx.topics.find(t => String(t.id || t.dbContentId) === String(topicId));
-    const dbTopicId = topic?.dbContentId || topic?.id || topicId;
+    const topic = aimeasyFindTopic(ctx, topicId);
+    const dbTopicId = aimeasyTopicDbId(topic, topicId);
     if (!dbTopicId) { showToast('Topic not found in Supabase.', 'red'); return; }
     const { error: topicError } = await supabase.from('topics').update({ topic_name: name }).eq('id', dbTopicId);
     if (topicError) { showToast('Failed to update topic: ' + topicError.message, 'red'); return; }
@@ -2995,8 +3049,8 @@ window.v10Esc = window.v10Esc || function(str) {
       const supabase = window.__AIMEASY_SUPABASE__;
       if (!supabase) { showToast('Supabase is not available.', 'red'); return; }
       const ctx = await aimeasyResolveRoadmapContext(subjId, unitId);
-      const topic = ctx.topics.find(t => String(t.id || t.dbContentId) === String(topicId));
-      const dbTopicId = topic?.dbContentId || topic?.id || topicId;
+      const topic = aimeasyFindTopic(ctx, topicId);
+      const dbTopicId = aimeasyTopicDbId(topic, topicId);
       if (!dbTopicId) { showToast('Topic not found in Supabase.', 'red'); return; }
       await supabase.from('topic_videos').delete().eq('topic_id', dbTopicId);
       const { error } = await supabase.from('topics').delete().eq('id', dbTopicId);
@@ -3015,6 +3069,14 @@ window.v10Esc = window.v10Esc || function(str) {
       await aimeasyRefreshRoadmapSurfaces(subjId, unitId, ctx);
       showToast('Topic deleted.', 'green');
     });
+  };
+
+  window.v10OpenRoadmapEditModal = function v10OpenRoadmapEditModalDbBridge(subjId, unitId, topicRef) {
+    return window.v10OpenRoadmapEditModalDb?.(subjId, unitId, topicRef);
+  };
+
+  window.v10DeleteSavedRoadmapTopic = function v10DeleteSavedRoadmapTopicDbBridge(subjId, unitId, topicRef) {
+    return window.v10DeleteSavedRoadmapTopicDb?.(subjId, unitId, topicRef);
   };
 
   window.submitVideoSuggestion = async function submitVideoSuggestionDbFixed() {

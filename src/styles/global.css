@@ -1917,7 +1917,7 @@ body.intro-playing .screen:not(#screen-intro) {
   background: var(--surface); border-bottom: 1px solid var(--border);
   padding: 0 2rem; height: 64px;
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-  position: sticky; top: 42px; z-index: 100;
+  position: sticky; top: 0; z-index: 100;
 }
 .admin-content { padding: 2rem; flex: 1; max-width: 1200px; margin: 0 auto; width: 100%; }
 .admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap: 1.2rem; margin-bottom: 2rem; }
@@ -2169,6 +2169,58 @@ body { position: relative; }
 .admin-main-wrap {
   display: flex; flex-direction: column; min-height: auto;
   width: 100%;
+}
+
+.aimeasy-app:has(#screen-admin.active),
+.aimeasy-app:has(#screen-subadmin.active) {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+#screen-admin.active,
+#screen-subadmin.active {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#screen-admin.active .admin-main-wrap,
+#screen-subadmin.active .admin-main-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#screen-admin.active .admin-topbar,
+#screen-subadmin.active .admin-topbar {
+  position: relative;
+  top: auto;
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 64px;
+}
+
+#screen-admin.active .admin-content,
+#screen-subadmin.active .admin-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+}
+
+.admin-sidebar,
+.admin-sidebar nav {
+  min-height: 0;
+}
+
+.admin-sidebar nav {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 /* ─── RESPONSIVE ─── */
 @media (max-width: 768px) {
@@ -2959,7 +3011,7 @@ body,
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
 }
 
 .production-kpi-grid {
@@ -3013,6 +3065,11 @@ body,
 
 .manage-panel {
   padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  max-height: min(560px, calc(100dvh - 190px));
+  overflow: hidden;
 }
 
 .manage-panel-head {
@@ -3021,6 +3078,7 @@ body,
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
+  flex: 0 0 auto;
 }
 
 .manage-panel-head h3 {
@@ -3040,16 +3098,18 @@ body,
   font-size: 0.82rem;
   line-height: 1.45;
   margin: -0.25rem 0 0.9rem;
+  flex: 0 0 auto;
 }
 
 .regulation-create-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.5rem;
+  flex: 0 0 auto;
 }
 
 .regulation-list {
-  max-height: 280px;
+  max-height: none;
 }
 
 .regulation-row {
@@ -3278,8 +3338,30 @@ body,
 
 .manage-list {
   margin-top: 0.85rem;
-  max-height: 330px;
-  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-right: 0.25rem;
+}
+
+.manage-panel > .input,
+.manage-panel > .select,
+.manage-panel > .university-filter-box,
+.manage-panel > .regulation-create-row {
+  flex: 0 0 auto;
+}
+
+.v10-items.manage-list {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.manage-list .empty-state-card {
+  margin-bottom: 0;
 }
 
 @media (max-width: 900px) {
@@ -3305,6 +3387,11 @@ body,
   .approval-summary-line,
   .approval-actions {
     justify-content: flex-start;
+  }
+
+  .manage-panel {
+    min-height: 320px;
+    max-height: min(520px, calc(100dvh - 170px));
   }
 }
 

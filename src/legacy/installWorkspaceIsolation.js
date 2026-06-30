@@ -32,9 +32,30 @@ function activeSaSection() {
   return document.querySelector('[id^="sa-nav-"].active')?.id?.replace('sa-nav-', '') || '';
 }
 
+function pushSubAdminRoute(path) {
+  if (window.__aimeasyApplyingRoute) return;
+  const normalized = path.startsWith('#') ? path.slice(1) : path;
+  const hash = `#${normalized}`;
+  if (window.location.hash === hash) return;
+  const nextIndex = (window.history.state?.aimeasyIndex ?? 0) + 1;
+  window.__aimeasyRouterWritingHistory = true;
+  try {
+    window.history.pushState({ aimeasyPath: normalized, aimeasyIndex: nextIndex }, '', hash);
+  } finally {
+    window.__aimeasyRouterWritingHistory = false;
+  }
+}
+
 function refreshActiveSaWorkspace() {
   // Stay on unit detail / roadmap pages after saves — do not replace deep navigation.
-  if (window._v10SAUnitId) return;
+  if (window._v10SAUnitId && window._v10SASubj && typeof window.v10SAUnitDetail === 'function') {
+    window.v10SAUnitDetail(window._v10SASubj.id, window._v10SAUnitId);
+    return;
+  }
+  if (window._v10SASubj && typeof window.v10SAUnitsPage === 'function') {
+    window.v10SAUnitsPage(window._v10SASubj);
+    return;
+  }
   const section = activeSaSection();
   if (section === 'subjects') window.v10SASubjects?.();
   if (section === 'view') window.v10SAViewContent?.();
@@ -444,7 +465,13 @@ export function installWorkspaceIsolation() {
   if (typeof origSwitchSASection === 'function' && !origSwitchSASection.__workspacePatched) {
     window.switchSASection = function switchSASectionWorkspace(section) {
       if (section === 'subjects') {
+        window.closeSASidebar?.();
+        document.querySelectorAll('[id^="sa-nav-"]').forEach((el) => el.classList.remove('active'));
+        document.getElementById('sa-nav-subjects')?.classList.add('active');
+        const titleEl = document.getElementById('sa-topbar-title');
+        if (titleEl) titleEl.textContent = 'Create Subject';
         window.v10SASubjects();
+        pushSubAdminRoute('/subadmin/create-subject');
         return;
       }
       if (section === 'view') {
@@ -532,11 +559,56 @@ export function installWorkspaceIsolation() {
           isReadOnly: !isRecordOwner(subj),
         };
         if (typeof window.v10SAUnitsPage === 'function') {
-          return window.v10SAUnitsPage(window._v10SASubj);
+          const result = await window.v10SAUnitsPage(window._v10SASubj);
+          pushSubAdminRoute(`/subadmin/units/${encodeURIComponent(String(subj.id))}`);
+          return result;
         }
       }
-      return origOpenUnits(subjId);
+      const result = await origOpenUnits(subjId);
+      pushSubAdminRoute(`/subadmin/units/${encodeURIComponent(String(subjId))}`);
+      return result;
     };
     window.v10SAOpenUnits.__workspacePatched = true;
+  }
+
+  const origUnitsPage = window.v10SAUnitsPage;
+  if (typeof origUnitsPage === 'function' && !origUnitsPage.__workspacePatched) {
+    window.v10SAUnitsPage = async function v10SAUnitsPageWorkspaceRoute(subj, ...args) {
+      const result = await origUnitsPage.call(this, subj, ...args);
+      if (subj?.id) {
+        window._v10SAUnitId = null;
+        pushSubAdminRoute(`/subadmin/units/${encodeURIComponent(String(subj.id))}`);
+      }
+      return result;
+    };
+    window.v10SAUnitsPage.__workspacePatched = true;
+  }
+
+  const origUnitDetail = window.v10SAUnitDetail;
+  if (typeof origUnitDetail === 'function' && !origUnitDetail.__workspacePatched) {
+    window.v10SAUnitDetail = async function v10SAUnitDetailWorkspaceRoute(subjId, unitId, ...args) {
+      const result = await origUnitDetail.call(this, subjId, unitId, ...args);
+      if (subjId && unitId) {
+        pushSubAdminRoute(`/subadmin/topics/${encodeURIComponent(String(subjId))}/${encodeURIComponent(String(unitId))}`);
+      }
+      return result;
+    };
+    window.v10SAUnitDetail.__workspacePatched = true;
+  }
+
+  const origAddUnit = window.v10SAAddUnit;
+  if (typeof origAddUnit === 'function' && !origAddUnit.__workspacePatched) {
+    window.v10SAAddUnit = async function v10SAAddUnitStayOnUnits(subjId, ...args) {
+      const subjectBefore = window._v10SASubj;
+      const result = await origAddUnit.call(this, subjId, ...args);
+      const activeSubject = window._v10SASubj || subjectBefore;
+      window._v10SAUnitId = null;
+      if (activeSubject && typeof window.v10SAUnitsPage === 'function') {
+        await window.v10SAUnitsPage(activeSubject);
+        pushSubAdminRoute(`/subadmin/units/${encodeURIComponent(String(activeSubject.id || subjId))}`);
+      }
+      return result;
+    };
+    window.v10SAAddUnit.__workspacePatched = true;
   }
 }

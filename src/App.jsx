@@ -104,7 +104,7 @@ function AuthenticatedLegacyApp() {
 
     window.__AIMEASY_SUPABASE__ = supabase;
     installBackButtonFixes();
-    //installBrowserNavigation();
+    installBrowserNavigation();
     const cleanupLegacyScripts = runLegacyScripts([
       { name: 'legacy-app.js', source: legacyScript },
       { name: 'legacy-patches.js', source: legacyPatchScript },

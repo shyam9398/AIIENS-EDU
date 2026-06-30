@@ -74,6 +74,20 @@ export function installCriticalFixes() {
   window.__aimeasyCentralAuthInstalled = true;
   window.__aimeasyAuthBootstrapComplete = true;
 
+  const actionIcon = {
+    edit: '<span aria-hidden="true">&#9998;</span>',
+    delete: '<span aria-hidden="true">&times;</span>',
+  };
+
+  function escAttr(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   function getStoredLoginPortal() {
     return sessionStorage.getItem('aimeasy_login_portal') || localStorage.getItem('aimeasy_login_portal_backup');
   }
@@ -1479,10 +1493,18 @@ if (!/^[0-9]{10}$/.test(phone)) {
           '</div>' +
           '<button class="icon-action-btn" onclick="aiiensEditSubAdmin(' +
           realIndex +
-          ')">Edit</button>' +
+          ')" title="Edit sub admin" aria-label="Edit ' +
+          escAttr(sa.username || 'sub admin') +
+          '">' +
+          actionIcon.edit +
+          '</button>' +
           '<button class="icon-action-btn danger" onclick="aiiensDeleteSubAdmin(' +
           realIndex +
-          ')">Delete</button>' +
+          ')" title="Delete sub admin" aria-label="Delete ' +
+          escAttr(sa.username || 'sub admin') +
+          '">' +
+          actionIcon.delete +
+          '</button>' +
           '</div>'
         );
       })

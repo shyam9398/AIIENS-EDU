@@ -19,6 +19,7 @@ const STUDENT_INNER_PAGES = new Set([
 let suppressRouteUpdate = false;
 let oauthNavigationHandled = false;
 let bootstrapSessionRestoreAttempted = false;
+let scheduledHistoryRouteSync = 0;
 
 function isOAuthCallbackHash() {
   const hash = window.location.hash || '';
@@ -101,7 +102,12 @@ function replaceRoute(path) {
   const nextHash = hashFor(path);
   if (window.location.hash !== nextHash) {
     const currentIndex = window.history.state?.aimeasyIndex ?? 0;
-    window.history.replaceState({ aimeasyPath: path, aimeasyIndex: currentIndex }, '', nextHash);
+    window.__aimeasyRouterWritingHistory = true;
+    try {
+      window.history.replaceState({ aimeasyPath: path, aimeasyIndex: currentIndex }, '', nextHash);
+    } finally {
+      window.__aimeasyRouterWritingHistory = false;
+    }
   }
 }
 
@@ -110,7 +116,12 @@ function pushRoute(path) {
   const nextHash = hashFor(path);
   if (window.location.hash !== nextHash) {
     const nextIndex = (window.history.state?.aimeasyIndex ?? 0) + 1;
-    window.history.pushState({ aimeasyPath: path, aimeasyIndex: nextIndex }, '', nextHash);
+    window.__aimeasyRouterWritingHistory = true;
+    try {
+      window.history.pushState({ aimeasyPath: path, aimeasyIndex: nextIndex }, '', nextHash);
+    } finally {
+      window.__aimeasyRouterWritingHistory = false;
+    }
   }
 }
 
@@ -129,6 +140,15 @@ function decodeRoutePart(value) {
     return String(value || '');
   }
 }
+
+function activateSubAdminSubjectsNav() {
+  window.closeSASidebar?.();
+  document.querySelectorAll('[id^="sa-nav-"]').forEach((el) => el.classList.remove('active'));
+  document.getElementById('sa-nav-subjects')?.classList.add('active');
+  const titleEl = document.getElementById('sa-topbar-title');
+  if (titleEl) titleEl.textContent = 'Create Subject';
+}
+
 function showOnlyScreen(screenId) {
   document.querySelectorAll('.screen').forEach((screen) => {
     screen.classList.remove('active');
@@ -291,44 +311,62 @@ async function applyRoute(path) {
   }
 
   suppressRouteUpdate = true;
+  window.__aimeasyApplyingRoute = true;
 
-  if (typeof window.showScreen === 'function') {
-    window.showScreen(page.screenId);
-  } else {
-    showOnlyScreen(page.screenId);
-  }
-  syncProfileStepFromPath(normalizedMainPath);
-
-  if (page.screenId === 'screen-app') {
-    window.updateSidebarProfile?.();
-  }
-
-  if (page.screenId === 'screen-app' && childPath && STUDENT_INNER_PAGES.has(childPath)) {
-    if (childPath === 'subjects' && subjectId && typeof window.openSubject === 'function') {
-      window.navigateTo?.('subjects');
-      await window.openSubject(decodeRoutePart(subjectId));
-    } else if ((childPath === 'units' || childPath === 'unit-content') && subjectId && typeof window.openSubject === 'function') {
-      window.navigateTo?.('subjects');
-      await window.openSubject(decodeRoutePart(subjectId));
-      if (unitId && typeof window.openUnit === 'function') {
-        window.openUnit(Number(decodeRoutePart(unitId)), decodeRoutePart(subjectId));
-      }
-    } else if (typeof window.navigateTo === 'function') {
-      window.navigateTo(childPath);
+  try {
+    if (typeof window.showScreen === 'function') {
+      window.showScreen(page.screenId);
     } else {
-      showStudentInnerPage(childPath);
+      showOnlyScreen(page.screenId);
     }
-  } else if (page.screenId === 'screen-subadmin' && childPath && typeof window.switchSASection === 'function') {
-    window.switchSASection(decodeRoutePart(childPath));
-  } else if (page.screenId === 'screen-admin' && childPath && typeof window.switchAdminSection === 'function') {
-    window.switchAdminSection(decodeRoutePart(childPath));
-  } else if (page.screenId === 'screen-creator' && childPath && typeof window.switchCRSection === 'function') {
-    window.switchCRSection(decodeRoutePart(childPath));
-  }
+    syncProfileStepFromPath(normalizedMainPath);
 
-  suppressRouteUpdate = false;
-  console.log('[ROUTE] Route Allowed', { requestedRoute: path, screenId: page.screenId });
-  console.log('[ROUTE] Final Route', { route: path, screenId: page.screenId });
+    if (page.screenId === 'screen-app') {
+      window.updateSidebarProfile?.();
+    }
+
+    if (page.screenId === 'screen-app' && childPath && STUDENT_INNER_PAGES.has(childPath)) {
+      if (childPath === 'subjects' && subjectId && typeof window.openSubject === 'function') {
+        window.navigateTo?.('subjects');
+        await window.openSubject(decodeRoutePart(subjectId));
+      } else if ((childPath === 'units' || childPath === 'unit-content') && subjectId && typeof window.openSubject === 'function') {
+        window.navigateTo?.('subjects');
+        await window.openSubject(decodeRoutePart(subjectId));
+        if (unitId && typeof window.openUnit === 'function') {
+          window.openUnit(Number(decodeRoutePart(unitId)), decodeRoutePart(subjectId));
+        }
+      } else if (typeof window.navigateTo === 'function') {
+        window.navigateTo(childPath);
+      } else {
+        showStudentInnerPage(childPath);
+      }
+    } else if (page.screenId === 'screen-subadmin' && childPath) {
+      const subadminRoute = decodeRoutePart(childPath);
+      if (subadminRoute === 'units' || subadminRoute === 'topics') {
+        activateSubAdminSubjectsNav();
+        if (subjectId && typeof window.v10SAOpenUnits === 'function') {
+          await window.v10SAOpenUnits(decodeRoutePart(subjectId));
+        } else if (typeof window.v10SASubjects === 'function') {
+          await window.v10SASubjects();
+        }
+        if (subadminRoute === 'topics' && subjectId && unitId && typeof window.v10SAUnitDetail === 'function') {
+          await window.v10SAUnitDetail(decodeRoutePart(subjectId), decodeRoutePart(unitId));
+        }
+      } else if (typeof window.switchSASection === 'function') {
+        window.switchSASection(subadminRoute);
+      }
+    } else if (page.screenId === 'screen-admin' && childPath && typeof window.switchAdminSection === 'function') {
+      window.switchAdminSection(decodeRoutePart(childPath));
+    } else if (page.screenId === 'screen-creator' && childPath && typeof window.switchCRSection === 'function') {
+      window.switchCRSection(decodeRoutePart(childPath));
+    }
+
+    console.log('[ROUTE] Route Allowed', { requestedRoute: path, screenId: page.screenId });
+    console.log('[ROUTE] Final Route', { route: path, screenId: page.screenId });
+  } finally {
+    suppressRouteUpdate = false;
+    window.__aimeasyApplyingRoute = false;
+  }
 }
 
 function pathForScreen(screenId) {
@@ -482,9 +520,10 @@ export function installBrowserNavigation() {
   if (window.__aimeasyBrowserNavigationInstalled) return;
   let lastHandledHash = null;
 
-  async function handleNavigationEvent() {
+  async function handleNavigationEvent(options = {}) {
+    const { force = false, source = 'browser' } = options;
     const currentHash = normalizeHash();
-    if (currentHash === lastHandledHash && !isOAuthCallbackHash()) return;
+    if (!force && currentHash === lastHandledHash && !isOAuthCallbackHash()) return;
     lastHandledHash = currentHash;
 
     if (isOAuthCallbackHash()) {
@@ -497,14 +536,70 @@ export function installBrowserNavigation() {
     await applyRoute(currentHash);
   }
 
+  function scheduleHistoryRouteSync(source) {
+    if (
+      window.__aimeasyRouterWritingHistory ||
+      window.__aimeasyApplyingRoute ||
+      suppressRouteUpdate ||
+      isCentralAuthRouting()
+    ) {
+      return;
+    }
+
+    window.clearTimeout(scheduledHistoryRouteSync);
+    scheduledHistoryRouteSync = window.setTimeout(async () => {
+      scheduledHistoryRouteSync = 0;
+      if (
+        window.__aimeasyRouterWritingHistory ||
+        window.__aimeasyApplyingRoute ||
+        suppressRouteUpdate ||
+        isCentralAuthRouting()
+      ) {
+        return;
+      }
+
+      console.log('[NAVIGATION] history state sync triggered', { source });
+      await handleNavigationEvent({ force: true, source });
+    }, 0);
+  }
+
+  function installHistoryStateSync() {
+    if (window.__aimeasyHistoryStateSyncInstalled) return;
+
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+
+    window.history.pushState = function aimeasyPushState(...args) {
+      const previousUrl = window.location.href;
+      const result = originalPushState.apply(this, args);
+      if (window.location.href !== previousUrl) {
+        scheduleHistoryRouteSync('pushState');
+      }
+      return result;
+    };
+
+    window.history.replaceState = function aimeasyReplaceState(...args) {
+      const previousUrl = window.location.href;
+      const result = originalReplaceState.apply(this, args);
+      if (window.location.href !== previousUrl) {
+        scheduleHistoryRouteSync('replaceState');
+      }
+      return result;
+    };
+
+    window.__aimeasyHistoryStateSyncInstalled = true;
+  }
+
+  installHistoryStateSync();
+
   window.addEventListener('popstate', async () => {
     console.log('[NAVIGATION] popstate triggered');
-    await handleNavigationEvent();
+    await handleNavigationEvent({ source: 'popstate' });
   });
 
   window.addEventListener('hashchange', async () => {
     console.log('[NAVIGATION] hashchange triggered');
-    await handleNavigationEvent();
+    await handleNavigationEvent({ source: 'hashchange' });
   });
 
   window.addEventListener('aimeasy:auth-bootstrap-complete', () => {

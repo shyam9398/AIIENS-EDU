@@ -47,6 +47,26 @@ function showToast(message, type = 'blue') {
   }
 }
 
+function keepAdminSubjectRoute() {
+  document.querySelectorAll('[id^="admin-nav-"]').forEach((el) => el.classList.remove('active'));
+  document.getElementById('admin-nav-subjects')?.classList.add('active');
+  const titleEl = document.getElementById('admin-topbar-title');
+  if (titleEl) titleEl.textContent = 'Subject CRUD';
+
+  if (window.location.hash !== '#/admin/subjects') {
+    window.__aimeasyRouterWritingHistory = true;
+    try {
+      window.history.pushState(
+        { aimeasyPath: '/admin/subjects', aimeasyIndex: (window.history.state?.aimeasyIndex ?? 0) + 1 },
+        '',
+        '#/admin/subjects',
+      );
+    } finally {
+      window.__aimeasyRouterWritingHistory = false;
+    }
+  }
+}
+
 function renderSubjectForm(editingSubject, catalog = {}) {
   const isEdit = Boolean(editingSubject);
   const title = isEdit ? 'Edit Subject' : 'Add New Subject';
@@ -290,8 +310,8 @@ export function installAdminSubjectCrud() {
     }
 
     showToast('Subject added successfully', 'green');
+    keepAdminSubjectRoute();
     await renderAdminSubjectCrud();
-    window.aiiensRefreshActiveAdminSurfaces?.();
   };
 
   window.adminSubjectEdit = async function adminSubjectEdit(id) {
@@ -332,13 +352,16 @@ export function installAdminSubjectCrud() {
     const payload = collectSubjectPayload();
     if (!payload || !id) return;
 
-    const { data: existing } = await window.supabase.from('subjects').select('*').eq('id', id).maybeSingle();
-    if (existing && !isRecordOwner(existing)) {
+    const { data: existing, error: existingError } = await window.supabase.from('subjects').select('*').eq('id', id).maybeSingle();
+    if (existingError || !existing) {
+      showToast('Subject not found in database', 'red');
+      return;
+    }
+    if (!isRecordOwner(existing)) {
       showToast('You can only update subjects you created', 'red');
       return;
     }
 
-    const meta = subjectCreateMeta();
     const dbPayload = {
       name: payload.name,
       code: payload.code,
@@ -349,9 +372,9 @@ export function installAdminSubjectCrud() {
       year: payload.year,
       credits: Number(payload.credits),
       status: 'active',
-      createdBy: meta.created_by,
-      created_by: meta.created_by,
-      created_by_role: meta.created_by_role,
+      createdBy: existing.created_by,
+      created_by: existing.created_by,
+      created_by_role: existing.created_by_role,
     };
 
     showToast('Saving changes...', 'blue');
@@ -362,22 +385,26 @@ export function installAdminSubjectCrud() {
     }
 
     showToast('Subject updated successfully', 'green');
+    keepAdminSubjectRoute();
     await renderAdminSubjectCrud();
-    window.aiiensRefreshActiveAdminSurfaces?.();
   };
 
   window.adminSubjectDelete = async function adminSubjectDelete(id) {
     if (!id) return;
     if (!confirm('Are you sure you want to delete this subject and its units?')) return;
 
-    const { data: row } = await window.supabase.from('subjects').select('*').eq('id', id).maybeSingle();
-    if (row && !isRecordOwner(row)) {
+    const { data: row, error: rowError } = await window.supabase.from('subjects').select('*').eq('id', id).maybeSingle();
+    if (rowError || !row) {
+      showToast('Subject not found in database', 'red');
+      return;
+    }
+    if (!isRecordOwner(row)) {
       showToast('You can only delete subjects you created', 'red');
       return;
     }
 
     showToast('Deleting from database...', 'blue');
-    const ownerKey = getPortalActorId() || getPortalActorUsername();
+    const ownerKey = row?.created_by || getPortalActorId() || getPortalActorUsername();
     const { error } = await window.aimeasyDeleteSubject(id, ownerKey);
     if (error) {
       showToast('Failed to delete subject: ' + error.message, 'red');
@@ -385,8 +412,8 @@ export function installAdminSubjectCrud() {
     }
 
     showToast('Subject deleted', 'red');
+    keepAdminSubjectRoute();
     await renderAdminSubjectCrud();
-    window.aiiensRefreshActiveAdminSurfaces?.();
   };
 
   window.adminSubjectOpen = function adminSubjectOpen(encodedSubject) {
@@ -423,14 +450,8 @@ export function installAdminSubjectCrud() {
   if (typeof originalSwitchAdminSection === 'function') {
     window.switchAdminSection = function switchAdminSectionWithCrud(section) {
       if (section === 'subjects') {
-        document.querySelectorAll('[id^="admin-nav-"]').forEach((el) => el.classList.remove('active'));
-        document.getElementById('admin-nav-subjects')?.classList.add('active');
-        const titleEl = document.getElementById('admin-topbar-title');
-        if (titleEl) titleEl.textContent = 'Subject CRUD';
+        keepAdminSubjectRoute();
         renderAdminSubjectCrud();
-        if (window.location.hash !== '#/admin/subjects') {
-          window.location.hash = '#/admin/subjects';
-        }
         return;
       }
 
