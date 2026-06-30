@@ -229,6 +229,23 @@ export default function App() {
     };
   }, []);
 
+  React.useEffect(() => {
+    const handleMouseMove = (e) => {
+      const card = e.target.closest('.card, .metric-card, .progress-tracker, .video-sidebar, .subject-card, .subject-item, .unit-card, .sidebar, .admin-sidebar, .topbar, .admin-topbar, .btn');
+      if (card) {
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        card.style.setProperty('--mouse-x', `${x}px`);
+        card.style.setProperty('--mouse-y', `${y}px`);
+      }
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
+
   if (!backendReady) {
     return (
       <main className="aimeasy-app">

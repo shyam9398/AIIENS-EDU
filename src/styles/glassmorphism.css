@@ -1,0 +1,438 @@
+/* ==========================================
+   PREMIUM ANTI-GRAVITY GLASSMORPHISM THEME
+   ========================================== */
+
+/* 1. SILKY VIOLET-WAVE BACKGROUND CANVAS */
+html, body {
+  background: #05040B !important;
+  background-image: 
+    radial-gradient(circle at 15% 25%, rgba(76, 29, 149, 0.22) 0%, transparent 55%),
+    radial-gradient(circle at 85% 75%, rgba(46, 16, 101, 0.28) 0%, transparent 65%),
+    #05040B !important;
+  background-attachment: fixed !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  color: #FFFFFF !important;
+  font-family: 'Outfit', Inter, ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden !important;
+}
+
+/* 2. RESPONSIVE ARCHITECTURE & AUTO-FIT FLEX LAYOUT */
+@media (min-width: 768px) {
+  /* Enforce horizontal layout for active portal screens */
+  .screen.active[id="screen-app"],
+  .screen.active[id="screen-admin"],
+  .screen.active[id="screen-subadmin"],
+  .screen.active[id="screen-creator"] {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    width: 100vw !important;
+    min-height: 100vh !important;
+    overflow-x: hidden !important;
+    background: transparent !important;
+  }
+
+  /* Anchored Sidebar Layout */
+  .sidebar,
+  .admin-sidebar {
+    width: 260px !important;
+    height: 100vh !important;
+    position: sticky !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    flex-shrink: 0 !important;
+    z-index: 100 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    transition: none !important;
+    box-shadow: none !important;
+    background: rgba(255, 255, 255, 0.015) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    border-left: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Main Workspace Auto-Fit */
+  .main,
+  .admin-main-wrap {
+    flex: 1 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 2rem !important;
+    overflow-y: auto !important;
+    background: transparent !important;
+  }
+
+  /* Hide mobile elements on desktop */
+  .hamburger-btn,
+  #hamburger-btn,
+  #admin-hamburger,
+  #sa-hamburger,
+  #cr-hamburger,
+  .sidebar-close-btn,
+  .sidebar-backdrop,
+  .admin-sidebar-backdrop {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .screen.active[id="screen-app"],
+  .screen.active[id="screen-admin"],
+  .screen.active[id="screen-subadmin"],
+  .screen.active[id="screen-creator"] {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100vw !important;
+    min-height: 100vh !important;
+    overflow-x: hidden !important;
+    background: transparent !important;
+  }
+
+  .sidebar,
+  .admin-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    width: 280px !important;
+    z-index: 1000 !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    background: rgba(10, 8, 19, 0.96) !important;
+    backdrop-filter: blur(30px) !important;
+    -webkit-backdrop-filter: blur(30px) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 10px 0 40px rgba(0, 0, 0, 0.8) !important;
+  }
+
+  .sidebar.open,
+  .admin-sidebar.open {
+    transform: translateX(0) !important;
+  }
+
+  .sidebar-backdrop,
+  .admin-sidebar-backdrop {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(5, 4, 11, 0.75) !important;
+    backdrop-filter: blur(8px) !important;
+    z-index: 999 !important;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .sidebar-backdrop.open,
+  .admin-sidebar-backdrop.open {
+    opacity: 1 !important;
+    pointer-events: all !important;
+  }
+
+  .main,
+  .admin-main-wrap {
+    width: 100% !important;
+    padding: 1rem !important;
+    flex: 1 !important;
+    background: transparent !important;
+  }
+
+  .hamburger-btn {
+    display: flex !important;
+  }
+}
+
+/* 3. "SANDWICH METHOD" GLASSMORPHISM HIERARCHY */
+
+/* LAYER 2: Floating Translucent Glass Sheets */
+.card,
+.metric-card,
+.progress-tracker,
+.video-sidebar,
+.subject-card,
+.subject-item,
+.unit-card,
+.achievement-grid > div,
+.topbar,
+.admin-topbar,
+.modal-content,
+.calc-wrapper,
+.settings-card,
+.onboarding-card,
+.course-card,
+.lesson-card,
+.chat-container,
+.tab-pane {
+  background: rgba(255, 255, 255, 0.018) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 16px !important;
+  box-shadow: 
+    inset 0 1px 0px rgba(255, 255, 255, 0.1),
+    0 4px 6px rgba(0, 0, 0, 0.1),
+    0 25px 45px rgba(0, 0, 0, 0.5) !important;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+}
+
+/* Hover Physics Ease State */
+.card:hover,
+.metric-card:hover,
+.subject-card:hover,
+.subject-item:hover,
+.unit-card:hover {
+  transform: translateY(-4px) scale(1.01) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 
+    inset 0 1px 0px rgba(255, 255, 255, 0.2),
+    0 10px 20px rgba(0, 0, 0, 0.2),
+    0 30px 60px rgba(139, 92, 246, 0.25) !important;
+}
+
+/* LAYER 3: Inner Recessed Dark Slots (Matte Wells) */
+.input,
+.select,
+textarea,
+.search-bar,
+.metric-icon,
+.video-list,
+.video-placeholder,
+.content-tab:not(.active),
+.badge-primary,
+.badge-teal,
+.badge-lavender,
+.badge-amber,
+.badge-red,
+.badge-green,
+.admin-content-box,
+.empty-state,
+.code-editor,
+.recessed-well,
+.select-box,
+.profile-avatar {
+  background: rgba(10, 8, 19, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+  box-shadow: 
+    inset 0 2px 5px rgba(0, 0, 0, 0.6),
+    0 1px 0px rgba(255, 255, 255, 0.02) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Inputs and Buttons Premium Accents */
+.input:focus,
+.select:focus,
+textarea:focus {
+  border-color: rgba(139, 92, 246, 0.5) !important;
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.8),
+    0 0 12px rgba(139, 92, 246, 0.3) !important;
+  outline: none !important;
+}
+
+/* 4. CURSOR-TRACKING DYNAMIC AMBIENT LIGHT BORDERS */
+.card,
+.metric-card,
+.progress-tracker,
+.video-sidebar,
+.subject-card,
+.subject-item,
+.unit-card,
+.sidebar,
+.admin-sidebar,
+.topbar,
+.admin-topbar,
+.btn {
+  position: relative;
+}
+
+.card::before,
+.metric-card::before,
+.progress-tracker::before,
+.video-sidebar::before,
+.subject-card::before,
+.subject-item::before,
+.unit-card::before,
+.sidebar::before,
+.admin-sidebar::before,
+.topbar::before,
+.admin-topbar::before,
+.btn::before {
+  content: '' !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit !important;
+  padding: 1.5px !important; /* Border thickness */
+  background: radial-gradient(
+    200px circle at var(--mouse-x, 0px) var(--mouse-y, 0px),
+    rgba(139, 92, 246, 0.45),
+    transparent 60%
+  ) !important;
+  -webkit-mask: 
+     linear-gradient(#fff 0 0) content-box, 
+     linear-gradient(#fff 0 0) !important;
+  -webkit-mask-composite: xor !important;
+          mask-composite: exclude !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  transition: opacity 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+  z-index: 2 !important;
+}
+
+.card:hover::before,
+.metric-card:hover::before,
+.progress-tracker:hover::before,
+.video-sidebar:hover::before,
+.subject-card:hover::before,
+.subject-item:hover::before,
+.unit-card:hover::before,
+.sidebar:hover::before,
+.admin-sidebar:hover::before,
+.topbar:hover::before,
+.admin-topbar:hover::before,
+.btn:hover::before {
+  opacity: 1 !important;
+}
+
+/* 5. ULTRA-CLEAN LINE NAVIGATION ICONOGRAPHY */
+.nav-icon,
+.admin-nav-item span {
+  display: inline-block !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin-right: 12px !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  vertical-align: middle !important;
+  filter: brightness(0) invert(1) opacity(0.65) !important;
+  transition: all 0.25s ease !important;
+  font-size: 0 !important; /* Hide original emoji */
+}
+
+/* Map specific items to sleek SVGs */
+/* Dashboard */
+.nav-item[onclick*="dashboard"] .nav-icon,
+#admin-nav-dashboard span,
+#sa-nav-dashboard span,
+#cr-nav-dashboard span {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25' /%3E%3C/svg%3E") !important;
+}
+
+/* Subjects */
+.nav-item[onclick*="subjects"] .nav-icon,
+#admin-nav-subjects span,
+#sa-nav-subjects span,
+#sa-nav-view span {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25' /%3E%3C/svg%3E") !important;
+}
+
+/* Calculator */
+.nav-item[onclick*="calculator"] .nav-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M15.75 15.75h.008v.008H15.75v-.008zm0-2.25h.008v.008H15.75v-.008zm0-2.25h.008v.008H15.75V11.25zm-2.25 4.5h.008v.008h-.008v-.008zm0-2.25h.008v.008h-.008v-.008zm0-2.25h.008v.008h-.008V11.25zm-2.25 4.5h.008v.008h-.008v-.008zm0-2.25h.008v.008h-.008v-.008zm0-2.25h.008v.008h-.008V11.25zm-2.25 4.5h.008v.008H9v-.008zm0-2.25h.008v.008H9v-.008zm0-2.25h.008v.008H9V11.25zm-2.25-4.5h15c.621 0 1.125.504 1.125 1.125v10.5c0 .621-.504 1.125-1.125 1.125h-15a1.125 1.125 0 01-1.125-1.125v-10.5c0-.621.504-1.125 1.125-1.125z' /%3E%3C/svg%3E") !important;
+}
+
+/* Backlog (Warning) */
+.nav-item[onclick*="backlog"] .nav-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z' /%3E%3C/svg%3E") !important;
+}
+
+/* Skills / Skill Up */
+.nav-item[onclick*="skills"] .nav-icon,
+#admin-nav-skillup span,
+#sa-nav-skillup span {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z' /%3E%3C/svg%3E") !important;
+}
+
+/* Profile / Settings */
+.nav-item[onclick*="profile"] .nav-icon,
+.admin-nav-item[onclick*="profile"] span {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z' /%3E%3C/svg%3E") !important;
+}
+
+/* Logout */
+.nav-item[onclick*="Logout"] .nav-icon,
+.nav-item[onclick*="logout"] .nav-icon,
+.admin-nav-item[onclick*="Logout"] span,
+.admin-nav-item[onclick*="logout"] span {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75' /%3E%3C/svg%3E") !important;
+}
+
+/* Add / Create / Choose */
+#admin-nav-create span,
+#cr-nav-choosing span {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M12 4.5v15m7.5-7.5h-15' /%3E%3C/svg%3E") !important;
+}
+
+/* Approvals / Added */
+#admin-nav-approvals span,
+#cr-nav-addcontent span {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z' /%3E%3C/svg%3E") !important;
+}
+
+/* Notifications */
+#admin-nav-notifications span {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0' /%3E%3C/svg%3E") !important;
+}
+
+/* Creator View */
+#admin-nav-creatorview span {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M9.53 16.122a3 3 0 00-3.078 0L3.75 17.5V6.75A2.25 2.25 0 016 4.5h12a2.25 2.25 0 012.25 2.25v10.75l-2.702-1.378a3 3 0 00-3.078 0l-4.94 2.5z' /%3E%3C/svg%3E") !important;
+}
+
+/* Curriculum */
+#sa-nav-curriculum span {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M2.25 13.5h3.86a2.25 2.25 0 012.008 1.24l.885 1.77a2.25 2.25 0 002.007 1.24h1.98a2.25 2.25 0 002.007-1.24l.885-1.77a2.25 2.25 0 012.007-1.24h3.86m-18 0h18a2.25 2.25 0 012.25 2.25v4.25a2.25 2.25 0 01-2.25 2.25H2.25A2.25 2.25 0 010 18.75v-4.25a2.25 2.25 0 012.25-2.25zm0-9h18A2.25 2.25 0 0122.5 9v4.25a2.25 2.25 0 01-2.25 2.25H2.25A2.25 2.25 0 010 13.25V9a2.25 2.25 0 012.25-2.25z' /%3E%3C/svg%3E") !important;
+}
+
+/* ACTIVE STATE NEON GLOW */
+.nav-item.active,
+.admin-nav-item.active {
+  background: rgba(139, 92, 246, 0.16) !important;
+  color: #E9D5FF !important;
+  border: 1px solid rgba(139, 92, 246, 0.35) !important;
+  box-shadow: 
+    0 0 16px rgba(139, 92, 246, 0.3),
+    inset 0 1px 0px rgba(255, 255, 255, 0.1) !important;
+  text-shadow: 0 0 8px rgba(139, 92, 246, 0.45) !important;
+}
+
+.nav-item.active::before,
+.admin-nav-item.active::before {
+  background: #C084FC !important;
+  box-shadow: 0 0 12px #C084FC, 0 0 24px #C084FC !important;
+}
+
+.nav-item.active .nav-icon,
+.admin-nav-item.active span {
+  filter: brightness(0) invert(1) drop-shadow(0 0 6px rgba(139, 92, 246, 0.9)) opacity(1) !important;
+}
+
+/* Custom adjustment to make sure scrollbars look dark and sleek too */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(5, 4, 11, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.3);
+}
