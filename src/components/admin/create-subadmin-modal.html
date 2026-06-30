@@ -1,0 +1,49 @@
+<div class="modal-overlay" id="create-subadmin-modal">
+  <div class="modal create-subadmin-dialog" style="max-width:500px;">
+    <h3 id="create-subadmin-title" style="margin-bottom:1.2rem;">Create Sub Admin</h3>
+    <div class="form-row">
+      <div class="input-group">
+        <label>User ID</label>
+        <input class="input" id="sa-create-username" placeholder="e.g. ravi_cse">
+      </div>
+      <div class="input-group">
+        <label>Password</label>
+        <div class="password-field">
+          <input class="input" id="sa-create-password" placeholder="Set password" type="password">
+          <button type="button" class="password-toggle" aria-label="Show password" onclick="toggleSubAdminPassword()">Eye</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="input-group">
+        <label>University</label>
+        <select class="select" id="sa-create-university">
+          <option value="">Select University</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>Branch</label>
+        <select class="select" id="sa-create-branch">
+          <option value="">Select Branch</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="input-group">
+        <label>Regulation</label>
+        <select class="select" id="sa-create-regulation">
+          <option value="">Select Regulation</option>
+        </select>
+      </div>
+      <input class="input" id="sa-create-dept" type="hidden" value="Academics">
+      <input class="input" id="sa-create-permissions" type="hidden" value="subjects, units, content">
+    </div>
+    <div id="sa-create-err" style="display:none;font-size:0.82rem;color:var(--red);margin-bottom:10px;padding:8px 12px;background:var(--red-light);border-radius:var(--radius-sm);">Please fill all fields.</div>
+    <div id="sa-create-success" style="display:none;font-size:0.82rem;color:var(--green);margin-bottom:10px;padding:8px 12px;background:var(--green-light);border-radius:var(--radius-sm);"></div>
+    <div id="sa-existing-list" style="margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeCreateSubAdminModal()">Cancel</button>
+      <button class="btn btn-lavender" id="sa-create-submit" onclick="createSubAdmin()">Create</button>
+    </div>
+  </div>
+</div>

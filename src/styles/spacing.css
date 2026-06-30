@@ -1,0 +1,37 @@
+/* src/styles/spacing.css */
+/* Margin and padding utility classes using the spacing scale (4px base) */
+/* Example: .m-4 => margin: var(--spacing-4); */
+.m-4 { margin: var(--spacing-4); }
+.mt-4 { margin-top: var(--spacing-4); }
+.mb-4 { margin-bottom: var(--spacing-4); }
+.ml-4 { margin-left: var(--spacing-4); }
+.mr-4 { margin-right: var(--spacing-4); }
+.mx-4 { margin-left: var(--spacing-4); margin-right: var(--spacing-4); }
+.my-4 { margin-top: var(--spacing-4); margin-bottom: var(--spacing-4); }
+
+.p-4 { padding: var(--spacing-4); }
+.pt-4 { padding-top: var(--spacing-4); }
+.pb-4 { padding-bottom: var(--spacing-4); }
+.pl-4 { padding-left: var(--spacing-4); }
+.pr-4 { padding-right: var(--spacing-4); }
+.px-4 { padding-left: var(--spacing-4); padding-right: var(--spacing-4); }
+.py-4 { padding-top: var(--spacing-4); padding-bottom: var(--spacing-4); }
+
+/* Scale up to 16 (64px) using the defined spacing variables */
+.m-8 { margin: var(--spacing-8); }
+.mt-8 { margin-top: var(--spacing-8); }
+.mb-8 { margin-bottom: var(--spacing-8); }
+.mx-8 { margin-left: var(--spacing-8); margin-right: var(--spacing-8); }
+.my-8 { margin-top: var(--spacing-8); margin-bottom: var(--spacing-8); }
+.p-8 { padding: var(--spacing-8); }
+.px-8 { padding-left: var(--spacing-8); padding-right: var(--spacing-8); }
+.py-8 { padding-top: var(--spacing-8); padding-bottom: var(--spacing-8); }
+
+.m-12 { margin: var(--spacing-12); }
+.p-12 { padding: var(--spacing-12); }
+
+.m-16 { margin: var(--spacing-16); }
+.p-16 { padding: var(--spacing-16); }
+
+/* Utility to prevent overflow */
+.no-overflow { overflow: hidden; }

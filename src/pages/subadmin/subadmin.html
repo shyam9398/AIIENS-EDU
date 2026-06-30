@@ -1,0 +1,64 @@
+<div class="screen" id="screen-subadmin">
+  <!-- Sub Admin Sidebar Backdrop -->
+  <div class="admin-sidebar-backdrop" id="sa-sidebar-backdrop" onclick="closeSASidebar()"></div>
+  <!-- Sub Admin Sidebar -->
+  <aside class="admin-sidebar" id="sa-sidebar">
+    <div class="admin-sidebar-header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="logo-icon" style="width:30px;height:30px;font-size:0.75rem;background:linear-gradient(135deg,var(--teal),var(--primary));">S</div>
+        <span style="font-weight:800;font-size:0.95rem;letter-spacing:-0.02em;">Sub Admin</span>
+      </div>
+      <button onclick="closeSASidebar()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text2);padding:4px;">✕</button>
+    </div>
+    <div style="padding:1rem 1.2rem;border-bottom:1px solid var(--border);margin-bottom:0.5rem;">
+      <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:6px;">Logged in as</div>
+      <div style="font-weight:700;font-size:0.9rem;" id="sa-sidebar-name">Sub Admin</div>
+      <div style="font-size:0.75rem;color:var(--text3);" id="sa-sidebar-info">Content Manager</div>
+    </div>
+    <nav style="padding:0.5rem 0.8rem;flex:1;">
+      <div class="admin-nav-item active" id="sa-nav-dashboard" onclick="switchSASection('dashboard')">
+        <span>📊</span> Dashboard
+      </div>
+      <div class="admin-nav-item" id="sa-nav-subjects" onclick="switchSASection('subjects')">
+        <span>📚</span> Create Subject
+      </div>
+      <div class="admin-nav-item" id="sa-nav-view" onclick="switchSASection('view')">
+        <span>👁️</span> View Subjects
+      </div>
+      <div class="admin-nav-item" id="sa-nav-skillup" onclick="switchSASection('skillup')">
+        <span>⚡</span> Skill Up
+      </div>
+      <div class="admin-nav-item" id="sa-nav-curriculum" onclick="switchSASection('curriculum')">
+        <span>🗂️</span> Curriculum
+      </div>
+    </nav>
+    <div style="padding:1rem 0.8rem;border-top:1px solid var(--border);">
+      <div class="admin-nav-item" onclick="subAdminLogout()" style="color:var(--red);">
+        <span>🚪</span> Logout
+      </div>
+    </div>
+  </aside>
+  <!-- Sub Admin Main -->
+  <div class="admin-main-wrap" id="sa-main-wrap">
+    <header class="admin-topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger-btn" id="sa-hamburger" onclick="toggleSASidebar()" style="display:flex;">
+          <span></span><span></span><span></span>
+        </button>
+        <div>
+          <div style="font-weight:800;font-size:1rem;letter-spacing:-0.02em;" id="sa-topbar-title">Sub Admin Dashboard</div>
+          <div style="font-size:0.72rem;color:var(--text3);">Content Management</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="subAdminBack()">← Back</button>
+    </header>
+    <div class="admin-content" id="sa-content">
+      <!-- Content rendered by JS -->
+    </div>
+    </div>
+
+
+
+</div>
+
+

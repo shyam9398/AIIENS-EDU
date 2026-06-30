@@ -1,0 +1,80 @@
+<div class="screen" id="screen-admin">
+  <!-- Admin Sidebar Backdrop -->
+  <div class="admin-sidebar-backdrop" id="admin-sidebar-backdrop" onclick="closeAdminSidebar()"></div>
+  <!-- Admin Sidebar -->
+  <aside class="admin-sidebar" id="admin-sidebar">
+    <div class="admin-sidebar-header">
+      <div class="sidebar-logo">
+        <div class="logo-icon" style="width:32px;height:32px;">A</div>
+        <span class="sidebar-logo-text">Aim <span>Easy</span></span>
+      </div>
+      <button onclick="closeAdminSidebar()"
+        style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text2);padding:4px;">✕</button>
+    </div>
+    <div style="padding:1rem 1.2rem;border-bottom:1px solid var(--border);margin-bottom:0.5rem;">
+      <div
+        style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:6px;">
+        Logged in as</div>
+      <div style="font-weight:700;font-size:0.9rem;" id="admin-sidebar-name">Administrator</div>
+      <div style="font-size:0.75rem;color:var(--text3);" id="admin-sidebar-role">Full Access</div>
+    </div>
+    <nav style="padding:0.5rem 0.8rem;flex:1;">
+      <div class="admin-nav-item active" id="admin-nav-dashboard" onclick="switchAdminSection('dashboard')">
+        <span>📊</span> Dashboard
+      </div>
+      <div class="admin-nav-item" id="admin-nav-create" onclick="switchAdminSection('create')">
+        <span>➕</span> Create
+      </div>
+      <div class="admin-nav-item" id="admin-nav-subjects" onclick="switchAdminSection('subjects')">
+        <span>📚</span> Subjects
+      </div>
+      <div class="admin-nav-item" id="admin-nav-approvals" onclick="switchAdminSection('approvals')">
+        <span>✅</span> Approvals
+        <span class="admin-nav-badge" id="admin-approval-badge" style="display:none;">0</span>
+      </div>
+      <div class="admin-nav-item" id="admin-nav-notifications" onclick="switchAdminSection('notifications')">
+        <span>🔔</span> Notifications
+      </div>
+      <div class="admin-nav-item" id="admin-nav-creatorview" onclick="switchAdminSection('creatorview')">
+        <span>🎨</span> Creator View
+      </div>
+      <div class="admin-nav-item" id="admin-nav-skillup" onclick="switchAdminSection('skillup')">
+        <span>⚡</span> Skill Up
+      </div>
+    </nav>
+    <div style="padding:1rem 0.8rem;border-top:1px solid var(--border);">
+      <div class="admin-nav-item" onclick="adminLogout()" style="color:var(--red);">
+        <span>🚪</span> Logout
+      </div>
+    </div>
+  </aside>
+  <!-- Admin Main -->
+  <div class="admin-main-wrap" id="admin-main-wrap">
+    <header class="admin-topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="hamburger-btn" id="admin-hamburger" onclick="toggleAdminSidebar()" style="display:flex;">
+          <span></span><span></span><span></span>
+        </button>
+        <div>
+          <div style="font-weight:800;font-size:1rem;letter-spacing:-0.02em;" id="admin-topbar-title">Admin Dashboard
+          </div>
+          <div style="font-size:0.72rem;color:var(--text3);" id="admin-role-label">Administrator</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-primary btn-sm" id="create-subadmin-btn"
+          onclick="switchAdminSection('create');closeAdminSidebar();" style="display:none;">+ Sub Admin</button>
+        <button class="btn btn-ghost btn-sm" onclick="adminLogout()">← Logout</button>
+      </div>
+    </header>
+    <div class="admin-content" id="admin-content">
+      <!-- Content rendered by JS -->
+    </div>
+
+
+
+
+
+
+  </div>
+</div>

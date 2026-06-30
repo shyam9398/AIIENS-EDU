@@ -1,0 +1,398 @@
+<div class="screen" id="screen-app" style="background:var(--bg);flex-direction:column;">
+
+  <!-- SIDEBAR BACKDROP -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>
+
+  <!-- SIDEBAR (hamburger overlay) -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <div class="logo-icon" style="width:32px;height:32px;">A</div>
+        <span class="sidebar-logo-text">AIIENS <span>Edu</span></span>
+      </div>
+      <!-- Close X button inside sidebar -->
+      <button class="sidebar-close-btn" onclick="closeSidebar()" aria-label="Close menu">✕</button>
+    </div>
+
+    <div class="sidebar-profile">
+      <div class="profile-avatar" id="sidebar-avatar">--</div>
+      <div class="profile-info">
+        <div class="profile-name" id="sidebar-name">Student</div>
+        <div class="profile-year" id="sidebar-info"></div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Main</div>
+      <div class="nav-item active" onclick="navigateTo('dashboard');closeSidebar()">
+        <span class="nav-icon">🏠</span><span class="nav-label">Dashboard</span>
+      </div>
+      <div class="nav-item" onclick="navigateTo('subjects');closeSidebar()">
+        <span class="nav-icon">📖</span><span class="nav-label">Subjects</span>
+      </div>
+      <div class="nav-section-label">Tools</div>
+      <div class="nav-item" onclick="navigateTo('calculator');closeSidebar()">
+        <span class="nav-icon">🧮</span><span class="nav-label">Calculator</span>
+      </div>
+      <div class="nav-item" onclick="navigateTo('backlog');closeSidebar()">
+        <span class="nav-icon">⚠️</span><span class="nav-label">Backlog Subjects</span>
+        <span class="nav-badge" id="backlog-badge">0</span>
+      </div>
+      <div class="nav-item" onclick="navigateTo('skills');closeSidebar()">
+        <span class="nav-icon">⚡</span><span class="nav-label">Skills Up</span>
+        <span class="nav-badge" style="background:var(--teal);">NEW</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="nav-item" onclick="showScreen('screen-profile');closeSidebar()">
+        <span class="nav-icon">👤</span><span class="nav-label">Profile Settings</span>
+      </div>
+      <div class="nav-item" onclick="openLogoutModal()" style="color:var(--red);">
+        <span class="nav-icon">🚪</span><span class="nav-label">Logout</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN (full width now — sidebar is overlay) -->
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <!-- Hamburger button -->
+        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleSidebar()" aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
+        <div>
+          <div class="page-title" id="topbar-title">Dashboard</div>
+          <div class="breadcrumb" id="topbar-breadcrumb">Home / <span>Dashboard</span></div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input type="text" placeholder="Search subjects, topics..." id="global-search"
+            oninput="handleSearch(this.value)">
+        </div>
+        <div class="notif-btn" onclick="openNotificationsModal()" style="position:relative;">
+          🔔
+          <div class="notif-dot" id="student-notif-dot" style="display:none;"></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <!-- ── DASHBOARD ── -->
+      <div id="page-dashboard" style="display:block;">
+
+        <!-- REQUIRED Adsense placement goes below page content (before footer) -->
+        <div class="dash-greeting">
+          <h2 id="dash-greeting-text">Welcome back! 👋</h2>
+          <p>Here's your personalized learning overview for today.</p>
+        </div>
+
+        <!-- Student dashboard metrics are populated from real subject and study activity. -->
+
+        <div class="dash-grid">
+          <div class="metric-card blue" style="animation:fadeIn 0.4s 0.05s ease both">
+            <div class="metric-icon">📊</div>
+            <div class="metric-val" style="color:var(--primary);">0</div>
+            <div class="metric-label">Current CGPA</div>
+            <div class="metric-trend">↑ 0.0 from last sem</div>
+          </div>
+          <div class="metric-card teal" style="animation:fadeIn 0.4s 0.1s ease both">
+            <div class="metric-icon">✅</div>
+            <div class="metric-val" style="color:var(--teal);">0%</div>
+            <div class="metric-label">Syllabus Covered</div>
+            <div class="metric-trend">↑ 0% this week</div>
+          </div>
+          <div class="metric-card lavender" style="animation:fadeIn 0.4s 0.15s ease both">
+            <div class="metric-icon">🔥</div>
+            <div class="metric-val" style="color:var(--lavender);">0</div>
+            <div class="metric-label">Day Streak</div>
+            <div class="metric-trend">↑ Personal best!</div>
+          </div>
+        </div>
+
+        <div class="dash-row streak-dashboard-row">
+          <div>
+            <div class="streak-card" style="margin-bottom:1.2rem;animation:fadeIn 0.4s 0.2s ease both">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">
+                <div>
+                  <div class="streak-num" id="study-streak-current">0 🔥</div>
+                  <div class="streak-label">Consecutive Study Days</div>
+                </div>
+                <div style="font-size:2rem;">🏆</div>
+              </div>
+              <div id="study-streak-meta" style="font-size:0.75rem;color:#92400e;margin-bottom:8px;">Best Streak: 0 ·
+                Last Active: Never</div>
+              <div style="font-size:0.75rem;color:#92400e;margin-bottom:8px;">Study Activity (Last 13 weeks)</div>
+              <div class="heatmap" id="heatmap"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dash-row-3">
+          <div class="progress-tracker" style="animation:fadeIn 0.4s 0.25s ease both">
+            <div class="section-heading">📈 Weekly Progress</div>
+          </div>
+
+          <div class="card" style="animation:fadeIn 0.4s 0.3s ease both">
+            <div class="section-heading">🕐 Recently Opened Subjects</div>
+            <div id="recently-opened-list"></div>
+          </div>
+
+          <div class="card" style="animation:fadeIn 0.4s 0.35s ease both">
+            <div class="section-heading">🎖️ Achievements</div>
+            <div id="achievements-list" class="achievement-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SUBJECTS ── -->
+      <div id="page-subjects" style="display:none;">
+        <div class="subjects-topbar">
+          <div>
+            <h2 style="font-size:1.3rem;margin-bottom:2px;">Your Subjects</h2>
+            <p style="font-size:0.82rem;color:var(--text3);" id="subjects-meta">3rd Year · Sem 3-1 · JNTUK R23</p>
+          </div>
+          <!-- Task 6: Semester switcher shows only allowed semesters for user's year -->
+          <select class="select" style="width:140px;" id="sem-switcher" onchange="switchSemester(this.value)">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+        <div class="subject-grid" id="subject-grid"></div>
+      </div>
+
+      <!-- ── UNITS ── -->
+      <div id="page-units" style="display:none;">
+        <button class="back-btn" onclick="navigateTo('subjects')">← Back to Subjects</button>
+        <div class="units-header">
+          <h2 id="units-subject-name" style="font-size:1.4rem;"></h2>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;" id="units-tags"></div>
+        </div>
+        <div class="units-grid" id="units-grid"></div>
+      </div>
+
+      <!-- ── UNIT CONTENT ── -->
+      <div id="page-unit-content" style="display:none;">
+        <button class="back-btn" onclick="backToUnits()">← Back to Units</button>
+        <div style="margin-bottom:1rem;">
+          <h3 id="unit-content-title" style="font-size:1.25rem;font-weight:800;"></h3>
+          <p id="unit-content-sub" style="font-size:0.82rem;color:var(--text3);margin-top:3px;"></p>
+        </div>
+        <div class="content-tabs">
+          <button class="content-tab active" id="tab-btn-videos" onclick="switchTab('videos')">🎬 Videos</button>
+          <button class="content-tab" id="tab-btn-notes" onclick="switchTab('notes')">📄 Notes</button>
+          <button class="content-tab" id="tab-btn-pyq" onclick="switchTab('pyq')">📝 Previous Year Qs</button>
+          <button class="content-tab" id="tab-btn-iq" onclick="switchTab('iq')">⭐ Important Qs</button>
+        </div>
+
+        <!-- VIDEOS TAB -->
+        <div class="tab-pane active" id="tab-videos">
+          <div class="videos-layout" id="videos-layout">
+            <!-- LEFT: Collapsible Learning Roadmap -->
+            <div class="video-sidebar" id="video-sidebar">
+              <div class="video-sidebar-header" onclick="toggleRoadmapSidebar()" title="Toggle roadmap">
+                <span class="sidebar-header-label">📍 Learning Roadmap</span>
+                <div class="sidebar-toggle-btn" id="sidebar-toggle-icon">◀</div>
+              </div>
+              <div class="video-sidebar-body" id="video-sidebar-body">
+                <div class="video-list" id="video-list"></div>
+              </div>
+            </div>
+            <!-- RIGHT: Video + topic notes -->
+            <div class="video-player-area">
+              <!-- Video embed -->
+              <div class="video-embed-wrapper" id="video-embed-wrapper">
+                <div class="video-placeholder" id="video-placeholder">
+                  <div style="font-size:3.5rem;margin-bottom:4px;">🎬</div>
+                  <div class="play-btn-big" id="play-btn-main" onclick="playCurrentVideo()">▶</div>
+                  <div style="opacity:0.75;font-size:0.95rem;margin-top:6px;color:#fff;" id="now-playing-label">Select a
+                    topic to start</div>
+                </div>
+              </div>
+              <!-- Controls -->
+              <div class="video-controls">
+                <button class="btn btn-ghost" onclick="prevVideo()">← Previous</button>
+                <button class="btn review-btn" id="review-btn" onclick="toggleReview()">🔖 Mark for Review</button>
+                <button class="btn btn-primary" onclick="nextVideo()">Next Step</button>
+              </div>
+              <!-- Topic info + inline notes for this topic -->
+              <div class="card" style="padding:1.1rem;">
+                <div style="font-weight:700;margin-bottom:4px;font-size:1rem;" id="video-topic-title">Select a topic
+                </div>
+                <p style="font-size:0.83rem;color:var(--text2);line-height:1.6;margin-bottom:10px;"
+                  id="video-topic-desc">Choose a topic from the roadmap on the left to start learning.</p>
+                <!-- Inline topic notes populated per selection -->
+                <div id="topic-inline-notes"
+                  style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);"></div>
+              </div>
+              <!-- Student URL suggestion box -->
+              <div class="video-suggest-box">
+                <div class="video-suggest-title">💡 Suggest a Video URL</div>
+                <div class="video-suggest-desc">Found a great educational video? Submit the URL for admin review.</div>
+                <div class="video-suggest-grid">
+                  <input class="video-suggest-input" id="suggest-title-input"
+                    placeholder="Topic Name" type="text">
+                  <input class="video-suggest-input" id="suggest-url-input"
+                    placeholder="Paste YouTube or educational URL here..." type="url">
+                  <textarea class="video-suggest-input" id="suggest-desc-input" placeholder="Description (optional)" rows="2"></textarea>
+                  <button class="btn btn-primary btn-sm" onclick="submitVideoSuggestion()">Submit</button>
+                </div>
+                <div id="suggest-pending-list" style="margin-top:10px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NOTES TAB -->
+        <div class="tab-pane" id="tab-notes">
+          <div class="notes-list" id="notes-list"></div>
+        </div>
+
+        <!-- PYQ TAB -->
+        <div class="tab-pane" id="tab-pyq">
+          <div class="pyq-filters" id="pyq-filters">
+            <div class="pyq-filter active" onclick="filterPYQ(this,'all')">All Years</div>
+          </div>
+          <div id="pyq-list"></div>
+        </div>
+
+        <!-- IQ TAB -->
+        <div class="tab-pane" id="tab-iq">
+          <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+            <button class="btn btn-ghost btn-sm" onclick="showToast('📥 Exporting to PDF...','blue')">📄 Export
+              PDF</button>
+          </div>
+          <div id="iq-list"></div>
+        </div>
+      </div>
+
+      <!-- ── CALCULATOR ── -->
+      <div id="page-calculator" style="display:none;">
+        <div style="margin-bottom:1.4rem;">
+          <!-- Task 8: Renamed from "GPA Calculator" to "Calculator" -->
+          <h2 style="font-size:1.3rem;margin-bottom:3px;">Calculator</h2>
+          <p style="font-size:0.82rem;color:var(--text3);">Add semesters and subjects, enter credits & grades to
+            calculate SGPA & CGPA. Failed subjects auto-move to Backlog.</p>
+        </div>
+        <div class="calc-layout">
+          <div>
+            <!-- UPDATE: Semester tabs for multi-semester CGPA calculation -->
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;align-items:center;">
+              <div id="sem-tabs" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;"></div>
+              <button class="btn btn-teal btn-sm" onclick="addSemester()">+ Add Semester</button>
+            </div>
+            <div class="calc-table-wrapper">
+              <div class="calc-table-header">
+                <h4 id="calc-sem-title">Semester 1 Subjects</h4>
+                <button class="btn btn-primary btn-sm" onclick="addCalcRow()">+ Add Subject</button>
+              </div>
+              <div class="calc-table">
+                <table id="calc-table">
+                  <thead>
+                    <tr>
+                      <th>Subject</th>
+                      <th style="width:80px">Credits</th>
+                      <th style="width:90px">Grade</th>
+                      <th style="width:60px">Points</th>
+                      <th style="width:40px"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="calc-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:1rem;justify-content:flex-end;">
+              <button class="btn btn-ghost" onclick="clearCalc()">Clear All</button>
+              <button class="btn btn-primary" onclick="calculateGPA()">📊 Calculate</button>
+            </div>
+          </div>
+          <div class="calc-results">
+            <div class="result-card"
+              style="text-align:center;background:linear-gradient(135deg,var(--primary-light),var(--lavender-light));border-color:var(--primary-mid);">
+              <div
+                style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text2);margin-bottom:4px;">
+                SGPA</div>
+              <div class="result-big" style="color:var(--primary);" id="sgpa-result">–</div>
+              <div style="font-size:0.78rem;color:var(--text2);margin-top:4px;" id="sgpa-grade">Calculate to see your
+                grade</div>
+            </div>
+            <div class="result-card"
+              style="text-align:center;background:linear-gradient(135deg,var(--teal-light),var(--primary-light));border-color:var(--teal-mid);">
+              <div
+                style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text2);margin-bottom:4px;">
+                CGPA</div>
+              <div class="result-big" style="color:var(--teal);" id="cgpa-result">–</div>
+              <div style="font-size:0.78rem;color:var(--text2);margin-top:4px;">Cumulative grade</div>
+            </div>
+            <div class="result-card">
+              <div style="font-size:0.85rem;font-weight:700;margin-bottom:10px;">Grade Distribution</div>
+              <div id="grade-dist"></div>
+              <div id="backlog-warn"
+                style="display:none;margin-top:12px;padding:10px;background:var(--red-light);border-radius:var(--radius-sm);border:1px solid #fca5a5;">
+                <div style="font-size:0.82rem;font-weight:700;color:var(--red);margin-bottom:3px;">⚠️ Backlogs Detected
+                </div>
+                <div id="backlog-warn-subjects" style="font-size:0.78rem;color:#dc2626;"></div>
+              </div>
+            </div>
+            <div class="result-card" id="all-sems-summary" style="display:none;">
+              <div style="font-size:0.85rem;font-weight:700;margin-bottom:10px;">📊 All Semesters CGPA</div>
+              <div id="all-sems-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── BACKLOG ── -->
+      <div id="page-backlog" style="display:none;">
+        <div style="margin-bottom:1.4rem;">
+          <h2 style="font-size:1.3rem;margin-bottom:3px;">Backlog Subjects</h2>
+          <p style="font-size:0.82rem;color:var(--text3);">Focus on these subjects. Complete all units and practice PYQs
+            to clear your backlogs.</p>
+        </div>
+        <div id="backlog-grid"></div>
+      </div>
+
+      <!-- ── SKILLS ── -->
+      <div id="page-skills" style="display:none;">
+        <div class="coming-soon-wrap">
+          <div class="coming-soon-orbit">
+            <div class="orbit-ring" style="width:160px;height:160px;"></div>
+            <div class="orbit-ring" style="width:120px;height:120px;"></div>
+            <div class="orbit-center">⚡</div>
+            <div
+              style="position:absolute;top:5px;left:50%;transform:translateX(-50%);animation:orbit 4s linear infinite;transform-origin:0 80px;">
+              <div
+                style="width:20px;height:20px;border-radius:50%;background:var(--primary-light);border:2px solid var(--primary);display:flex;align-items:center;justify-content:center;font-size:0.6rem;">
+                💻</div>
+            </div>
+            <div
+              style="position:absolute;bottom:5px;left:50%;transform:translateX(-50%);animation:orbit 6s linear infinite reverse;transform-origin:0 -80px;">
+              <div
+                style="width:20px;height:20px;border-radius:50%;background:var(--teal-light);border:2px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:0.6rem;">
+                📊</div>
+            </div>
+          </div>
+          <h2 style="font-size:1.8rem;margin-bottom:0.5rem;letter-spacing:-0.02em;">Skills Up</h2>
+          <p style="color:var(--text2);max-width:420px;line-height:1.7;margin-bottom:1.5rem;">We're building an
+            incredible skills platform. Soon you'll have access to curated courses in Coding, Aptitude, Communication,
+            AI, and more.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:1.5rem;">
+            <span class="badge badge-primary">💻 Coding</span>
+            <span class="badge badge-teal">🧠 Aptitude</span>
+            <span class="badge badge-lavender">🎤 Communication</span>
+            <span class="badge badge-amber">🤖 AI Skills</span>
+            <span class="badge badge-green">📜 Certifications</span>
+          </div>
+          <button class="btn btn-primary" onclick="showToast('✉️ You will be notified on launch!','green')">Notify Me on
+            Launch 🚀</button>
+        </div>
+      </div>
+
+    </div><!-- /page-content -->
+
+
+
+  </main>
+</div>

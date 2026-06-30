@@ -1,0 +1,131 @@
+<div class="screen auth-page" id="screen-profile">
+  <div class="profile-card">
+    <div style="margin-bottom:0.4rem;">
+      <div class="logo" style="margin-bottom:0.6rem;">
+        <div class="logo-icon">A</div> AIIENS Edu
+      </div>
+      <h3 style="font-size:1.3rem;margin-bottom:0.3rem;">Complete your profile</h3>
+      <p style="font-size:0.83rem;color:var(--text2);">Set up once, and we'll personalize everything for you</p>
+    </div>
+    <div class="profile-steps">
+      <div class="profile-step active" id="step1"></div>
+      <div class="profile-step" id="step2"></div>
+    </div>
+
+    <!-- Step 1: Personal -->
+    <div id="profile-step1">
+      <div class="section-title">Personal Information</div>
+      <div class="photo-upload">
+        <div class="photo-circle" id="photo-circle" onclick="document.getElementById('photo-input').click()">📷</div>
+        <div>
+          <div style="font-weight:700;font-size:0.9rem;">Profile Photo</div>
+          <div style="font-size:0.78rem;color:var(--text3);">Click to upload (optional)</div>
+        </div>
+        <input type="file" id="photo-input" accept="image/*" style="display:none" onchange="previewPhoto(event)">
+      </div>
+      <div class="input-group">
+        <label>Full Name</label>
+        <input class="input" id="p-name" placeholder="e.g. Sai Krishna Reddy" type="text">
+      </div>
+      <div class="input-group">
+        <label>Email</label>
+        <input class="input" id="p-email" placeholder="you@example.com" type="email" readonly>
+      </div>
+      <div class="form-row">
+        <div class="input-group" id="profile-college-group">
+          <label>College Name <span style="color:red">*</span></label>
+            <input
+            class="input"
+            id="p-college"
+            placeholder="e.g. VRSEC"
+            type="text"
+            required>
+        </div>
+      <div class="input-group">
+        <label>Phone Number <span style="color:red">*</span></label>
+          <input
+           class="input"
+          id="p-phone"
+          placeholder="10-digit number"
+          type="tel"
+          maxlength="10"
+          required
+          oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)">
+      </div>
+    </div>
+      <div id="creator-profile-fields" style="display:none;">
+        <div class="input-group">
+          <label>Creator Type</label>
+          <select class="select" id="p-role-type" onchange="window.syncCreatorProfileFields?.()">
+            <option value="">Select Creator Type</option>
+            <option value="teacher">Teacher</option>
+            <option value="non_teacher">Non Teacher</option>
+          </select>
+        </div>
+        <div id="creator-teacher-fields" style="display:none;">
+          <div class="input-group">
+            <label>Qualification</label>
+            <input class="input" id="p-qualification" placeholder="e.g. M.Tech" type="text">
+          </div>
+          <div class="input-group">
+            <label>Experience</label>
+            <input class="input" id="p-experience" placeholder="e.g. 5 years" type="text">
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:0.5rem;">
+        <button class="btn btn-primary" onclick="profileStep2()">Next →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Academic -->
+    <div id="profile-step2" style="display:none;">
+      <div class="section-title">Academic Information</div>
+      <div class="form-row">
+        <div class="input-group">
+          <label>University</label>
+          <select class="select" id="p-university">
+            <option value="">Select University</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Regulation</label>
+          <select class="select" id="p-regulation">
+            <option value="">Select Regulation</option>
+          </select>
+        </div>
+      </div>
+      <!-- Task 3: Branch dropdown added -->
+      <div class="input-group" id="profile-branch-group">
+        <label>Branch</label>
+        <select class="select" id="p-branch">
+          <option value="">Select Branch</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="input-group">
+          <label>Year</label>
+          <select class="select" id="p-year" onchange="updateSemesterOptions()">
+            <option value="">Select Year</option>
+            <option value="1">1st Year</option>
+            <option value="2">2nd Year</option>
+            <option value="3">3rd Year</option>
+            <option value="4">4th Year</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Current Semester</label>
+          <select class="select" id="p-semester">
+            <option value="">Select Year first</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:0.5rem;gap:10px;">
+        <button class="btn btn-ghost" onclick="backToStep1()">← Back</button>
+        <button class="btn btn-primary" onclick="submitProfile()">🚀 Go to Dashboard</button>
+</div>
+</div>
+
+</div>
+
+</div>

@@ -1,0 +1,27 @@
+<div class="chat-window" id="chat-window">
+  <div class="chat-header">
+    <div class="chat-avatar">🤖</div>
+    <div>
+      <div class="chat-title">AIIENS Edu AI</div>
+      <div class="chat-subtitle">● Online · Always ready to help</div>
+    </div>
+    <button class="chat-close" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-msg bot">
+      <div class="chat-bubble">Hi! I'm your AI study assistant. I can explain topics, generate quizzes, create mind maps, summarize notes, and analyze your weak areas. What would you like to do? 🎓</div>
+    </div>
+  </div>
+  <div class="chat-quick-btns">
+    <button class="chat-quick-btn" onclick="quickChat('Explain current topic')">💡 Explain Topic</button>
+    <button class="chat-quick-btn" onclick="quickChat('Create a quiz for me')">🧠 Quiz Me</button>
+    <button class="chat-quick-btn" onclick="quickChat('Summarize this unit')">📝 Summarize</button>
+    <button class="chat-quick-btn" onclick="quickChat('Show my weak areas')">⚠️ Weak Areas</button>
+    <button class="chat-quick-btn" onclick="quickChat('Generate mind map')">🗺️ Mind Map</button>
+    <button class="chat-quick-btn" onclick="quickChat('Generate notes for this topic')">📒 Notes</button>
+  </div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="chat-input" placeholder="Ask anything..." onkeydown="if(event.key==='Enter')sendChat()">
+    <button class="chat-send" onclick="sendChat()">➤</button>
+  </div>
+</div>
