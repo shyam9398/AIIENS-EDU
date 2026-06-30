@@ -29,7 +29,7 @@ export default function LegacyAppShell() {
       <DynamicBlockList blocks={floatingBlocks} />
       <DynamicBlockList blocks={modalBlocks} />
       <div className="adsense-banner google-ad-banner"></div>
-      <footer className="site-footer footer">@2025 AIIENS Edu All Rights Reserved</footer>
+      <footer className="site-footer footer">@2026 AIIENS Edu All Rights Reserved</footer>
     </main>
   );
 }
