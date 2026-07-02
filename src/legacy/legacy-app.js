@@ -11294,6 +11294,10 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   const js = (value) => String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const sb = () => window.__AIMEASY_SUPABASE__;
   let liveWorkshopChannel = null;
+  let liveWorkshopActivePage = 'dashboard';
+  let liveWorkshopCarouselTimer = null;
+  let liveWorkshopCarouselIndex = 0;
+  let liveWorkshopRenderToken = 0;
   const todayKeyDb = (date = new Date()) => date.toISOString().slice(0, 10);
   const pctFromCgpa = (cgpa) => Math.max(0, Math.min(100, Number(cgpa || 0) * 9.5));
 
@@ -11759,13 +11763,46 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       const position = appShell && footer ? 'beforebegin' : 'beforeend';
       const html = `
         <div class="screen live-workshop-screen" id="screen-live-workshops">
-          <div class="live-workshop-shell">
-            <header class="live-workshop-topbar">
-              <button class="btn btn-ghost btn-sm" onclick="showScreen('screen-landing')">Back</button>
-              <strong>Live Workshops</strong>
+          <div class="sidebar-backdrop" id="live-workshop-sidebar-backdrop" onclick="closeLiveWorkshopSidebar()"></div>
+          <aside class="sidebar live-workshop-sidebar" id="live-workshop-sidebar">
+            <div class="sidebar-header">
+              <div class="sidebar-logo">
+                <div class="logo-icon" style="width:32px;height:32px;">A</div>
+                <span class="sidebar-logo-text">AIIENS <span>Live</span></span>
+              </div>
+              <button class="sidebar-close-btn" onclick="closeLiveWorkshopSidebar()" aria-label="Close menu">×</button>
+            </div>
+            <nav class="sidebar-nav">
+              <div class="nav-section-label">Live Workshop</div>
+              <div class="nav-item active" id="live-nav-dashboard" onclick="switchLiveWorkshopPage('dashboard');closeLiveWorkshopSidebar()">
+                <span class="nav-icon">🏠</span><span class="nav-label">Dashboard</span>
+              </div>
+              <div class="nav-item" id="live-nav-skillup" onclick="switchLiveWorkshopPage('skillup');closeLiveWorkshopSidebar()">
+                <span class="nav-icon">📚</span><span class="nav-label">SkillUp Courses</span>
+              </div>
+            </nav>
+            <div class="sidebar-footer">
+              <div class="nav-item" onclick="showScreen('screen-landing')">
+                <span class="nav-icon">←</span><span class="nav-label">Back to Home</span>
+              </div>
+            </div>
+          </aside>
+          <main class="main live-workshop-main">
+            <header class="topbar live-workshop-topbar">
+              <div class="topbar-left">
+                <button class="hamburger-btn" onclick="toggleLiveWorkshopSidebar()" aria-label="Open menu">
+                  <span></span><span></span><span></span>
+                </button>
+                <div>
+                  <div class="page-title" id="live-workshop-title">Dashboard</div>
+                  <div class="breadcrumb">Live Workshops / <span id="live-workshop-breadcrumb">Dashboard</span></div>
+                </div>
+              </div>
             </header>
-            <main id="live-workshop-content"></main>
-          </div>
+            <div class="page-content live-workshop-content-wrap">
+              <div id="live-workshop-content"></div>
+            </div>
+          </main>
         </div>`;
       if (appShell && footer) footer.insertAdjacentHTML(position, html);
       else host.insertAdjacentHTML(position, html);
@@ -11778,6 +11815,28 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         </div>`);
     }
   }
+
+  window.toggleLiveWorkshopSidebar = function toggleLiveWorkshopSidebar() {
+    document.getElementById('live-workshop-sidebar')?.classList.toggle('open');
+    document.getElementById('live-workshop-sidebar-backdrop')?.classList.toggle('open');
+  };
+
+  window.closeLiveWorkshopSidebar = function closeLiveWorkshopSidebar() {
+    document.getElementById('live-workshop-sidebar')?.classList.remove('open');
+    document.getElementById('live-workshop-sidebar-backdrop')?.classList.remove('open');
+  };
+
+  window.switchLiveWorkshopPage = async function switchLiveWorkshopPage(page = 'dashboard') {
+    liveWorkshopActivePage = page === 'skillup' ? 'skillup' : 'dashboard';
+    document.getElementById('live-nav-dashboard')?.classList.toggle('active', liveWorkshopActivePage === 'dashboard');
+    document.getElementById('live-nav-skillup')?.classList.toggle('active', liveWorkshopActivePage === 'skillup');
+    const label = liveWorkshopActivePage === 'skillup' ? 'SkillUp Courses' : 'Dashboard';
+    const title = document.getElementById('live-workshop-title');
+    const breadcrumb = document.getElementById('live-workshop-breadcrumb');
+    if (title) title.textContent = label;
+    if (breadcrumb) breadcrumb.textContent = label;
+    await renderLiveWorkshopDashboard();
+  };
 
   window.openLiveWorkshops = async function openLiveWorkshops() {
     ensureLiveWorkshopSurfaces();
@@ -11831,12 +11890,20 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     liveWorkshopChannel = supabase.channel('live-workshop-dashboard')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_workshops' }, () => {
         if (document.getElementById('screen-live-workshops')?.classList.contains('active')) renderLiveWorkshopDashboard();
+        if (document.getElementById('admin-nav-liveworkshops')?.classList.contains('active')) loadAdminLiveWorkshopList();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_workshop_banners' }, () => {
         if (document.getElementById('screen-live-workshops')?.classList.contains('active')) renderLiveWorkshopDashboard();
+        if (document.getElementById('admin-nav-liveworkshops')?.classList.contains('active')) loadAdminLiveBannerList();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_workshop_registrations' }, () => {
         window.updateLandingStats?.();
+        if (document.getElementById('screen-live-workshops')?.classList.contains('active')) renderLiveWorkshopDashboard();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'content_items' }, () => {
+        if (document.getElementById('screen-live-workshops')?.classList.contains('active') && liveWorkshopActivePage === 'skillup') {
+          renderLiveWorkshopDashboard();
+        }
       })
       .subscribe?.();
   }
@@ -11869,7 +11936,11 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         </section>`;
       return;
     }
-    await renderPublishedWorkshops(root);
+    if (liveWorkshopActivePage === 'skillup') {
+      await renderLiveWorkshopSkillUp(root);
+    } else {
+      await renderPublishedWorkshops(root);
+    }
   }
 
   window.submitLiveWorkshopProfile = async function submitLiveWorkshopProfile() {
@@ -11932,18 +12003,158 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     await renderLiveWorkshopDashboard();
   };
 
+  function liveWorkshopBannerSlide(banner, index) {
+    const image = banner?.banner_image || banner?.image_url || banner?.banner_url || '';
+    const title = banner?.banner_title || banner?.title || 'Live Workshops';
+    const subtitle = banner?.banner_subtitle || banner?.subtitle || 'Upcoming expert sessions';
+    return `
+      <article class="live-workshop-carousel-slide ${index === 0 ? 'active' : ''}" data-live-banner-index="${index}" ${image ? `style="background-image:url('${esc(image)}')"` : ''}>
+        <div class="live-workshop-carousel-copy">
+          <span>${esc(title)}</span>
+          <h1>${esc(subtitle)}</h1>
+        </div>
+      </article>`;
+  }
+
+  function updateLiveWorkshopCarousel() {
+    const slides = Array.from(document.querySelectorAll('.live-workshop-carousel-slide'));
+    if (!slides.length) return;
+    liveWorkshopCarouselIndex = ((liveWorkshopCarouselIndex % slides.length) + slides.length) % slides.length;
+    slides.forEach((slide, index) => {
+      slide.classList.toggle('active', index === liveWorkshopCarouselIndex);
+      slide.style.transform = `translateX(${(index - liveWorkshopCarouselIndex) * 100}%)`;
+    });
+  }
+
+  function stopLiveWorkshopCarousel() {
+    if (liveWorkshopCarouselTimer) {
+      window.clearInterval(liveWorkshopCarouselTimer);
+      liveWorkshopCarouselTimer = null;
+    }
+  }
+
+  function startLiveWorkshopCarousel(count) {
+    stopLiveWorkshopCarousel();
+    liveWorkshopCarouselIndex = 0;
+    updateLiveWorkshopCarousel();
+    if (count > 1) {
+      liveWorkshopCarouselTimer = window.setInterval(() => {
+        window.moveLiveWorkshopCarousel(1);
+      }, 3000);
+    }
+  }
+
+  window.moveLiveWorkshopCarousel = function moveLiveWorkshopCarousel(delta) {
+    const slides = document.querySelectorAll('.live-workshop-carousel-slide');
+    if (!slides.length) return;
+    liveWorkshopCarouselIndex = (liveWorkshopCarouselIndex + Number(delta || 0) + slides.length) % slides.length;
+    updateLiveWorkshopCarousel();
+  };
+
+  async function loadLiveWorkshopSkillUpItems() {
+    const supabase = sb();
+    const skills = JSON.parse(localStorage.getItem('edusync_skills') || '[]');
+    const skillVideos = JSON.parse(localStorage.getItem('edusync_skill_videos') || '[]');
+    const skillNotes = JSON.parse(localStorage.getItem('edusync_skill_notes') || '[]');
+    let contentItems = [];
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('content_items')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (!error) contentItems = data || [];
+      } catch (error) {
+        console.warn('[LIVE WORKSHOP] SkillUp content load failed:', error?.message || error);
+      }
+    }
+    return { skills, skillVideos, skillNotes, contentItems };
+  }
+
+  async function renderLiveWorkshopSkillUp(root) {
+    const { skills, skillVideos, skillNotes, contentItems } = await loadLiveWorkshopSkillUpItems();
+    const contentByCourse = new Map();
+    (contentItems || []).forEach((item) => {
+      let meta = item.metadata || {};
+      if (typeof meta === 'string') {
+        try { meta = JSON.parse(meta); } catch { meta = {}; }
+      }
+      const key = meta.skillId || meta.skill_id || item.subject_id || 'content-items';
+      if (!contentByCourse.has(key)) contentByCourse.set(key, []);
+      contentByCourse.get(key).push({ ...item, metadata: meta });
+    });
+    const contentCards = Array.from(contentByCourse.entries()).map(([key, items], index) => {
+      const first = items[0] || {};
+      const videos = items.filter((item) => item.content_type === 'video');
+      const notes = items.filter((item) => ['note', 'pdf'].includes(item.content_type));
+      return {
+        id: `content-${key}`,
+        name: first.metadata?.course || first.metadata?.skill || first.title || 'SkillUp Content',
+        description: first.body || first.description || '',
+        category: first.metadata?.category || 'SkillUp',
+        level: first.metadata?.level || 'Self-paced',
+        icon: '📚',
+        duration: first.metadata?.duration || 'Self-paced',
+        videos: videos.length,
+        notes: notes.length,
+        index,
+      };
+    });
+    const localCards = (skills || []).map((skill, index) => ({
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
+      category: skill.category || 'SkillUp',
+      level: skill.level || 'Beginner',
+      icon: skill.icon || '⚡',
+      duration: skill.duration || 'Self-paced',
+      videos: skillVideos.filter(v => v.skillId == skill.id).length,
+      notes: skillNotes.filter(n => n.skillId == skill.id).length,
+      index,
+    }));
+    const cards = [...localCards, ...contentCards];
+    root.innerHTML = `
+      <section class="live-workshop-section">
+        <div class="section-heading">📚 SkillUp Courses</div>
+        <p class="live-section-copy">Courses use the same SkillUp content source already managed by Admin/SubAdmin.</p>
+        <div class="live-skillup-grid">
+          ${cards.length ? cards.map(skillUpCard).join('') : '<div class="empty-state-card">SkillUp courses will appear here as soon as Admin or SubAdmin publishes content.</div>'}
+        </div>
+      </section>`;
+  }
+
+  function skillUpCard(card) {
+    return `
+      <article class="subject-card live-skillup-card" style="animation-delay:${(card.index || 0) * 0.06}s">
+        <div class="subject-card-header">
+          <div class="subject-icon">${esc(card.icon || '📚')}</div>
+          <div class="subject-name">${esc(card.name)}</div>
+          <div class="subject-code">${esc(card.category)} · ${esc(card.level)}</div>
+        </div>
+        <div class="subject-card-body">
+          <div class="subject-meta">
+            <span class="badge badge-teal">${Number(card.videos || 0)} Videos</span>
+            <span class="badge badge-lavender">${Number(card.notes || 0)} PDFs/Notes</span>
+            <span class="badge badge-primary">${esc(card.duration)}</span>
+          </div>
+          <p style="font-size:0.78rem;color:var(--text2);margin:8px 0;">${esc(card.description || '')}</p>
+          <div class="progress-bar" style="margin-top:8px;"><div class="progress-fill" style="width:0%;"></div></div>
+        </div>
+      </article>`;
+  }
+
   async function renderPublishedWorkshops(root) {
     const supabase = sb();
-    let banner = null;
+    const renderToken = ++liveWorkshopRenderToken;
+    stopLiveWorkshopCarousel();
+    let banners = [];
     try {
       const { data: bannerData, error: bannerError } = await supabase
         .from('live_workshop_banners')
         .select('*')
         .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!bannerError) banner = bannerData || null;
+        .order('created_at', { ascending: false });
+      if (!bannerError) banners = bannerData || [];
     } catch (error) {
       console.warn('[LIVE WORKSHOP] Banner load failed:', error?.message || error);
     }
@@ -11952,21 +12163,66 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       root.innerHTML = `<div class="empty-state-card">Could not load workshops: ${esc(error.message)}</div>`;
       return;
     }
-    const bannerImage = banner?.banner_image || banner?.image_url || (data || []).find(row => row.banner_image)?.banner_image || '';
-    const bannerTitle = banner?.banner_title || banner?.title || 'Live Workshops';
-    const bannerSubtitle = banner?.banner_subtitle || banner?.subtitle || 'Upcoming expert sessions';
+    if (renderToken !== liveWorkshopRenderToken) return;
+    const user = await authUser();
+    let registrations = [];
+    try {
+      const { data: regData, error: regError } = await supabase
+        .from('live_workshop_registrations')
+        .select('*')
+        .eq('user_id', user?.id || '');
+      if (!regError) registrations = regData || [];
+    } catch (regError) {
+      console.warn('[LIVE WORKSHOP] Registered workshop load failed:', regError?.message || regError);
+    }
+    const registeredIds = new Set(
+      (registrations || [])
+        .map((row) => row.workshop_id)
+        .filter(Boolean),
+    );
+    const allWorkshops = data || [];
+    const registeredWorkshops = allWorkshops.filter((row) => registeredIds.has(row.id));
+    const today = todayKeyDb();
+    const upcomingWorkshops = allWorkshops.filter((row) => String(row.workshop_date || '') >= today);
+    if (!banners.length) {
+      const fallback = allWorkshops.find(row => row.banner_image);
+      banners = [{
+        id: 'fallback-live-workshop-banner',
+        banner_image: fallback?.banner_image || '',
+        banner_title: 'Live Workshops',
+        banner_subtitle: 'Upcoming expert sessions',
+      }];
+    }
     root.innerHTML = `
-      <section class="live-workshop-banner" ${bannerImage ? `style="background-image:url('${esc(bannerImage)}')"` : ''}>
-        <div><span>${esc(bannerTitle)}</span><h1>${esc(bannerSubtitle)}</h1></div>
+      <section class="live-workshop-carousel" aria-label="Live workshop banners">
+        <div class="live-workshop-carousel-track" id="live-workshop-carousel-track">
+          ${banners.map((banner, index) => liveWorkshopBannerSlide(banner, index)).join('')}
+        </div>
+        ${banners.length > 1 ? `
+          <button class="live-carousel-arrow left" type="button" onclick="moveLiveWorkshopCarousel(-1)" aria-label="Previous banner">‹</button>
+          <button class="live-carousel-arrow right" type="button" onclick="moveLiveWorkshopCarousel(1)" aria-label="Next banner">›</button>
+        ` : ''}
       </section>
-      <section class="live-workshop-grid">
-        ${(data || []).length ? data.map(workshopCard).join('') : '<div class="empty-state-card">No published workshops yet.</div>'}
-      </section>`;
+      <section class="live-workshop-section">
+        <div class="section-heading">Registered Workshops</div>
+        <div class="live-workshop-grid">
+          ${registeredWorkshops.length ? registeredWorkshops.map(workshopCard).join('') : '<div class="empty-state-card">registered workshops fast.</div>'}
+        </div>
+      </section>
+      <section class="live-workshop-section">
+        <div class="section-heading">Upcoming Workshops</div>
+        <div class="live-workshop-grid">
+          ${upcomingWorkshops.length ? upcomingWorkshops.map(workshopCard).join('') : '<div class="empty-state-card">upcoming workshops available soon.</div>'}
+        </div>
+      </section>
+    `;
+    startLiveWorkshopCarousel(banners.length);
   }
 
   function workshopCard(row) {
     return `
       <article class="live-workshop-card">
+        ${row.banner_image ? `<img class="live-workshop-card-img" src="${esc(row.banner_image)}" alt="${esc(row.workshop_name)} banner" loading="lazy">` : ''}
         <h3>${esc(row.workshop_name)}</h3>
         <p><strong>Speaker:</strong> ${esc(row.speaker_name)}</p>
         <p><strong>Date:</strong> ${esc(row.workshop_date)} <strong>Time:</strong> ${esc(row.workshop_time)}</p>
@@ -11977,10 +12233,19 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
 
   async function renderAdminLiveWorkshops() {
     ensureLiveWorkshopSurfaces();
+    subscribeLiveWorkshopUpdates();
     const content = document.getElementById('admin-content');
     if (!content) return;
     content.innerHTML = `
       <div class="admin-section-head"><div><h2>Live Workshops</h2><p>Create, publish, edit, and delete live workshop sessions.</p></div></div>
+      <div class="card live-admin-form">
+        <div class="admin-section-head" style="margin-bottom:1rem;"><div><h2 style="font-size:1.1rem;">➕ Add Banner</h2><p>Upload multiple dashboard carousel banners using image URLs.</p></div></div>
+        <input class="input" id="admin-lwb-id" type="hidden">
+        <div class="form-row"><div class="input-group"><label>Image</label><input class="input" id="admin-lwb-image" type="url" placeholder="https://..."></div><div class="input-group"><label>Title</label><input class="input" id="admin-lwb-title" placeholder="Live Workshops"></div></div>
+        <div class="form-row"><div class="input-group"><label>Subtitle</label><input class="input" id="admin-lwb-subtitle" placeholder="Upcoming expert sessions"></div><div class="input-group"><label>Status</label><select class="select" id="admin-lwb-status"><option value="true">Active</option><option value="false">Inactive</option></select></div></div>
+        <button class="btn btn-primary" onclick="saveAdminLiveBanner()">Save Banner</button>
+      </div>
+      <div id="admin-live-banner-list" class="live-workshop-grid" style="margin-bottom:1.5rem;"></div>
       <div class="card live-admin-form">
         <input class="input" id="admin-lw-id" type="hidden">
         <div class="form-row"><div class="input-group"><label>Workshop Name</label><input class="input" id="admin-lw-name"></div><div class="input-group"><label>Speaker Name</label><input class="input" id="admin-lw-speaker"></div></div>
@@ -11990,7 +12255,31 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         <button class="btn btn-primary" onclick="saveAdminLiveWorkshop()">Save Workshop</button>
       </div>
       <div id="admin-live-workshop-list" class="live-workshop-grid"></div>`;
+    await loadAdminLiveBannerList();
     await loadAdminLiveWorkshopList();
+  }
+
+  async function loadAdminLiveBannerList() {
+    const supabase = sb();
+    const list = document.getElementById('admin-live-banner-list');
+    if (!supabase || !list) return;
+    const { data, error } = await supabase.from('live_workshop_banners').select('*').order('created_at', { ascending: false });
+    if (error) {
+      list.innerHTML = `<div class="empty-state-card">Could not load banners: ${esc(error.message)}</div>`;
+      return;
+    }
+    list.innerHTML = (data || []).length ? data.map(row => `
+      <article class="live-workshop-card">
+        ${row.banner_image ? `<img class="live-workshop-card-img" src="${esc(row.banner_image)}" alt="${esc(row.banner_title)} banner" loading="lazy">` : ''}
+        <h3>${esc(row.banner_title)}</h3>
+        <p>${esc(row.banner_subtitle || '')}</p>
+        <p><strong>Status:</strong> ${row.is_active ? 'Active' : 'Inactive'}</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" onclick='editAdminLiveBanner(${JSON.stringify(row).replace(/'/g, '&#39;')})'>Edit</button>
+          <button class="btn btn-primary btn-sm" onclick="toggleAdminLiveBanner('${js(row.id)}', ${row.is_active ? 'false' : 'true'})">${row.is_active ? 'Deactivate' : 'Activate'}</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteAdminLiveBanner('${js(row.id)}')">Delete</button>
+        </div>
+      </article>`).join('') : '<div class="empty-state-card">No banners created yet.</div>';
   }
 
   async function loadAdminLiveWorkshopList() {
@@ -12014,6 +12303,58 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         </div>
       </article>`).join('') : '<div class="empty-state-card">No workshops created yet.</div>';
   }
+
+  window.saveAdminLiveBanner = async function saveAdminLiveBanner() {
+    const supabase = sb();
+    if (!supabase) return;
+    const auth = await authUser();
+    const row = {
+      banner_image: document.getElementById('admin-lwb-image')?.value?.trim(),
+      banner_title: document.getElementById('admin-lwb-title')?.value?.trim(),
+      banner_subtitle: document.getElementById('admin-lwb-subtitle')?.value?.trim() || null,
+      is_active: document.getElementById('admin-lwb-status')?.value === 'true',
+      created_by: auth?.id || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (!row.banner_image || !row.banner_title) {
+      window.showToast?.('Please add banner image and title', 'red');
+      return;
+    }
+    const editId = document.getElementById('admin-lwb-id')?.value;
+    const request = editId ? supabase.from('live_workshop_banners').update(row).eq('id', editId) : supabase.from('live_workshop_banners').insert(row);
+    const { error } = await request;
+    if (error) {
+      window.showToast?.('Banner save failed: ' + error.message, 'red');
+      return;
+    }
+    window.showToast?.('Banner saved', 'green');
+    document.getElementById('admin-lwb-id').value = '';
+    document.getElementById('admin-lwb-image').value = '';
+    document.getElementById('admin-lwb-title').value = '';
+    document.getElementById('admin-lwb-subtitle').value = '';
+    document.getElementById('admin-lwb-status').value = 'true';
+    await loadAdminLiveBannerList();
+  };
+
+  window.editAdminLiveBanner = function editAdminLiveBanner(row) {
+    document.getElementById('admin-lwb-id').value = row.id || '';
+    document.getElementById('admin-lwb-image').value = row.banner_image || row.image_url || row.banner_url || '';
+    document.getElementById('admin-lwb-title').value = row.banner_title || row.title || '';
+    document.getElementById('admin-lwb-subtitle').value = row.banner_subtitle || row.subtitle || '';
+    document.getElementById('admin-lwb-status').value = row.is_active ? 'true' : 'false';
+  };
+
+  window.toggleAdminLiveBanner = async function toggleAdminLiveBanner(id, next) {
+    const { error } = await sb().from('live_workshop_banners').update({ is_active: Boolean(next), updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) window.showToast?.('Banner status update failed: ' + error.message, 'red');
+    else await loadAdminLiveBannerList();
+  };
+
+  window.deleteAdminLiveBanner = async function deleteAdminLiveBanner(id) {
+    const { error } = await sb().from('live_workshop_banners').delete().eq('id', id);
+    if (error) window.showToast?.('Banner delete failed: ' + error.message, 'red');
+    else await loadAdminLiveBannerList();
+  };
 
   window.saveAdminLiveWorkshop = async function saveAdminLiveWorkshop() {
     const supabase = sb();
