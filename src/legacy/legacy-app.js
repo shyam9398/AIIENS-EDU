@@ -6623,19 +6623,7 @@ async function v10SASubjects(forceRefresh) {
   </div>`;
 }
 
-function v10SaDotMenu(btn, id, name) {
-  document.querySelectorAll('.v10-popup').forEach(p => p.remove());
-  const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const popup = document.createElement('div');
-  popup.className = 'v10-popup';
-  popup.innerHTML = `
-    <button class="v10-popup-item" onclick="v10SAOpenUnits('${id}')">🔍 Open & Manage</button>
-    <button class="v10-popup-item" onclick="v10SAEditSubject('${id}')">✏️ Edit Subject</button>
-    <button class="v10-popup-item red" onclick="v10SADeleteSubject('${id}','${safeName}')">🗑 Delete Subject</button>`;
-  btn.closest('.v10-dot-wrap').appendChild(popup);
-}
-
-async function v10SAEditSubject(id) {
+async function v10SAEditSubjectLegacy(id) {
   document.querySelectorAll('.v10-popup').forEach(p => p.remove());
   if (!window.aimeasyFetchSubjects) { showToast('Supabase not ready', 'red'); return; }
 
@@ -6668,7 +6656,7 @@ async function v10SAEditSubject(id) {
   v10SASubjects(true);
 }
 
-async function v10SADeleteSubject(id, name) {
+async function v10SADeleteSubjectLegacy(id, name) {
   document.querySelectorAll('.v10-popup').forEach(p => p.remove());
   if (!confirm(`Delete "${name}" from the database?\n\nThis will permanently remove all content for this subject.`)) return;
   if (!window.aimeasyDeleteSubject) { showToast('Supabase not ready', 'red'); return; }
@@ -6680,6 +6668,127 @@ async function v10SADeleteSubject(id, name) {
   showToast('Subject deleted from database', 'red');
   window._v10SaSubjectsCached = null;
   v10SASubjects(true);
+}
+
+/* Subject edit/delete dialogs intentionally update the existing in-memory list after
+   Supabase confirms the mutation. No page reload or second database fetch is needed. */
+function v10SAFormEscape(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function v10SASelectOptions(values, selected) {
+  return [...new Set([selected, ...values].filter(Boolean))].map(value => {
+    const safe = v10SAFormEscape(value);
+    return `<option value="${safe}"${String(value) === String(selected) ? ' selected' : ''}>${safe}</option>`;
+  }).join('');
+}
+
+function v10SaDotMenu(btn, id) {
+  document.querySelectorAll('.v10-popup').forEach(p => p.remove());
+  const popup = document.createElement('div');
+  popup.className = 'v10-popup';
+  popup.innerHTML = `
+    <button class="v10-popup-item" onclick="v10SAEditSubject('${id}')">✏️ Edit Subject</button>
+    <button class="v10-popup-item red" onclick="v10SADeleteSubject('${id}')">🗑 Delete Subject</button>`;
+  btn.closest('.v10-dot-wrap').appendChild(popup);
+}
+
+async function v10SAEditSubject(id) {
+  document.querySelectorAll('.v10-popup').forEach(p => p.remove());
+  if (!window.aimeasyFetchSubjectById) { showToast('Supabase not ready', 'red'); return; }
+  const { data: s, error } = await window.aimeasyFetchSubjectById(id);
+  if (error) { showToast(error.message, 'red'); return; }
+  if (!s) { showToast('Subject not found in database', 'red'); return; }
+
+  document.getElementById('v10-sa-edit-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.id = 'v10-sa-edit-modal';
+  modal.onclick = event => { if (event.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="modal" style="max-width:720px;max-height:90vh;overflow:auto;">
+      <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:1.2rem;">Edit Subject</h2>
+      <div class="v10-2col">
+        <div class="input-group"><label>Subject Name</label><input class="input" id="v10-edit-name" value="${v10SAFormEscape(s.name)}"></div>
+        <div class="input-group"><label>Subject Code</label><input class="input" id="v10-edit-code" value="${v10SAFormEscape(s.code)}"></div>
+      </div>
+      <div class="v10-2col">
+        <div class="input-group"><label>University</label><select class="select" id="v10-edit-uni">${v10SASelectOptions(window.__aiiensRuntimeUniversityNames || [], s.university_name)}</select></div>
+        <div class="input-group"><label>Branch</label><select class="select" id="v10-edit-branch">${v10SASelectOptions(window.__aiiensRuntimeBranchNames || [], s.branch)}</select></div>
+      </div>
+      <div class="v10-2col">
+        <div class="input-group"><label>Regulation</label><select class="select" id="v10-edit-reg">${v10SASelectOptions(['R23','R20','R19','R16'], s.regulation_code)}</select></div>
+        <div class="input-group"><label>Year</label><select class="select" id="v10-edit-year">${v10SASelectOptions(['1','2','3','4'], String(s.year || String(s.semester || '')[0] || ''))}</select></div>
+      </div>
+      <div class="v10-2col">
+        <div class="input-group"><label>Semester</label><select class="select" id="v10-edit-sem">${v10SASelectOptions(['1-1','1-2','2-1','2-2','3-1','3-2','4-1','4-2'], s.semester)}</select></div>
+        <div class="input-group"><label>Credits</label><select class="select" id="v10-edit-credits">${v10SASelectOptions(['1','2','3','4','5','6'], String(s.credits || '3'))}</select></div>
+      </div>
+      <div class="input-group"><label>Status</label><select class="select" id="v10-edit-status">${v10SASelectOptions(['active','inactive'], s.status || 'active')}</select></div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:1rem;">
+        <button class="btn btn-ghost" onclick="document.getElementById('v10-sa-edit-modal')?.remove()">Cancel</button>
+        <button class="btn btn-primary" id="v10-edit-save" onclick="v10SASaveSubject('${id}')">Save Changes</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function v10SASaveSubject(id) {
+  if (!window.aimeasyUpdateSubject) { showToast('Supabase not ready', 'red'); return; }
+  const { data: existing, error: fetchError } = await window.aimeasyFetchSubjectById(id);
+  if (fetchError) { showToast(fetchError.message, 'red'); return; }
+  if (!existing) { showToast('Subject not found in database', 'red'); return; }
+  const value = field => document.getElementById(`v10-edit-${field}`)?.value?.trim();
+  const payload = {
+    name: value('name'), code: value('code'), university_name: value('uni'), branch: value('branch'),
+    regulation_code: value('reg'), year: value('year'), semester: value('sem'),
+    credits: Number(value('credits')), status: value('status'), created_by: existing.created_by
+  };
+  if (!payload.name || !payload.code || !payload.university_name || !payload.branch || !payload.regulation_code || !payload.year || !payload.semester) {
+    showToast('Please fill all required fields', 'red'); return;
+  }
+  const button = document.getElementById('v10-edit-save');
+  if (button) button.disabled = true;
+  const currentSubjects = window._v10SaSubjectsCached || [];
+  const { data, error } = await window.aimeasyUpdateSubject(id, payload);
+  if (error) { if (button) button.disabled = false; showToast(error.message, 'red'); return; }
+  window._v10SaSubjectsCached = currentSubjects.map(subject => String(subject.id) === String(id) ? { ...subject, ...(data || payload) } : subject);
+  document.getElementById('v10-sa-edit-modal')?.remove();
+  await v10SASubjects(false);
+  showToast('Subject updated successfully.', 'green');
+}
+
+async function v10SADeleteSubject(id) {
+  document.querySelectorAll('.v10-popup').forEach(p => p.remove());
+  document.getElementById('v10-sa-delete-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.id = 'v10-sa-delete-modal';
+  modal.onclick = event => { if (event.target === modal) modal.remove(); };
+  modal.innerHTML = `<div class="modal" style="max-width:460px;">
+    <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:.7rem;">Delete Subject?</h2>
+    <p style="color:var(--text2);margin-bottom:1.3rem;">This action will permanently delete the subject and all its related data.</p>
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button class="btn btn-ghost" onclick="document.getElementById('v10-sa-delete-modal')?.remove()">Cancel</button>
+      <button class="btn btn-danger" id="v10-delete-confirm" onclick="v10SAConfirmDelete('${id}')">Delete</button>
+    </div></div>`;
+  document.body.appendChild(modal);
+}
+
+async function v10SAConfirmDelete(id) {
+  if (!window.aimeasyDeleteSubject) { showToast('Supabase not ready', 'red'); return; }
+  const { data: existing, error: fetchError } = await window.aimeasyFetchSubjectById(id);
+  if (fetchError) { showToast(fetchError.message, 'red'); return; }
+  if (!existing) { showToast('Subject not found in database', 'red'); return; }
+  const button = document.getElementById('v10-delete-confirm');
+  if (button) button.disabled = true;
+  const currentSubjects = window._v10SaSubjectsCached || [];
+  const { error } = await window.aimeasyDeleteSubject(id);
+  if (error) { if (button) button.disabled = false; showToast(error.message, 'red'); return; }
+  window._v10SaSubjectsCached = currentSubjects.filter(subject => String(subject.id) !== String(id));
+  document.getElementById('v10-sa-delete-modal')?.remove();
+  await v10SASubjects(false);
+  showToast('Subject deleted successfully.', 'green');
 }
 
 async function v10SACreateSubject() {

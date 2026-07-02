@@ -5,6 +5,7 @@ import {
   modalBlocks,
   shellBlocks,
 } from './sharedUiRegistry.js';
+import AdPlacementManager from '../ads/AdPlacementManager.jsx';
 
 function DynamicBlockList({ blocks }) {
   return blocks.map((block) => (
@@ -28,7 +29,7 @@ export default function LegacyAppShell() {
       <DynamicBlockList blocks={appPages} />
       <DynamicBlockList blocks={floatingBlocks} />
       <DynamicBlockList blocks={modalBlocks} />
-      <div className="adsense-banner google-ad-banner"></div>
+      <AdPlacementManager />
       <footer className="site-footer footer">@2026 AIIENS Edu All Rights Reserved</footer>
     </main>
   );

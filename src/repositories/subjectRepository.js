@@ -32,6 +32,12 @@ export async function fetchSubjects(filters = {}) {
   return q;
 }
 
+export async function fetchSubjectById(id) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  if (!id) return { data: null, error: new Error('Subject ID is required') };
+  return supabase.from('subjects').select('*').eq('id', id).maybeSingle();
+}
+
 export async function createSubject(subject) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
   const row = normalizeSubject(subject);
@@ -40,20 +46,14 @@ export async function createSubject(subject) {
 
 export async function updateSubject(id, subject) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  const row = { ...normalizeSubject(subject), updated_at: new Date().toISOString() };
-  let query = supabase.from('subjects').update(row).eq('id', id);
-  const ownerKey = subject?.createdBy || subject?.created_by;
-  if (ownerKey) {
-    query = query.eq('created_by', ownerKey);
-  }
-  return query.select().single();
+  const row = normalizeSubject(subject);
+  return supabase.from('subjects').update(row).eq('id', id).select().single();
 }
 
-export async function deleteSubject(id, createdBy = null) {
-  if (!supabase) return { error: new Error('Supabase not configured') };
-  let query = supabase.from('subjects').delete().eq('id', id);
-  if (createdBy) {
-    query = query.eq('created_by', createdBy);
-  }
-  return query;
+export async function deleteSubject(id) {
+  if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+  const { data, error } = await supabase.from('subjects').delete().eq('id', id).select('id').maybeSingle();
+  if (error) return { data: null, error };
+  if (!data) return { data: null, error: new Error('Subject could not be deleted or no longer exists.') };
+  return { data, error: null };
 }

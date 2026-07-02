@@ -431,7 +431,8 @@ function wrapSubjectMutations() {
         args[0] = { ...args[0], createdBy: meta.created_by, created_by: meta.created_by, created_by_role: meta.created_by_role };
       }
       if (name === 'aimeasyUpdateSubject' && args[1] && typeof args[1] === 'object') {
-        args[1] = { ...args[1], createdBy: meta.created_by, created_by: meta.created_by };
+        const owner = args[1].created_by || args[1].createdBy || meta.created_by;
+        args[1] = { ...args[1], createdBy: owner, created_by: owner };
       }
       if (name === 'aimeasyDeleteSubject' && args.length === 1) {
         args.push(meta.created_by);

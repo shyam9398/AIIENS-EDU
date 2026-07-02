@@ -13,6 +13,67 @@ body { overflow-x: hidden; }
   .sidebar-backdrop { display: none; }
 }
 
+/* Google AdSense React placements */
+.aiiens-ad-anchor {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.aiiens-ad-anchor:empty {
+  display: none !important;
+}
+
+.aiiens-ad-slot {
+  display: block;
+  width: min(100%, 970px);
+  margin: 1.25rem auto;
+  overflow: hidden;
+  position: relative;
+  border-radius: var(--radius-md);
+  background: transparent;
+  contain: layout paint;
+}
+
+.aiiens-ad-slot::before {
+  content: 'ADVERTISEMENT';
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text3);
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+.aiiens-ad-banner,
+.aiiens-ad-responsive,
+.aiiens-ad-in-article {
+  padding: 0 1rem;
+}
+
+.aiiens-ad-square,
+.aiiens-ad-sidebar {
+  width: min(100%, 336px);
+}
+
+.adsbygoogle {
+  min-width: 250px;
+}
+
+.adsense-banner {
+  display: none !important;
+}
+
+.aimeasy-app:has(#screen-google-auth.active) .aiiens-ad-anchor,
+.aimeasy-app:has(#screen-profile.active) .aiiens-ad-anchor,
+.aimeasy-app:has(#screen-admin.active) .aiiens-ad-anchor,
+.aimeasy-app:has(#screen-setting-up-profile.active) .aiiens-ad-anchor,
+.aimeasy-app:has(#screen-subadmin.active) .aiiens-ad-anchor,
+.intro-playing .aiiens-ad-anchor,
+.aimeasy-app:has(#screen-intro.active) .aiiens-ad-anchor {
+  display: none !important;
+}
+
 /* Brand palette (professional, academic) */
 :root {
   /* Colors */

@@ -40,6 +40,7 @@ import {
 } from '../repositories/topicRepository.js';
 import {
   fetchSubjects,
+  fetchSubjectById,
   createSubject,
   updateSubject,
   deleteSubject,
@@ -1031,6 +1032,7 @@ if (!/^[0-9]{10}$/.test(phone)) {
   window.aimeasySaveLinkedContentItem = withCurriculumRefresh(saveLinkedContentItem, 'content');
   window.aimeasyFetchCurriculumStats = fetchCurriculumStats;
   window.aimeasyFetchSubjects = fetchSubjects;
+  window.aimeasyFetchSubjectById = fetchSubjectById;
   window.aimeasyCreateSubject = withCurriculumRefresh(createSubject, 'subject');
   window.aimeasyUpdateSubject = withCurriculumRefresh(updateSubject, 'subject');
   window.aimeasyDeleteSubject = withCurriculumRefresh(deleteSubject, 'subject');
