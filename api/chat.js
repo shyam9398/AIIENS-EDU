@@ -1,0 +1,168 @@
+import { createClient } from '@supabase/supabase-js';
+
+const FRIENDLY_ERROR = "Sorry, I'm unable to answer right now. Please try again later.";
+const MODEL = 'gemini-2.0-flash';
+
+function parseBody(req) {
+  if (!req.body) return {};
+  if (typeof req.body === 'object') return req.body;
+  try {
+    return JSON.parse(req.body);
+  } catch {
+    return {};
+  }
+}
+
+function cleanText(value, limit = 4000) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, limit);
+}
+
+function rowText(row) {
+  if (!row || typeof row !== 'object') return '';
+  return Object.values(row)
+    .map((value) => {
+      if (value == null) return '';
+      if (typeof value === 'object') return JSON.stringify(value);
+      return String(value);
+    })
+    .join(' ');
+}
+
+function queryTerms(message) {
+  return Array.from(new Set(cleanText(message, 300).toLowerCase().match(/[a-z0-9]{3,}/g) || []))
+    .filter((term) => !['what', 'when', 'where', 'which', 'with', 'from', 'this', 'that', 'about', 'please'].includes(term))
+    .slice(0, 8);
+}
+
+function scoreRow(row, terms) {
+  const text = rowText(row).toLowerCase();
+  return terms.reduce((score, term) => score + (text.includes(term) ? 1 : 0), 0);
+}
+
+function formatContext(label, rows, mapper) {
+  if (!rows.length) return '';
+  const lines = rows.slice(0, 8).map(mapper).filter(Boolean);
+  return lines.length ? `${label}:\n${lines.join('\n')}` : '';
+}
+
+async function readTable(supabase, table, select, orderColumn) {
+  try {
+    let query = supabase.from(table).select(select).limit(80);
+    if (orderColumn) query = query.order(orderColumn, { ascending: false });
+    const { data, error } = await query;
+    if (error) return [];
+    return data || [];
+  } catch {
+    return [];
+  }
+}
+
+async function loadSupabaseContext(message) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) return '';
+
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const terms = queryTerms(message);
+
+  const [subjects, units, topics, videos, contentItems, workshops] = await Promise.all([
+    readTable(supabase, 'subjects', 'id,name,code,semester,branch,regulation_code,university_name', 'created_at'),
+    readTable(supabase, 'units', 'id,subject_id,title,sort_order', 'created_at'),
+    readTable(supabase, 'topics', 'id,subject_id,unit_id,topic_name,display_order', 'created_at'),
+    readTable(supabase, 'topic_videos', 'id,topic_id,video_url,description,display_order', 'created_at'),
+    readTable(supabase, 'content_items', 'id,subject_id,unit_id,content_type,title,body,url,metadata,created_at', 'created_at'),
+    readTable(supabase, 'live_workshops', 'id,workshop_name,speaker_name,workshop_date,workshop_time,description,status', 'created_at'),
+  ]);
+
+  const rank = (rows) => rows
+    .map((row) => ({ row, score: scoreRow(row, terms) }))
+    .filter((entry) => !terms.length || entry.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.row);
+
+  const rankedSubjects = rank(subjects);
+  const rankedUnits = rank(units);
+  const rankedTopics = rank(topics);
+  const rankedVideos = rank(videos);
+  const rankedContent = rank(contentItems);
+  const rankedWorkshops = rank(workshops.filter((row) => row.status === 'published' || scoreRow(row, terms) > 0));
+
+  const sections = [
+    formatContext('Subjects', rankedSubjects, (row) => `- ${cleanText(row.name)} (${cleanText(row.code || row.branch || row.semester)})`),
+    formatContext('Units', rankedUnits, (row) => `- ${cleanText(row.title)} (subject ${row.subject_id}, unit ${row.id})`),
+    formatContext('Learning Roadmap Topics', rankedTopics, (row) => `- ${cleanText(row.topic_name)} (subject ${row.subject_id}, unit ${row.unit_id})`),
+    formatContext('Topic Videos', rankedVideos, (row) => `- ${cleanText(row.description || row.video_url)} (${cleanText(row.video_url, 220)})`),
+    formatContext('Notes, PYQs, Important Questions, Assignments, Reference Materials, SkillUp', rankedContent, (row) => {
+      const meta = typeof row.metadata === 'string' ? row.metadata : JSON.stringify(row.metadata || {});
+      return `- [${cleanText(row.content_type)}] ${cleanText(row.title || row.url)}: ${cleanText(row.body || meta || row.url, 500)}`;
+    }),
+    formatContext('Workshops', rankedWorkshops, (row) => `- ${cleanText(row.workshop_name)} by ${cleanText(row.speaker_name)} on ${cleanText(row.workshop_date)}: ${cleanText(row.description, 400)}`),
+  ].filter(Boolean);
+
+  return cleanText(sections.join('\n\n'), 9000);
+}
+
+function buildPrompt(message, context) {
+  return [
+    'You are AIIENS Edu AI, a helpful study assistant for engineering students.',
+    'Answer clearly, educationally, and concisely. Use the provided AIIENS Supabase context when it is relevant.',
+    'If context is not relevant or missing, answer using general knowledge.',
+    'Do not invent database records, dates, links, or student progress.',
+    context ? `AIIENS context:\n${context}` : 'AIIENS context: No relevant records were found.',
+    `Student question: ${cleanText(message, 2000)}`,
+  ].join('\n\n');
+}
+
+export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    res.status(405).json({ answer: FRIENDLY_ERROR });
+    return;
+  }
+
+  const apiKey = process.env.VITE_GEMINI_API_KEY;
+  const { message } = parseBody(req);
+  const cleanMessage = cleanText(message, 2000);
+
+  if (!apiKey || !cleanMessage) {
+    res.status(200).json({ answer: FRIENDLY_ERROR });
+    return;
+  }
+
+  try {
+    const context = await loadSupabaseContext(cleanMessage);
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: buildPrompt(cleanMessage, context) }] }],
+          generationConfig: {
+            temperature: 0.45,
+            maxOutputTokens: 900,
+          },
+        }),
+      },
+    );
+
+    if (!geminiResponse.ok) {
+      res.status(200).json({ answer: FRIENDLY_ERROR });
+      return;
+    }
+
+    const data = await geminiResponse.json();
+    const answer = (data.candidates?.[0]?.content?.parts || [])
+      .map((part) => part.text || '')
+      .join('\n')
+      .trim();
+
+    res.status(200).json({ answer: answer || FRIENDLY_ERROR });
+  } catch {
+    res.status(200).json({ answer: FRIENDLY_ERROR });
+  }
+}

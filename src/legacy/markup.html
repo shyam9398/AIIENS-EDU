@@ -859,19 +859,20 @@
         <div style="margin-bottom:1.4rem;">
           <!-- Task 8: Renamed from "GPA Calculator" to "Calculator" -->
           <h2 style="font-size:1.3rem;margin-bottom:3px;">Calculator</h2>
-          <p style="font-size:0.82rem;color:var(--text3);">Add semesters and subjects, enter credits & grades to calculate SGPA & CGPA. Failed subjects auto-move to Backlog.</p>
+          <p style="font-size:0.82rem;color:var(--text3);">Published subjects and credits load automatically. Add custom subjects only when needed.</p>
         </div>
         <div class="calc-layout">
           <div>
             <!-- UPDATE: Semester tabs for multi-semester CGPA calculation -->
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;align-items:center;">
               <div id="sem-tabs" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;"></div>
-              <button class="btn btn-teal btn-sm" onclick="addSemester()">+ Add Semester</button>
+              <button class="btn btn-teal btn-sm" id="calc-add-semester-btn" onclick="addSemester()">+ Add Semester</button>
+              <div id="calc-semester-limit-msg" class="calc-limit-msg" style="display:none;">All semesters have already been added.</div>
             </div>
             <div class="calc-table-wrapper">
               <div class="calc-table-header">
-                <h4 id="calc-sem-title">Semester 1 Subjects</h4>
-                <button class="btn btn-primary btn-sm" onclick="addCalcRow()">+ Add Subject</button>
+                <h4 id="calc-sem-title">Semester 1-1 Subjects</h4>
+                <button class="btn btn-primary btn-sm" onclick="addCalcRow()">+ Add Custom Subject</button>
               </div>
               <div class="calc-table">
                 <table id="calc-table">

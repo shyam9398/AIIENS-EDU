@@ -158,8 +158,14 @@ window.v10Esc = window.v10Esc || function(str) {
 
   function dynamicItems(feature, subject, unit) {
     const key = slug(feature);
+    const dbItems = window.__v10DynamicDbStore?.[`${subject}::${unit}::${key}`];
+    if (Array.isArray(dbItems)) return dbItems;
     return read(DYNAMIC_CONTENT_KEY, []).filter(item => item.slug === key && item.subject === subject && String(item.unit) === String(unit));
   }
+
+  window.edusyncGetDynamicFeatureContent = function(id, feature, subject, unit) {
+    return dynamicItems(feature, subject, unit).find((item) => String(item.id) === String(id)) || null;
+  };
 
   function subjectById(id) {
     return read('edusync_custom_subjects', []).find(item => String(item.id) === String(id));
@@ -232,7 +238,9 @@ window.v10Esc = window.v10Esc || function(str) {
       <div class="v10-item">
         <span style="font-size:1.1rem;">*</span>
         <div class="v10-item-body"><div class="v10-item-title">${esc(item.title)}</div><div class="v10-item-meta">${esc(item.uploadedAt || '')}</div>${item.link ? `<a href="${esc(item.link)}" target="_blank" rel="noopener" style="font-size:.78rem;color:var(--primary);">View</a>` : ''}</div>
-        ${isReadOnly ? '' : `<button class="v10-del" onclick="edusyncDeleteDynamicFeatureContent(${item.id},'${js(feature)}','${js(subject)}',${unit},'${mode}')" title="Delete">x</button>`}
+        ${isReadOnly ? '' : (mode === 'subadmin' && window.v10DynamicCrudButton
+          ? window.v10DynamicCrudButton(item, feature, subject, unit)
+          : `<button class="v10-del" onclick="edusyncDeleteDynamicFeatureContent('${item.id}','${js(feature)}','${js(subject)}','${unit}','${mode}')" title="Delete">x</button>`)}
       </div>`).join('')}</div>` : ''}`;
   }
 
@@ -254,7 +262,7 @@ window.v10Esc = window.v10Esc || function(str) {
     return `<div class="v10-panel"><div class="v10-panel-head"><h4>Unit Content</h4></div><div class="v10-tabs">${tabs}</div>${panes}</div>`;
   }
 
-  window.edusyncAddDynamicFeatureContent = function (feature, subject, unit, mode) {
+  window.edusyncAddDynamicFeatureContent = async function (feature, subject, unit, mode) {
     if (mode === 'subadmin' && window._v10SASubj?.isReadOnly) {
       showToast('Permission denied: Subject is read-only', 'red');
       return;
@@ -266,6 +274,26 @@ window.v10Esc = window.v10Esc || function(str) {
     if (!title) {
       showToast('Enter a title', 'red');
       return;
+    }
+    if (mode === 'subadmin' && window.createContent && window.v10GetDbContextForUnit) {
+      try {
+        const ctx = await window.v10GetDbContextForUnit(subject, unit);
+        if (!ctx?.subjectId || !ctx?.unitId) throw new Error('Unable to resolve subject and unit');
+        await window.createContent(slug(feature), {
+          subjectId: ctx.subjectId,
+          unitId: ctx.unitId,
+          title,
+          body: description || '',
+          url: link || '',
+          metadata: { feature, featureSlug: slug(feature) },
+        });
+        showToast(feature + ' saved successfully.', 'green');
+        await window.v10SAUnitDetail?.(window._v10SASubjId, unit);
+        return;
+      } catch (error) {
+        showToast('Save failed: ' + error.message, 'red');
+        return;
+      }
     }
     const items = read(DYNAMIC_CONTENT_KEY, []);
     items.push({ id: Date.now(), feature, slug: key, title, description, link, subject, unit, uploadedBy: APP.subAdminData?.username || mode || 'Sub Admin', uploadedAt: new Date().toLocaleString() });
@@ -2397,6 +2425,28 @@ window.v10SAUnitDetail = async function (subjId, unitId) {
   if (typeof v10ReloadUnitContentFromDb === 'function') {
     await v10ReloadUnitContentFromDb(subj.name, unitId);
   }
+  if (window.aimeasyListContent && window.v10GetDbContextForUnit && window.v10Features) {
+    const ctx = await window.v10GetDbContextForUnit(subj.name, unitId);
+    const customFeatures = window.v10Features().filter((feature) => !['videos', 'notes', 'pyqs', 'important-questions'].includes(String(feature).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')));
+    window.__v10DynamicDbStore = window.__v10DynamicDbStore || {};
+    await Promise.all(customFeatures.map(async (feature) => {
+      const featureSlug = String(feature).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const result = await window.aimeasyListContent({ subjectId: ctx?.subjectId, unitId: ctx?.unitId, contentType: featureSlug });
+      if (result?.error) return;
+      window.__v10DynamicDbStore[`${subj.name}::${unitId}::${featureSlug}`] = (result.data || []).map((row) => ({
+        id: row.id,
+        feature,
+        slug: featureSlug,
+        title: row.title || '',
+        description: row.body || '',
+        link: row.url || '',
+        subject: subj.name,
+        unit: unitId,
+        uploadedAt: row.created_at ? new Date(row.created_at).toLocaleString() : '',
+        created_by: row.created_by || '',
+      }));
+    }));
+  }
   await window.v10LoadUnitTopicsFromDb?.(subjId, unitId);
 
   const unitNumber = unit.sort_order || dbUnits.findIndex(u => String(u.id) === String(unitId)) + 1 || 1;
@@ -2840,325 +2890,7 @@ window.v10SavedRoadmapTree = function (topics, subjId, unitId) {
   `;
 };
 
-// 6. SubAdmin Upload/Delete Overrides to write to Supabase
-window.v11AdminUploadVideo = async function (subjId, unitId, subjName) {
-  const title = document.getElementById('v11-vtitle')?.value.trim();
-  const url = document.getElementById('v11-vurl')?.value.trim();
-  if (!title || !url) { showToast('Enter title and URL', 'red'); return; }
-  const saved = await window.aimeasySaveLinkedContentItem?.({
-    subject: { id: subjId, name: subjName },
-    unit: { id: unitId, name: `Unit ${unitId}` },
-    contentType: 'video',
-    title,
-    url,
-    createdBy: 'Admin'
-  });
-  if (saved?.error) { showToast('Save failed: ' + saved.error.message, 'red'); return; }
-  showToast('✅ Video uploaded! Live for students.', 'green');
-  document.getElementById('v11-vtitle').value = '';
-  document.getElementById('v11-vurl').value = '';
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
-
-window.v11AdminUploadNote = async function (subjId, unitId, subjName) {
-  const title = document.getElementById('v11-ntitle')?.value.trim();
-  const type = document.getElementById('v11-ntype')?.value;
-  const link = document.getElementById('v11-nlink')?.value.trim();
-  if (!title) { showToast('Enter title', 'red'); return; }
-  const saved = await window.aimeasySaveLinkedContentItem?.({
-    subject: { id: subjId, name: subjName },
-    unit: { id: unitId, name: `Unit ${unitId}` },
-    contentType: 'note',
-    title,
-    url: link,
-    metadata: { type },
-    createdBy: 'Admin'
-  });
-  if (saved?.error) { showToast('Save failed: ' + saved.error.message, 'red'); return; }
-  showToast('✅ Notes uploaded! Live for students.', 'green');
-  document.getElementById('v11-ntitle').value = '';
-  document.getElementById('v11-nlink').value = '';
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
-
-window.v11AdminUploadPYQ = async function (subjId, unitId, subjName) {
-  const year = document.getElementById('v11-pyqyr')?.value.trim();
-  const count = document.getElementById('v11-pyqcnt')?.value || '1';
-  const question = document.getElementById('v11-pyqtxt')?.value.trim();
-  const answer = document.getElementById('v11-pyqans')?.value.trim();
-  if (!question || !year) { showToast('Enter question and year', 'red'); return; }
-  const saved = await window.aimeasySaveLinkedContentItem?.({
-    subject: { id: subjId, name: subjName },
-    unit: { id: unitId, name: `Unit ${unitId}` },
-    contentType: 'pyq',
-    title: question.slice(0, 80),
-    body: question,
-    metadata: { year, count: parseInt(count) || 1, answer },
-    createdBy: 'Admin'
-  });
-  if (saved?.error) { showToast('Save failed: ' + saved.error.message, 'red'); return; }
-  showToast('✅ PYQ added! Live for students.', 'green');
-  document.getElementById('v11-pyqtxt').value = '';
-  document.getElementById('v11-pyqans').value = '';
-  document.getElementById('v11-pyqyr').value = '';
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
-
-window.v11AdminUploadIQ = async function (subjId, unitId, subjName) {
-  const question = document.getElementById('v11-iqtxt')?.value.trim();
-  const priority = document.getElementById('v11-iqprio')?.value;
-  const tags = document.getElementById('v11-iqtags')?.value.trim();
-  if (!question) { showToast('Enter question', 'red'); return; }
-  const saved = await window.aimeasySaveLinkedContentItem?.({
-    subject: { id: subjId, name: subjName },
-    unit: { id: unitId, name: `Unit ${unitId}` },
-    contentType: 'iq',
-    title: question.slice(0, 80),
-    body: question,
-    metadata: { priority, tags },
-    createdBy: 'Admin'
-  });
-  if (saved?.error) { showToast('Save failed: ' + saved.error.message, 'red'); return; }
-  showToast('✅ Important question added! Live for students.', 'green');
-  document.getElementById('v11-iqtxt').value = '';
-  document.getElementById('v11-iqtags').value = '';
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
-
-window.v11AdminDeleteVideo = async function (vid, subjId, unitId, subjName) {
-  if (!confirm('Are you sure you want to delete this video?')) return;
-  if (window.aimeasyDeleteContent) {
-    const { error } = await window.aimeasyDeleteContent(vid);
-    if (error) { showToast('Delete failed: ' + error.message, 'red'); return; }
-  }
-  showToast('Video deleted', 'red');
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
-
-window.v11AdminDeleteNote = async function (nid, subjId, unitId, subjName) {
-  if (!confirm('Are you sure you want to delete this note?')) return;
-  if (window.aimeasyDeleteContent) {
-    const { error } = await window.aimeasyDeleteContent(nid);
-    if (error) { showToast('Delete failed: ' + error.message, 'red'); return; }
-  }
-  showToast('Note deleted', 'red');
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
-
-window.v11AdminDeletePYQ = async function (pid, subjId, unitId, subjName) {
-  if (!confirm('Are you sure you want to delete this PYQ?')) return;
-  if (window.aimeasyDeleteContent) {
-    const { error } = await window.aimeasyDeleteContent(pid);
-    if (error) { showToast('Delete failed: ' + error.message, 'red'); return; }
-  }
-  showToast('PYQ deleted', 'red');
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
-
-window.v11AdminDeleteIQ = async function (qid, subjId, unitId, subjName) {
-  if (!confirm('Are you sure you want to delete this question?')) return;
-  if (window.aimeasyDeleteContent) {
-    const { error } = await window.aimeasyDeleteContent(qid);
-    if (error) { showToast('Delete failed: ' + error.message, 'red'); return; }
-  }
-  showToast('Question deleted', 'red');
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
-
-// ═══════════════════════════════════════════════════════════════
-// EDIT FUNCTIONS FOR NOTES, PYQS, IQS - SUPABASE-BASED
-// ═══════════════════════════════════════════════════════════════
-
-window.v11AdminEditNote = async function (nid, subjId, unitId, subjName) {
-  const notes = JSON.parse(localStorage.getItem('edusync_admin_notes') || '[]');
-  const note = notes.find(n => n.id === nid);
-  if (!note) { showToast('Note not found', 'red'); return; }
-
-  const modal = document.createElement('div');
-  modal.className = 'v11-confirm-modal';
-  modal.innerHTML = `
-    <div class="v11-confirm-box" style="max-width: 500px;">
-      <h3 style="font-size:1.1rem;margin-bottom:1rem;font-weight:700;color:var(--primary);">✏️ Edit Note</h3>
-      <div class="input-group" style="margin-bottom:12px;">
-        <span class="v10-label">TITLE *</span>
-        <input class="input" id="v11-edit-note-title" value="${(note.title || '').replace(/"/g, '&quot;')}" placeholder="Note Title" required />
-      </div>
-      <div class="input-group" style="margin-bottom:12px;">
-        <span class="v10-label">TYPE *</span>
-        <select class="select" id="v11-edit-note-type">
-          <option value="pdf" ${note.type === 'pdf' ? 'selected' : ''}>PDF</option>
-          <option value="doc" ${note.type === 'doc' ? 'selected' : ''}>DOC</option>
-          <option value="link" ${note.type === 'link' ? 'selected' : ''}>Link</option>
-        </select>
-      </div>
-      <div class="input-group" style="margin-bottom:16px;">
-        <span class="v10-label">LINK *</span>
-        <input class="input" id="v11-edit-note-link" value="${(note.link || '').replace(/"/g, '&quot;')}" placeholder="Google Drive / URL Link" required />
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;">
-        <button class="btn btn-ghost btn-sm" onclick="this.closest('.v11-confirm-modal').remove()">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="window.v11SaveEditNote('${nid}','${subjId}','${unitId}','${(subjName || '').replace(/'/g, "\\'")}')">Save Changes</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-};
-
-window.v11SaveEditNote = async function (nid, subjId, unitId, subjName) {
-  const title = document.getElementById('v11-edit-note-title')?.value.trim();
-  const type = document.getElementById('v11-edit-note-type')?.value;
-  const link = document.getElementById('v11-edit-note-link')?.value.trim();
-  
-  if (!title || !link) { showToast('Title and Link are required', 'red'); return; }
-  
-  const notes = JSON.parse(localStorage.getItem('edusync_admin_notes') || '[]');
-  const noteIdx = notes.findIndex(n => n.id === nid);
-  if (noteIdx === -1) { showToast('Note not found', 'red'); return; }
-  
-  notes[noteIdx] = { ...notes[noteIdx], title, type, link, uploadedAt: new Date().toLocaleString() };
-  localStorage.setItem('edusync_admin_notes', JSON.stringify(notes));
-  
-  if (window.aimeasyUpdateContent) {
-    const { error } = await window.aimeasyUpdateContent(nid, { title, type, link });
-    if (error) { showToast('Supabase update failed: ' + error.message, 'red'); }
-  }
-  
-  document.querySelector('.v11-confirm-modal')?.remove();
-  showToast('✅ Note updated!', 'green');
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
-
-window.v11AdminEditPYQ = async function (pid, subjId, unitId, subjName) {
-  const pyqs = JSON.parse(localStorage.getItem('edusync_admin_pyqs') || '[]');
-  const pyq = pyqs.find(p => p.id === pid);
-  if (!pyq) { showToast('PYQ not found', 'red'); return; }
-
-  const modal = document.createElement('div');
-  modal.className = 'v11-confirm-modal';
-  modal.innerHTML = `
-    <div class="v11-confirm-box" style="max-width: 500px;">
-      <h3 style="font-size:1.1rem;margin-bottom:1rem;font-weight:700;color:var(--primary);">✏️ Edit PYQ</h3>
-      <div class="input-group" style="margin-bottom:12px;">
-        <span class="v10-label">QUESTION *</span>
-        <textarea class="input" id="v11-edit-pyq-q" placeholder="Question..." rows="3" required style="resize:vertical;">${(pyq.question || '').replace(/"/g, '&quot;')}</textarea>
-      </div>
-      <div style="display:flex;gap:10px;margin-bottom:12px;">
-        <div class="input-group" style="flex:1;">
-          <span class="v10-label">YEAR *</span>
-          <input class="input" id="v11-edit-pyq-year" type="number" min="2000" max="2099" value="${pyq.year || ''}" required />
-        </div>
-        <div class="input-group" style="flex:1;">
-          <span class="v10-label">TIMES ASKED</span>
-          <input class="input" id="v11-edit-pyq-count" type="number" min="1" value="${pyq.count || 1}" />
-        </div>
-      </div>
-      <div class="input-group" style="margin-bottom:16px;">
-        <span class="v10-label">ANSWER (OPTIONAL)</span>
-        <textarea class="input" id="v11-edit-pyq-ans" placeholder="Answer..." rows="2" style="resize:vertical;">${(pyq.answer || '').replace(/"/g, '&quot;')}</textarea>
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;">
-        <button class="btn btn-ghost btn-sm" onclick="this.closest('.v11-confirm-modal').remove()">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="window.v11SaveEditPYQ('${pid}','${subjId}','${unitId}','${(subjName || '').replace(/'/g, "\\'")}')">Save Changes</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-};
-
-window.v11SaveEditPYQ = async function (pid, subjId, unitId, subjName) {
-  const question = document.getElementById('v11-edit-pyq-q')?.value.trim();
-  const year = document.getElementById('v11-edit-pyq-year')?.value.trim();
-  const count = document.getElementById('v11-edit-pyq-count')?.value || '1';
-  const answer = document.getElementById('v11-edit-pyq-ans')?.value.trim() || '';
-  
-  if (!question || !year) { showToast('Question and Year are required', 'red'); return; }
-  
-  const pyqs = JSON.parse(localStorage.getItem('edusync_admin_pyqs') || '[]');
-  const pyqIdx = pyqs.findIndex(p => p.id === pid);
-  if (pyqIdx === -1) { showToast('PYQ not found', 'red'); return; }
-  
-  pyqs[pyqIdx] = { ...pyqs[pyqIdx], question, year, count: parseInt(count) || 1, answer, uploadedAt: new Date().toLocaleString() };
-  localStorage.setItem('edusync_admin_pyqs', JSON.stringify(pyqs));
-  
-  if (window.aimeasyUpdateContent) {
-    const { error } = await window.aimeasyUpdateContent(pid, { question, year, count: parseInt(count) || 1, answer });
-    if (error) { showToast('Supabase update failed: ' + error.message, 'red'); }
-  }
-  
-  document.querySelector('.v11-confirm-modal')?.remove();
-  showToast('✅ PYQ updated!', 'green');
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
-
-window.v11AdminEditIQ = async function (qid, subjId, unitId, subjName) {
-  const iqs = JSON.parse(localStorage.getItem('edusync_admin_iqs') || '[]');
-  const iq = iqs.find(q => q.id === qid);
-  if (!iq) { showToast('Question not found', 'red'); return; }
-
-  const modal = document.createElement('div');
-  modal.className = 'v11-confirm-modal';
-  modal.innerHTML = `
-    <div class="v11-confirm-box" style="max-width: 500px;">
-      <h3 style="font-size:1.1rem;margin-bottom:1rem;font-weight:700;color:var(--primary);">✏️ Edit Important Question</h3>
-      <div class="input-group" style="margin-bottom:12px;">
-        <span class="v10-label">QUESTION *</span>
-        <textarea class="input" id="v11-edit-iq-q" placeholder="Question..." rows="3" required style="resize:vertical;">${(iq.question || '').replace(/"/g, '&quot;')}</textarea>
-      </div>
-      <div class="input-group" style="margin-bottom:12px;">
-        <span class="v10-label">PRIORITY</span>
-        <select class="select" id="v11-edit-iq-prio">
-          <option value="high" ${iq.priority === 'high' ? 'selected' : ''}>🔴 High</option>
-          <option value="med" ${iq.priority === 'med' || iq.priority === 'medium' ? 'selected' : ''}>🟡 Medium</option>
-          <option value="low" ${iq.priority === 'low' ? 'selected' : ''}>🟢 Low</option>
-        </select>
-      </div>
-      <div class="input-group" style="margin-bottom:16px;">
-        <span class="v10-label">TAGS</span>
-        <input class="input" id="v11-edit-iq-tags" value="${(iq.tags || '').replace(/"/g, '&quot;')}" placeholder="e.g. Unit 1, Memory" />
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;">
-        <button class="btn btn-ghost btn-sm" onclick="this.closest('.v11-confirm-modal').remove()">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="window.v11SaveEditIQ('${qid}','${subjId}','${unitId}','${(subjName || '').replace(/'/g, "\\'")}')">Save Changes</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-};
-
-window.v11SaveEditIQ = async function (qid, subjId, unitId, subjName) {
-  const question = document.getElementById('v11-edit-iq-q')?.value.trim();
-  const priority = document.getElementById('v11-edit-iq-prio')?.value;
-  const tags = document.getElementById('v11-edit-iq-tags')?.value.trim() || '';
-  
-  if (!question) { showToast('Question is required', 'red'); return; }
-  
-  const iqs = JSON.parse(localStorage.getItem('edusync_admin_iqs') || '[]');
-  const iqIdx = iqs.findIndex(q => q.id === qid);
-  if (iqIdx === -1) { showToast('Question not found', 'red'); return; }
-  
-  iqs[iqIdx] = { ...iqs[iqIdx], question, priority, tags, uploadedAt: new Date().toLocaleString() };
-  localStorage.setItem('edusync_admin_iqs', JSON.stringify(iqs));
-  
-  if (window.aimeasyUpdateContent) {
-    const { error } = await window.aimeasyUpdateContent(qid, { question, priority, tags });
-    if (error) { showToast('Supabase update failed: ' + error.message, 'red'); }
-  }
-  
-  document.querySelector('.v11-confirm-modal')?.remove();
-  showToast('✅ Question updated!', 'green');
-  await window.v10ReloadUnitContentFromDb(subjName, unitId);
-  window.v11AdminUnitDetail(subjId, unitId);
-};
+// SubAdmin content CRUD is centralized in aimeasy-fixes.js.
 
 // 7. Creator Upload/Delete Overrides to write to Supabase
 window.v11CreatorUploadVideo = async function (subjId, unitId, subjName, by) {

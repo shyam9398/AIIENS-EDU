@@ -1041,177 +1041,9 @@ window.v10Esc = window.v10Esc || function(str) {
     addMenuIcons();
   });
 
-  window.aimeasyEditNote = async function(id, subjectName, unitId) {
-    const notes = window.v10GetUnitContent(subjectName, unitId, 'notes');
-    const note = notes.find(n => String(n.id) === String(id) || String(n.dbContentId) === String(id));
-    if (!note) return;
-    if (!v10CanModifyRecord({ created_by: note.created_by || note.uploadedBy })) {
-      showToast('Permission denied: You can only edit content you created', 'red');
-      return;
-    }
-    window.v10CloseAllPopups?.() || window.v11CloseAllPopups?.();
-    const esc = window.v10Esc || ((s) => String(s || ''));
-    const modal = document.createElement('div');
-    modal.className = 'v11-confirm-modal';
-    modal.innerHTML = `
-      <div class="v11-confirm-box" style="max-width:520px;">
-        <h3 style="font-size:1.1rem;margin-bottom:1rem;font-weight:700;color:var(--primary);">Edit Note</h3>
-        <div class="input-group" style="margin-bottom:12px;">
-          <span class="v10-label">NOTE TITLE</span>
-          <input class="input" id="v10-edit-note-title" value="${esc(note.title || note.topicName || '')}" placeholder="Note title">
-        </div>
-        <div class="input-group" style="margin-bottom:12px;">
-          <span class="v10-label">TOPIC</span>
-          <input class="input" id="v10-edit-note-topic" value="${esc(note.topicName || note.title || '')}" placeholder="Topic">
-        </div>
-        <div class="input-group" style="margin-bottom:12px;">
-          <span class="v10-label">URL</span>
-          <input class="input" id="v10-edit-note-url" value="${esc(note.link || note.url || '')}" placeholder="Note URL">
-        </div>
-        <div class="input-group" style="margin-bottom:16px;">
-          <span class="v10-label">DESCRIPTION</span>
-          <textarea class="input" id="v10-edit-note-desc" rows="3" style="resize:vertical;">${esc(note.description || '')}</textarea>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;">
-          <button class="btn btn-ghost btn-sm" onclick="this.closest('.v11-confirm-modal').remove()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="window.v10SaveNoteEdit('${id}','${subjectName.replace(/'/g, "\\'")}','${unitId}')">Save</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-  };
-
-  window.v10SaveNoteEdit = async function(id, subjectName, unitId) {
-    const noteTitle = document.getElementById('v10-edit-note-title')?.value.trim();
-    const topicName = document.getElementById('v10-edit-note-topic')?.value.trim();
-    const link = document.getElementById('v10-edit-note-url')?.value.trim() || '';
-    const description = document.getElementById('v10-edit-note-desc')?.value.trim() || '';
-    if (!noteTitle) { showToast('Note title is required', 'red'); return; }
-    if (!topicName) { showToast('Topic is required', 'red'); return; }
-    const notes = window.v10GetUnitContent(subjectName, unitId, 'notes');
-    const note = notes.find(n => String(n.id) === String(id) || String(n.dbContentId) === String(id));
-    const dbId = note?.dbContentId || note?.id || id;
-    await window.updateContent(dbId, {
-      title: noteTitle,
-      body: description,
-      url: link,
-      metadata: { topicText: topicName, topicId: note?.topicId || '' },
-    });
-    document.querySelector('.v11-confirm-modal')?.remove();
-    showToast('Note updated successfully', 'green');
-    await window.v10RefreshContentPane('notes', subjectName, unitId);
-  };
-
-  window.aimeasyEditPYQ = async function(id, subjectName, unitId) {
-    const pyqs = window.v10GetUnitContent(subjectName, unitId, 'pyqs');
-    const pyq = pyqs.find(p => String(p.id) === String(id) || String(p.dbContentId) === String(id));
-    if (!pyq) return;
-    if (!v10CanModifyRecord({ created_by: pyq.created_by || pyq.uploadedBy })) {
-      showToast('Permission denied: You can only edit content you created', 'red');
-      return;
-    }
-    window.v10CloseAllPopups?.() || window.v11CloseAllPopups?.();
-    const esc = window.v10Esc || ((s) => String(s || ''));
-    const modal = document.createElement('div');
-    modal.className = 'v11-confirm-modal';
-    modal.innerHTML = `
-      <div class="v11-confirm-box" style="max-width:520px;">
-        <h3 style="font-size:1.1rem;margin-bottom:1rem;font-weight:700;color:var(--primary);">Edit PYQ</h3>
-        <div class="input-group" style="margin-bottom:12px;">
-          <span class="v10-label">TOPIC</span>
-          <input class="input" id="v10-edit-pyq-topic" value="${esc(pyq.topicName || '')}" placeholder="Topic">
-        </div>
-        <div class="v10-2col" style="margin-bottom:12px;">
-          <div class="input-group"><span class="v10-label">YEAR</span><input class="input" id="v10-edit-pyq-year" value="${esc(pyq.year || '')}" type="number"></div>
-          <div class="input-group"><span class="v10-label">MARKS</span><input class="input" id="v10-edit-pyq-marks" value="${esc(pyq.marks || pyq.count || '')}" type="number"></div>
-        </div>
-        <div class="input-group" style="margin-bottom:16px;">
-          <span class="v10-label">QUESTION</span>
-          <textarea class="input" id="v10-edit-pyq-question" rows="4" style="resize:vertical;">${esc(pyq.question || '')}</textarea>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;">
-          <button class="btn btn-ghost btn-sm" onclick="this.closest('.v11-confirm-modal').remove()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="window.v10SavePYQEdit('${id}','${subjectName.replace(/'/g, "\\'")}','${unitId}')">Save</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-  };
-
-  window.v10SavePYQEdit = async function(id, subjectName, unitId) {
-    const topicName = document.getElementById('v10-edit-pyq-topic')?.value.trim();
-    const year = document.getElementById('v10-edit-pyq-year')?.value.trim();
-    const marks = document.getElementById('v10-edit-pyq-marks')?.value.trim();
-    const question = document.getElementById('v10-edit-pyq-question')?.value.trim();
-    if (!question) { showToast('Question is required', 'red'); return; }
-    const pyqs = window.v10GetUnitContent(subjectName, unitId, 'pyqs');
-    const pyq = pyqs.find(p => String(p.id) === String(id) || String(p.dbContentId) === String(id));
-    const dbId = pyq?.dbContentId || pyq?.id || id;
-    await window.updateContent(dbId, {
-      title: question.slice(0, 80),
-      body: question,
-      metadata: { year, marks, count: marks, topicText: topicName || '', topicId: pyq?.topicId || '' },
-    });
-    document.querySelector('.v11-confirm-modal')?.remove();
-    showToast('PYQ updated successfully', 'green');
-    await window.v10RefreshContentPane('pyq', subjectName, unitId);
-  };
-
-  window.aimeasyEditIQ = async function(id, subjectName, unitId) {
-    const iqs = window.v10GetUnitContent(subjectName, unitId, 'iqs');
-    const iq = iqs.find(q => String(q.id) === String(id) || String(q.dbContentId) === String(id));
-    if (!iq) return;
-    if (!v10CanModifyRecord({ created_by: iq.created_by || iq.uploadedBy })) {
-      showToast('Permission denied: You can only edit content you created', 'red');
-      return;
-    }
-    window.v10CloseAllPopups?.() || window.v11CloseAllPopups?.();
-    const esc = window.v10Esc || ((s) => String(s || ''));
-    const priority = iq.priority || 'med';
-    const modal = document.createElement('div');
-    modal.className = 'v11-confirm-modal';
-    modal.innerHTML = `
-      <div class="v11-confirm-box" style="max-width:520px;">
-        <h3 style="font-size:1.1rem;margin-bottom:1rem;font-weight:700;color:var(--primary);">Edit Important Question</h3>
-        <div class="input-group" style="margin-bottom:12px;">
-          <span class="v10-label">TOPIC</span>
-          <input class="input" id="v10-edit-iq-topic" value="${esc(iq.topicName || '')}" placeholder="Topic">
-        </div>
-        <div class="input-group" style="margin-bottom:12px;">
-          <span class="v10-label">QUESTION</span>
-          <textarea class="input" id="v10-edit-iq-question" rows="4" style="resize:vertical;">${esc(iq.question || '')}</textarea>
-        </div>
-        <div class="input-group" style="margin-bottom:16px;">
-          <span class="v10-label">PRIORITY</span>
-          <select class="select" id="v10-edit-iq-priority">
-            <option value="high"${priority === 'high' ? ' selected' : ''}>High</option>
-            <option value="med"${priority === 'med' ? ' selected' : ''}>Medium</option>
-            <option value="low"${priority === 'low' ? ' selected' : ''}>Low</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;">
-          <button class="btn btn-ghost btn-sm" onclick="this.closest('.v11-confirm-modal').remove()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="window.v10SaveIQEdit('${id}','${subjectName.replace(/'/g, "\\'")}','${unitId}')">Save</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-  };
-
-  window.v10SaveIQEdit = async function(id, subjectName, unitId) {
-    const topicName = document.getElementById('v10-edit-iq-topic')?.value.trim();
-    const question = document.getElementById('v10-edit-iq-question')?.value.trim();
-    const priority = document.getElementById('v10-edit-iq-priority')?.value || 'med';
-    if (!question) { showToast('Question is required', 'red'); return; }
-    const iqs = window.v10GetUnitContent(subjectName, unitId, 'iqs');
-    const iq = iqs.find(q => String(q.id) === String(id) || String(q.dbContentId) === String(id));
-    const dbId = iq?.dbContentId || iq?.id || id;
-    await window.updateContent(dbId, {
-      title: question.slice(0, 80),
-      body: question,
-      metadata: { priority, topicText: topicName || '', topicId: iq?.topicId || '' },
-    });
-    document.querySelector('.v11-confirm-modal')?.remove();
-    showToast('Important question updated successfully', 'green');
-    await window.v10RefreshContentPane('iq', subjectName, unitId);
-  };
+  window.aimeasyEditNote = (id, subjectName, unitId) => window.v10OpenUnifiedEditModal?.({ contentType: 'note', itemId: id, subjectId: subjectName, unitId });
+  window.aimeasyEditPYQ = (id, subjectName, unitId) => window.v10OpenUnifiedEditModal?.({ contentType: 'pyq', itemId: id, subjectId: subjectName, unitId });
+  window.aimeasyEditIQ = (id, subjectName, unitId) => window.v10OpenUnifiedEditModal?.({ contentType: 'iq', itemId: id, subjectId: subjectName, unitId });
 
   // =========================================================================
   //  CENTRALIZED CRUD ENGINE HELPERS (CRITICAL REQUIREMENT 3)
@@ -1570,9 +1402,13 @@ window.v10Esc = window.v10Esc || function(str) {
     return window.aiiensIsRecordOwner?.(record);
   }
 
-  function v10SaDotMenuHtml(editCall, deleteCall) {
-    return `<div class="v10-dot-wrap" style="position:relative;flex-shrink:0;" onclick="event.stopPropagation()">
-      <button type="button" class="v10-dot-btn" onclick="window.v10OpenSaActionMenu(this,'${editCall}','${deleteCall}',event)" title="Options">&#8942;</button>
+  function v10SaDotMenuHtml(kind, id, subjectName, unitId) {
+    const attr = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const subject = kind === 'roadmap' ? { id: subjectName } : v10ResolveSubject(subjectName);
+    const subjectId = subject?.dbSubjectId || subject?.id || subjectName;
+    return `<div class="v10-crud-actions" style="display:flex;align-items:center;gap:4px;flex-shrink:0;" onclick="event.stopPropagation()">
+      <button type="button" class="v10-dot-btn v10-crud-action" data-action="edit" data-content-type="${attr(kind)}" data-item-id="${attr(id)}" data-subject-id="${attr(subjectId)}" data-unit-id="${attr(unitId)}" title="Edit" aria-label="Edit" style="font-size:.9rem;">&#9998;</button>
+      <button type="button" class="v10-dot-btn v10-crud-action danger" data-action="delete" data-content-type="${attr(kind)}" data-item-id="${attr(id)}" data-subject-id="${attr(subjectId)}" data-unit-id="${attr(unitId)}" title="Delete" aria-label="Delete" style="font-size:.9rem;color:var(--red);">&#128465;</button>
     </div>`;
   }
 
@@ -1589,38 +1425,33 @@ window.v10Esc = window.v10Esc || function(str) {
   window.v11CloseAllPopups = window.v11CloseAllPopups || v10CloseAllPopups;
   window.closeAllMenus = window.closeAllMenus || v10CloseAllPopups;
 
-  window.v10OpenSaActionMenu = function(btn, editCall, deleteCall, ev) {
+  window.v10OpenSaActionMenu = function(btn, item, ev) {
     const e = ev || window.event;
     e?.stopPropagation?.();
     e?.preventDefault?.();
     window.closeAllMenus?.();
     const popup = document.createElement('div');
-    popup.className = 'adm-popup';
-    popup.style.cssText = 'position:absolute;right:0;top:100%;z-index:99;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);display:flex;flex-direction:column;min-width:140px;';
+    popup.className = 'adm-popup v10-modern-menu';
+    popup.dataset.contentType = item?.contentType || '';
+    popup.dataset.itemId = item?.itemId || '';
+    popup.dataset.subjectId = item?.subjectId || '';
+    popup.dataset.unitId = item?.unitId || '';
     popup.innerHTML = `
-      <button type="button" class="adm-popup-item" onclick="this.closest('.adm-popup').remove(); ${editCall}">Edit</button>
-      <button type="button" class="adm-popup-item red" onclick="this.closest('.adm-popup').remove(); ${deleteCall}">Delete</button>
+      <button type="button" class="adm-popup-item" data-action="edit"><span aria-hidden="true">&#9998;</span> Edit</button>
+      <button type="button" class="adm-popup-item red" data-action="delete"><span aria-hidden="true">&#128465;</span> Delete</button>
     `;
     btn.closest('.v10-dot-wrap').appendChild(popup);
+    btn.setAttribute('aria-expanded', 'true');
   };
 
-  function v10ContentItemActions(item, editCall, deleteCall, viewLink) {
-    const link = viewLink || item.link || item.url || '';
-    const viewBtn = link
-      ? `<a href="${String(link).replace(/"/g, '&quot;')}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="font-size:0.75rem;text-decoration:none;">View</a>`
-      : '';
-    if (!v10CanModifyRecord(item)) return viewBtn || '';
-    return `${viewBtn}${viewBtn ? ' ' : ''}${v10SaDotMenuHtml(editCall, deleteCall)}`;
-  }
-
-  function v10ContentItemRow(title, meta, item, editCall, deleteCall, viewLink) {
+  function v10ContentItemRow(title, meta, item, kind, subjectName, unitId, viewLink) {
     const canEdit = v10CanModifyRecord(item);
     const link = viewLink || item.link || item.url || '';
     const viewBtn = link
       ? `<a href="${String(link).replace(/"/g, '&quot;')}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="font-size:0.75rem;text-decoration:none;margin-top:6px;display:inline-block;">View</a>`
       : '';
     const menu = canEdit
-      ? `<div style="position:absolute;top:8px;right:8px;z-index:2;">${v10SaDotMenuHtml(editCall, deleteCall)}</div>`
+      ? `<div style="position:absolute;top:8px;right:8px;z-index:2;">${v10SaDotMenuHtml(kind, item.id || item.dbContentId, subjectName, unitId)}</div>`
       : '';
     return `<div class="v10-item" style="position:relative;padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--radius-md);background:var(--surface);margin-bottom:8px;">
       ${menu}
@@ -1644,8 +1475,7 @@ window.v10Esc = window.v10Esc || function(str) {
       n.topicName || n.title,
       `${n.description || n.title || ''} · ${n.uploadedAt || ''}`,
       { ...n, created_by: n.created_by || n.uploadedBy },
-      `window.aimeasyEditNote('${n.id}','${s}','${unitId}')`,
-      `window.v10DeleteNote('${n.id}','${s}','${unitId}')`,
+      'note', subjectName, unitId,
       n.link
     )).join('')}</div>` : '';
 
@@ -1664,8 +1494,7 @@ window.v10Esc = window.v10Esc || function(str) {
       p.question,
       `${p.topicName || 'No topic'} · ${p.year || '-'} · ${p.marks || p.count || '-'} marks`,
       { ...p, created_by: p.created_by || p.uploadedBy },
-      `window.aimeasyEditPYQ('${p.id}','${s}','${unitId}')`,
-      `window.v10DeletePYQ('${p.id}','${s}','${unitId}')`
+      'pyq', subjectName, unitId
     )).join('')}</div>` : '';
 
     return `${formHtml}${itemsHtml}`;
@@ -1683,8 +1512,7 @@ window.v10Esc = window.v10Esc || function(str) {
       q.question,
       `${q.topicName || 'No topic'} · ${q.priority || 'med'}`,
       { ...q, created_by: q.created_by || q.uploadedBy },
-      `window.aimeasyEditIQ('${q.id}','${s}','${unitId}')`,
-      `window.v10DeleteIQ('${q.id}','${s}','${unitId}')`
+      'iq', subjectName, unitId
     )).join('')}</div>` : '';
 
     return `${formHtml}${itemsHtml}`;
@@ -1721,133 +1549,6 @@ window.v10Esc = window.v10Esc || function(str) {
     window.__v10UnitTopicsCache = window.__v10UnitTopicsCache || {};
     window.__v10UnitTopicsCache[`${subjId}:${unitId}`] = data.topics || [];
     return { id: unitId, topics: data.topics || [] };
-  };
-
-  // =========================================================================
-  //  ROADMAP PERSISTENCE & ACTIONS (CRITICAL REQUIREMENT 4, 5, 6, 7, 8)
-  // =========================================================================
-  window.v10OpenRoadmapEditModalDb = function (subjId, unitId, topicId) {
-    window.v10CloseAllPopups?.() || window.v11CloseAllPopups?.();
-    const esc = window.v10Esc || ((s)=>String(s||''));
-    const topics = window.__v10UnitTopicsCache?.[`${subjId}:${unitId}`] || window.v10UnitTopics(unitId);
-    const topic = topics.find(t => String(t.id || t.dbContentId) === String(topicId));
-    if (!topic) { showToast('Topic not found', 'red'); return; }
-    const videos = Array.isArray(topic.videos) ? topic.videos : [];
-    const video = videos[0] || { url: '', description: '' };
-    const url = video.url || topic.youtubeUrl || topic.url || '';
-    const desc = video.description || topic.description || '';
-
-    const modal = document.createElement('div');
-    modal.className = 'v11-confirm-modal';
-    modal.innerHTML = `
-      <div class="v11-confirm-box" style="max-width: 500px;">
-        <h3 style="font-size:1.1rem;margin-bottom:1rem;font-weight:700;color:var(--primary);">Edit Topic</h3>
-        <div class="input-group" style="margin-bottom:12px;">
-          <span class="v10-label">TOPIC NAME *</span>
-          <input class="input" id="v11-edit-db-topic-name" value="${esc(topic.name || topic.topicName || '')}" placeholder="Topic Name" required />
-        </div>
-        <div class="input-group" style="margin-bottom:12px;">
-          <span class="v10-label">VIDEO URL *</span>
-          <input class="input" id="v11-edit-db-topic-url" value="${esc(url)}" placeholder="Video URL" required />
-        </div>
-        <div class="input-group" style="margin-bottom:16px;">
-          <span class="v10-label">DESCRIPTION (OPTIONAL)</span>
-          <textarea class="input" id="v11-edit-db-topic-desc" placeholder="Description..." rows="3" style="resize:vertical;">${esc(desc)}</textarea>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;">
-          <button class="btn btn-ghost btn-sm" onclick="this.closest('.v11-confirm-modal').remove()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="window.v10SaveRoadmapEditModalDb('${subjId}','${unitId}','${topicId}')">Save Changes</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-  };
-
-  window.v10SaveRoadmapEditModalDb = async function (subjId, unitId, topicId) {
-    if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
-    const name = document.getElementById('v11-edit-db-topic-name')?.value.trim();
-    const url = document.getElementById('v11-edit-db-topic-url')?.value.trim();
-    const desc = document.getElementById('v11-edit-db-topic-desc')?.value.trim() || '';
-
-    if (!name) { showToast('Topic Name is required', 'red'); return; }
-    if (!url) { showToast('Video URL is required', 'red'); return; }
-    try {
-      new URL(url);
-    } catch (e) {
-      showToast('Please enter a valid URL', 'red');
-      return;
-    }
-
-    const supabase = window.__AIMEASY_SUPABASE__;
-    if (!supabase) return;
-
-    try {
-      const { error: topicError } = await supabase.from('topics').update({ topic_name: name }).eq('id', topicId);
-      if (topicError) {
-        showToast('Failed to update topic: ' + topicError.message, 'red');
-        return;
-      }
-
-      const { data: existingVideos } = await supabase.from('topic_videos').select('id').eq('topic_id', topicId);
-      if (existingVideos && existingVideos.length > 0) {
-        const { error: videoError } = await supabase.from('topic_videos').update({ video_url: url, description: desc }).eq('id', existingVideos[0].id);
-        if (videoError) {
-          showToast('Failed to update video: ' + videoError.message, 'red');
-          return;
-        }
-      } else {
-        const { error: videoError } = await supabase.from('topic_videos').insert({ topic_id: topicId, video_url: url, description: desc, display_order: 1 });
-        if (videoError) {
-          showToast('Failed to save video: ' + videoError.message, 'red');
-          return;
-        }
-      }
-
-      document.querySelector('.v11-confirm-modal')?.remove();
-      showToast('Topic updated successfully.', 'green');
-      await window.v10RefreshRoadmapListInPlace(subjId, unitId);
-    } catch (err) {
-      showToast('Update failed: ' + err.message, 'red');
-    }
-  };
-
-  window.v10DeleteSavedRoadmapTopicDb = function (subjId, unitId, topicId) {
-    if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
-    v11Confirm('Are you sure you want to delete this topic?', async () => {
-      const supabase = window.__AIMEASY_SUPABASE__;
-      if (!supabase) return;
-      
-      try {
-        await supabase.from('topic_videos').delete().eq('topic_id', topicId);
-        const { error } = await supabase.from('topics').delete().eq('id', topicId);
-        if (error) {
-          showToast('Failed to delete topic: ' + error.message, 'red');
-          return;
-        }
-        
-        // Recalculate display_order (Critical Requirement 8)
-        const { data: remainingTopics, error: fetchErr } = await supabase
-          .from('topics')
-          .select('id, display_order')
-          .eq('subject_id', subjId)
-          .eq('unit_id', unitId)
-          .order('display_order', { ascending: true });
-          
-        if (!fetchErr && remainingTopics) {
-          for (let i = 0; i < remainingTopics.length; i++) {
-            const newOrder = i + 1;
-            if (remainingTopics[i].display_order !== newOrder) {
-              await supabase.from('topics').update({ display_order: newOrder }).eq('id', remainingTopics[i].id);
-            }
-          }
-        }
-        
-        showToast('Topic deleted.', 'red');
-        await window.v10RefreshRoadmapListInPlace(subjId, unitId);
-      } catch (err) {
-        showToast('Delete failed: ' + err.message, 'red');
-      }
-    });
   };
 
   window.v10MoveRoadmapTopicDb = async function (subjId, unitId, topicId, direction) {
@@ -1926,8 +1627,9 @@ window.v10Esc = window.v10Esc || function(str) {
             const description = video.description || topic.description || '';
             const topicKey = topic.id || topic.dbContentId || '';
             const menuHtml = isReadOnly ? '' : `
-              <div class="v10-dot-wrap" style="position:absolute;top:10px;right:10px;" onclick="event.stopPropagation()">
-                <button type="button" class="v10-dot-btn" onclick="window.v10OpenTopicMenuDb(this,'${subjId}','${unitId}','${topicKey}',${index},${list.length},event)" title="Options" style="padding:2px 6px;font-size:1.1rem;background:transparent;border:none;cursor:pointer;color:var(--text3);">&#8942;</button>
+              <div class="v10-crud-actions" style="position:absolute;top:10px;right:10px;display:flex;gap:4px;" onclick="event.stopPropagation()">
+                <button type="button" class="v10-dot-btn v10-crud-action" data-action="edit" data-content-type="roadmap" data-item-id="${esc(topicKey)}" data-subject-id="${esc(subjId)}" data-unit-id="${esc(unitId)}" title="Edit" aria-label="Edit" style="font-size:.9rem;">&#9998;</button>
+                <button type="button" class="v10-dot-btn v10-crud-action danger" data-action="delete" data-content-type="roadmap" data-item-id="${esc(topicKey)}" data-subject-id="${esc(subjId)}" data-unit-id="${esc(unitId)}" title="Delete" aria-label="Delete" style="font-size:.9rem;color:var(--red);">&#128465;</button>
               </div>`;
             const viewBtn = url
               ? `<a href="${esc(url)}" target="_blank" rel="noopener" class="btn btn-teal btn-sm" style="font-size:0.75rem;text-decoration:none;width:fit-content;">View</a>`
@@ -1935,6 +1637,7 @@ window.v10Esc = window.v10Esc || function(str) {
             return `
               <div class="v10-saved-topic" data-topic-id="${esc(topicKey)}" style="position:relative;padding:14px;border:1.5px solid var(--border);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:8px;">
                 ${menuHtml}
+                <div class="v10-saved-topic-number">Topic ${index + 1}</div>
                 <div class="v10-saved-topic-title" style="font-weight:800;color:var(--primary);padding-right:${isReadOnly ? '0' : '28px'};">${esc(name)}</div>
                 ${description ? `<p style="margin:0;color:var(--text2);font-size:0.82rem;line-height:1.45;">${esc(description)}</p>` : ''}
                 ${viewBtn}
@@ -1945,20 +1648,7 @@ window.v10Esc = window.v10Esc || function(str) {
   };
 
   window.v10OpenTopicMenuDb = function (btn, subjId, unitId, topicId, idx, total, ev) {
-    if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
-    const e = ev || window.event;
-    e?.stopPropagation?.();
-    e?.preventDefault?.();
-    window.closeAllMenus?.();
-    const popup = document.createElement('div');
-    popup.className = 'adm-popup';
-    popup.style.cssText = 'position:absolute;right:0;top:100%;z-index:99;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-md);display:flex;flex-direction:column;min-width:140px;';
-    popup.innerHTML = `
-      <button type="button" class="adm-popup-item" onclick="this.closest('.adm-popup').remove(); window.v10OpenRoadmapEditModalDb('${subjId}','${unitId}','${topicId}')">Edit Topic</button>
-      <button type="button" class="adm-popup-item red" onclick="this.closest('.adm-popup').remove(); window.v10DeleteSavedRoadmapTopicDb('${subjId}','${unitId}','${topicId}')">Delete Topic</button>
-    `;
-    const wrapper = btn.closest('.v10-dot-wrap') || btn.parentNode;
-    wrapper?.appendChild(popup);
+    window.v10OpenSaActionMenu(btn, { contentType: 'roadmap', itemId: topicId, subjectId: subjId, unitId }, ev);
   };
 
   // =========================================================================
@@ -2004,20 +1694,11 @@ window.v10Esc = window.v10Esc || function(str) {
 
   window.v10RoadmapPanel = function (subjId, unitId, topics) {
     const list = Array.isArray(topics) ? topics : [];
+    window.__v10UnitTopicsCache = window.__v10UnitTopicsCache || {};
+    window.__v10UnitTopicsCache[`${subjId}:${unitId}`] = list;
     const isReadOnly = window._v10SASubj?.isReadOnly;
-    const rows = list.length ? list.map((t, i) => window.v10TopicRowHTML(
-      subjId,
-      unitId,
-      i,
-      t.name || t.topicName || '',
-      Array.isArray(t.videos) && t.videos.length
-        ? t.videos
-        : (Array.isArray(t.youtubeUrls) ? t.youtubeUrls : (t.youtubeUrl || t.url ? [t.youtubeUrl || t.url] : [''])),
-      list.length,
-      t.id || ''
-    )).join('')
-      : `<div id="v10-rm-empty-${unitId}" style="text-align:center;padding:1.8rem;color:var(--text3);">
-          <div style="font-weight:600;font-size:.88rem;">No topics yet</div>
+    const rows = `<div id="v10-rm-empty-${unitId}" style="text-align:center;padding:1.8rem;color:var(--text3);">
+          <div style="font-weight:600;font-size:.88rem;">No topics queued</div>
           ${isReadOnly ? '' : `<div style="font-size:.76rem;margin-top:4px;">Click "+ Add Topic" to build the roadmap</div>`}
          </div>`;
 
@@ -2027,7 +1708,7 @@ window.v10Esc = window.v10Esc || function(str) {
         </div>`;
 
     const submitHtml = isReadOnly ? '' : `
-        <button class="v10-submit" onclick="window.v10SaveRoadmap('${subjId}','${unitId}')">Save Learning Roadmap</button>`;
+        <button class="v10-submit" data-v10-roadmap-save onclick="window.v10SaveRoadmap('${subjId}','${unitId}',this)"><span class="v10-save-label">Save Learning Roadmap</span></button>`;
 
     return `
     <div class="v10-panel">
@@ -2043,8 +1724,11 @@ window.v10Esc = window.v10Esc || function(str) {
     </div>`;
   };
 
-  window.v10SaveRoadmap = async function (subjId, unitId) {
+  const v10RoadmapSaveLocks = new Set();
+  window.v10SaveRoadmap = async function (subjId, unitId, saveButton) {
     if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
+    const lockKey = `${subjId}:${unitId}`;
+    if (v10RoadmapSaveLocks.has(lockKey)) return;
     console.log('[ROADMAP] Save Started');
     const container = document.getElementById('v10-topics-' + unitId);
     if (!container) return;
@@ -2071,6 +1755,7 @@ window.v10Esc = window.v10Esc || function(str) {
       });
     });
 
+    if (!topics.length) { showToast('Add at least one topic before saving.', 'red'); return; }
     // Validations: Topic Name required, Video URL required (Critical Requirement 7)
     for (const t of topics) {
       if (!t.name) { showToast('Topic Name is required', 'red'); return; }
@@ -2089,15 +1774,49 @@ window.v10Esc = window.v10Esc || function(str) {
       showToast('Roadmap DB save is unavailable. Supabase is the required source of truth.', 'red');
       return;
     }
-    const { data, error } = await window.aimeasySaveUnitRoadmap({ subject, unit, topics });
-    if (error) {
-      console.error('[ROADMAP] Save Failed', error);
-      showToast('Roadmap DB sync failed: ' + error.message, 'red');
+    const normalize = (value) => String(value || '').trim().toLocaleLowerCase();
+    const signature = (topic) => {
+      const video = Array.isArray(topic.videos) ? topic.videos[0] : null;
+      return `${normalize(topic.name || topic.topicName)}\u0000${normalize(video?.url || topic.youtubeUrl || topic.url)}`;
+    };
+    const savedTopics = window.__v10UnitTopicsCache?.[`${subjId}:${unitId}`] || [];
+    const existingKeys = new Set(savedTopics.map(signature));
+    const queuedKeys = new Set();
+    const hasDuplicate = topics.some((topic) => {
+      const key = signature(topic);
+      if (existingKeys.has(key) || queuedKeys.has(key)) return true;
+      queuedKeys.add(key);
+      return false;
+    });
+    if (hasDuplicate) {
+      showToast('This topic already exists.', 'red');
       return;
     }
-    v10PersistSubjectDbIds(subjId, unitId, data);
-    await window.v10RefreshRoadmapListInPlace(subjId, unitId);
-    showToast('Learning Roadmap saved and refreshed.', 'green');
+
+    v10RoadmapSaveLocks.add(lockKey);
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.setAttribute('aria-busy', 'true');
+      saveButton.innerHTML = '<span class="v10-button-spinner" aria-hidden="true"></span><span>Saving...</span>';
+    }
+    try {
+      const { data, error } = await window.aimeasySaveUnitRoadmap({ subject, unit, topics: [...savedTopics, ...topics] });
+      if (error) throw error;
+      v10PersistSubjectDbIds(subjId, unitId, data);
+      container.innerHTML = `<div id="v10-rm-empty-${unitId}" style="text-align:center;padding:1.8rem;color:var(--text3);"><div style="font-weight:600;font-size:.88rem;">No topics queued</div><div style="font-size:.76rem;margin-top:4px;">Click "+ Add Topic" to build the roadmap</div></div>`;
+      await window.v10RefreshRoadmapListInPlace(subjId, unitId);
+      showToast('Learning Roadmap saved successfully.', 'green');
+    } catch (error) {
+      console.error('[ROADMAP] Save Failed', error);
+      showToast('Roadmap DB sync failed: ' + error.message, 'red');
+    } finally {
+      v10RoadmapSaveLocks.delete(lockKey);
+      if (saveButton?.isConnected) {
+        saveButton.disabled = false;
+        saveButton.removeAttribute('aria-busy');
+        saveButton.innerHTML = '<span class="v10-save-label">Save Learning Roadmap</span>';
+      }
+    }
   };
 
   window.v10AddTopic = function(subjId, unitId) {
@@ -2116,8 +1835,34 @@ window.v10Esc = window.v10Esc || function(str) {
   // =========================================================================
   //  CONTENT CREATION & DELETION HANDLERS (CRITICAL REQUIREMENT 9)
   // =========================================================================
+  const v10ContentSaveLocks = new Set();
+
+  async function v10RunLockedSave(lockKey, button, label, task) {
+    if (v10ContentSaveLocks.has(lockKey)) return;
+    v10ContentSaveLocks.add(lockKey);
+    const originalHtml = button?.innerHTML;
+    if (button) {
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.innerHTML = `<span class="v10-button-spinner" aria-hidden="true"></span><span>${label}</span>`;
+    }
+    try {
+      return await task();
+    } finally {
+      v10ContentSaveLocks.delete(lockKey);
+      if (button?.isConnected) {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+        button.innerHTML = originalHtml;
+      }
+    }
+  }
+
   window.v10UploadNote = async function (subjectName, unitId) {
     if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
+    const button = document.activeElement?.matches?.('.v10-submit') ? document.activeElement : null;
+    const lockKey = `note:${subjectName}:${unitId}`;
+    return v10RunLockedSave(lockKey, button, 'Saving...', async () => {
     const link = document.getElementById('v10-nlink-' + unitId)?.value.trim();
     const description = document.getElementById('v10-ndesc-' + unitId)?.value.trim() || '';
     const { topicId, topicName } = v10ReadTopicInput(unitId, 'notes');
@@ -2146,10 +1891,14 @@ window.v10Esc = window.v10Esc || function(str) {
     } catch (err) {
       showToast('DB save failed: ' + err.message, 'red');
     }
+    });
   };
 
   window.v10UploadPYQ = async function (subjectName, unitId) {
     if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
+    const button = document.activeElement?.matches?.('.v10-submit') ? document.activeElement : null;
+    const lockKey = `pyq:${subjectName}:${unitId}`;
+    return v10RunLockedSave(lockKey, button, 'Saving...', async () => {
     const question = document.getElementById('v10-pyqtxt-' + unitId)?.value.trim();
     const year = document.getElementById('v10-pyqyr-' + unitId)?.value;
     const marks = document.getElementById('v10-pyqmarks-' + unitId)?.value;
@@ -2178,10 +1927,14 @@ window.v10Esc = window.v10Esc || function(str) {
     } catch (err) {
       showToast('DB save failed: ' + err.message, 'red');
     }
+    });
   };
 
   window.v10UploadIQ = async function (subjectName, unitId) {
     if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
+    const button = document.activeElement?.matches?.('.v10-submit') ? document.activeElement : null;
+    const lockKey = `iq:${subjectName}:${unitId}`;
+    return v10RunLockedSave(lockKey, button, 'Saving...', async () => {
     const question = document.getElementById('v10-iqtxt-' + unitId)?.value.trim();
     const priority = document.getElementById('v10-iqprio-' + unitId)?.value;
     const { topicId, topicName } = v10ReadTopicInput(unitId, 'iq');
@@ -2207,70 +1960,548 @@ window.v10Esc = window.v10Esc || function(str) {
     } catch (err) {
       showToast('DB save failed: ' + err.message, 'red');
     }
+    });
   };
 
-  window.v10DeleteNote = async function (id, subjectName, unitId) {
-    const notes = window.v10GetUnitContent(subjectName, unitId, 'notes');
-    const note = notes.find(n => String(n.id) === String(id) || String(n.dbContentId) === String(id));
-    if (note && !v10CanModifyRecord({ created_by: note.created_by || note.uploadedBy })) {
-      showToast('Permission denied: You can only delete content you created', 'red');
-      return;
+  async function v10SaveLinkedContentFromAdmin({ contentType, subjId, unitId, subjName, fields, button }) {
+    return v10RunLockedSave(`${contentType}:${subjId}:${unitId}`, button, 'Saving...', async () => {
+      const subject = { id: subjId, dbSubjectId: subjId, name: subjName };
+      const unit = { id: unitId, dbUnitId: unitId, name: `Unit ${unitId}` };
+      const saved = await window.aimeasySaveLinkedContentItem?.({
+        subject,
+        unit,
+        contentType,
+        ...fields,
+        createdBy: window.APP?.subAdminData?.username || window.APP?.adminType || 'subadmin',
+      });
+      if (saved?.error) throw saved.error;
+      await window.v10ReloadUnitContentFromDb?.(subjName, unitId);
+      if (window._v11AdminUnitId && String(window._v11AdminUnitId) === String(unitId)) {
+        await window.v11AdminUnitDetail?.(subjId, unitId);
+      } else if (window._v11CrSubj && String(window._v11CrSubj.id) === String(subjId)) {
+        await window.v11CreatorUnitDetail?.(subjId, unitId);
+      } else {
+        await window.v10RefreshContentPane?.(contentType === 'note' ? 'notes' : contentType, subjName, unitId);
+      }
+      showToast(`${v10ContentLabel(contentType)} saved successfully.`, 'green');
+      return saved;
+    }).catch((error) => {
+      showToast('Save failed: ' + error.message, 'red');
+      return null;
+    });
+  }
+
+  window.v11AdminUploadVideo = async function v11AdminUploadVideoUnified(subjId, unitId, subjName) {
+    const titleEl = document.getElementById('v11-vtitle');
+    const urlEl = document.getElementById('v11-vurl');
+    const title = titleEl?.value.trim();
+    const url = urlEl?.value.trim();
+    if (!title || !url) { showToast('Enter title and URL', 'red'); return; }
+    try { new URL(url); } catch (e) { showToast('Please enter a valid URL.', 'red'); return; }
+    const saved = await v10SaveLinkedContentFromAdmin({ contentType: 'video', subjId, unitId, subjName, fields: { title, url }, button: document.activeElement });
+    if (saved) {
+      if (titleEl) titleEl.value = '';
+      if (urlEl) urlEl.value = '';
     }
-    if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
-    v11Confirm('Are you sure you want to delete this note?', async () => {
+  };
+
+  window.v11AdminUploadNote = async function v11AdminUploadNoteUnified(subjId, unitId, subjName) {
+    const titleEl = document.getElementById('v11-ntitle');
+    const typeEl = document.getElementById('v11-ntype');
+    const linkEl = document.getElementById('v11-nlink');
+    const title = titleEl?.value.trim();
+    const url = linkEl?.value.trim() || '';
+    if (!title) { showToast('Enter title', 'red'); return; }
+    const saved = await v10SaveLinkedContentFromAdmin({ contentType: 'note', subjId, unitId, subjName, fields: { title, url, metadata: { type: typeEl?.value || 'link' } }, button: document.activeElement });
+    if (saved) {
+      if (titleEl) titleEl.value = '';
+      if (linkEl) linkEl.value = '';
+    }
+  };
+
+  window.v11AdminUploadPYQ = async function v11AdminUploadPYQUnified(subjId, unitId, subjName) {
+    const yearEl = document.getElementById('v11-pyqyr');
+    const countEl = document.getElementById('v11-pyqcnt');
+    const questionEl = document.getElementById('v11-pyqtxt');
+    const answerEl = document.getElementById('v11-pyqans');
+    const question = questionEl?.value.trim();
+    const year = yearEl?.value.trim();
+    if (!question || !year) { showToast('Enter question and year', 'red'); return; }
+    const count = parseInt(countEl?.value || '1', 10) || 1;
+    const saved = await v10SaveLinkedContentFromAdmin({
+      contentType: 'pyq',
+      subjId,
+      unitId,
+      subjName,
+      fields: { title: question.slice(0, 80), body: question, metadata: { year, count, answer: answerEl?.value.trim() || '' } },
+      button: document.activeElement,
+    });
+    if (saved) {
+      if (questionEl) questionEl.value = '';
+      if (answerEl) answerEl.value = '';
+      if (yearEl) yearEl.value = '';
+    }
+  };
+
+  window.v11AdminUploadIQ = async function v11AdminUploadIQUnified(subjId, unitId, subjName) {
+    const questionEl = document.getElementById('v11-iqtxt');
+    const priorityEl = document.getElementById('v11-iqprio');
+    const tagsEl = document.getElementById('v11-iqtags');
+    const question = questionEl?.value.trim();
+    if (!question) { showToast('Enter question', 'red'); return; }
+    const saved = await v10SaveLinkedContentFromAdmin({
+      contentType: 'iq',
+      subjId,
+      unitId,
+      subjName,
+      fields: { title: question.slice(0, 80), body: question, metadata: { priority: priorityEl?.value || 'med', tags: tagsEl?.value.trim() || '' } },
+      button: document.activeElement,
+    });
+    if (saved) {
+      if (questionEl) questionEl.value = '';
+      if (tagsEl) tagsEl.value = '';
+    }
+  };
+
+  window.v11AdminDeleteVideo = (id, subjId, unitId) => window.v10OpenUnifiedDeleteModal?.({ contentType: 'video', itemId: id, subjectId: subjId, unitId });
+  window.v11AdminDeleteNote = (id, subjId, unitId) => window.v10OpenUnifiedDeleteModal?.({ contentType: 'note', itemId: id, subjectId: subjId, unitId });
+  window.v11AdminDeletePYQ = (id, subjId, unitId) => window.v10OpenUnifiedDeleteModal?.({ contentType: 'pyq', itemId: id, subjectId: subjId, unitId });
+  window.v11AdminDeleteIQ = (id, subjId, unitId) => window.v10OpenUnifiedDeleteModal?.({ contentType: 'iq', itemId: id, subjectId: subjId, unitId });
+  window.v11AdminEditNote = (id, subjId, unitId) => window.v10OpenUnifiedEditModal?.({ contentType: 'note', itemId: id, subjectId: subjId, unitId });
+  window.v11AdminEditPYQ = (id, subjId, unitId) => window.v10OpenUnifiedEditModal?.({ contentType: 'pyq', itemId: id, subjectId: subjId, unitId });
+  window.v11AdminEditIQ = (id, subjId, unitId) => window.v10OpenUnifiedEditModal?.({ contentType: 'iq', itemId: id, subjectId: subjId, unitId });
+
+  function v10ConfirmContentDelete(itemLabel, onDelete) {
+    window.v10CloseAllPopups?.();
+    const modal = document.createElement('div');
+    modal.className = 'v11-confirm-modal';
+    modal.innerHTML = `<div class="v11-confirm-box v10-crud-modal" style="max-width:440px;">
+      <h3>Delete ${itemLabel}?</h3>
+      <p>This action cannot be undone.</p>
+      <div class="v10-modal-actions">
+        <button type="button" class="btn btn-ghost btn-sm" data-v10-cancel>Cancel</button>
+        <button type="button" class="btn btn-danger btn-sm" data-v10-confirm>Delete Permanently</button>
+      </div>
+    </div>`;
+    modal.querySelector('[data-v10-cancel]')?.addEventListener('click', () => modal.remove());
+    modal.querySelector('[data-v10-confirm]')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = 'Deleting...';
       try {
-        if (id && !String(id).startsWith('temp_')) {
-          await window.deleteContent(id);
-        }
-        await window.v10RefreshContentPane('notes', subjectName, unitId);
-        showToast('Note deleted successfully', 'green');
-      } catch (err) {
-        showToast('Delete failed: ' + err.message, 'red');
+        await onDelete();
+        modal.remove();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = 'Delete Permanently';
+        showToast('Delete failed: ' + error.message, 'red');
       }
     });
+    document.body.appendChild(modal);
+  }
+
+  window.v10DeleteNote = async function (id, subjectName, unitId) {
+    return window.v10OpenUnifiedDeleteModal?.({ contentType: 'note', itemId: id, subjectId: subjectName, unitId });
   };
 
   window.v10DeletePYQ = async function (id, subjectName, unitId) {
-    const pyqs = window.v10GetUnitContent(subjectName, unitId, 'pyqs');
-    const pyq = pyqs.find(p => String(p.id) === String(id) || String(p.dbContentId) === String(id));
-    if (pyq && !v10CanModifyRecord({ created_by: pyq.created_by || pyq.uploadedBy })) {
-      showToast('Permission denied: You can only delete content you created', 'red');
-      return;
-    }
-    if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
-    v11Confirm('Are you sure you want to delete this PYQ?', async () => {
-      try {
-        if (id && !String(id).startsWith('temp_')) {
-          await window.deleteContent(id);
-        }
-        await window.v10RefreshContentPane('pyq', subjectName, unitId);
-        showToast('PYQ deleted successfully', 'green');
-      } catch (err) {
-        showToast('Delete failed: ' + err.message, 'red');
-      }
-    });
+    return window.v10OpenUnifiedDeleteModal?.({ contentType: 'pyq', itemId: id, subjectId: subjectName, unitId });
   };
 
   window.v10DeleteIQ = async function (id, subjectName, unitId) {
-    const iqs = window.v10GetUnitContent(subjectName, unitId, 'iqs');
-    const iq = iqs.find(q => String(q.id) === String(id) || String(q.dbContentId) === String(id));
-    if (iq && !v10CanModifyRecord({ created_by: iq.created_by || iq.uploadedBy })) {
+    return window.v10OpenUnifiedDeleteModal?.({ contentType: 'iq', itemId: id, subjectId: subjectName, unitId });
+  };
+
+  // Single SubAdmin saved-content action dispatcher. Renderers provide data only;
+  // no executable callback strings are embedded in markup.
+  window.v10RunSaCrudAction = function v10RunSaCrudAction(action, item) {
+    const contentType = String(item?.contentType || '').trim();
+    const itemId = String(item?.itemId || '').trim();
+    const subjectId = String(item?.subjectId || '').trim();
+    const unitId = String(item?.unitId || '').trim();
+    if (!contentType || !itemId || !subjectId || !unitId) {
+      showToast('Unable to identify the selected item.', 'red');
+      return;
+    }
+    const normalized = contentType === 'important-questions' ? 'iq' : contentType;
+    if (action === 'edit') {
+      window.v10OpenUnifiedEditModal?.({ contentType: normalized, itemId, subjectId, unitId });
+      return;
+    }
+    if (action === 'delete') {
+      window.v10OpenUnifiedDeleteModal?.({ contentType: normalized, itemId, subjectId, unitId });
+      return;
+    }
+    showToast('This action is not available.', 'red');
+  };
+
+  function v10FindSavedContentRecord({ contentType, itemId, subjectId, unitId }) {
+    const subjectName = v10ResolveSubjectName(subjectId);
+    if (contentType === 'roadmap') {
+      const topics = window.__v10UnitTopicsCache?.[`${subjectId}:${unitId}`] || window.v10UnitTopics?.(unitId) || [];
+      return topics.find((topic) => [topic?.id, topic?.dbContentId, topic?.topicId, topic?.dbTopicId].some((value) => String(value || '') === String(itemId)));
+    }
+    const map = { note: 'notes', pyq: 'pyqs', iq: 'iqs', video: 'videos' };
+    const rows = window.v10GetUnitContent?.(subjectName, unitId, map[contentType] || contentType) || [];
+    return rows.find((row) => String(row.id || row.dbContentId || '') === String(itemId));
+  }
+
+  function v10ResolveSubject(subjectId) {
+    const candidates = [
+      window._v10SASubj,
+      window._v11AdminSubj,
+      window._v11CrSubj,
+      window._crSelectedSubj,
+      window.v10SubjectForDb?.(''),
+      typeof findSubjectById === 'function' ? findSubjectById(subjectId) : null,
+    ].filter(Boolean);
+    return candidates.find((subject) => [subject.id, subject.rawId, subject.dbSubjectId, subject.name].some((value) => String(value || '') === String(subjectId))) || candidates[0] || { id: subjectId, name: subjectId };
+  }
+
+  function v10ResolveSubjectName(subjectId) {
+    return v10ResolveSubject(subjectId)?.name || subjectId;
+  }
+
+  function v10ContentLabel(contentType) {
+    return ({
+      roadmap: 'Topic',
+      note: 'Note',
+      pyq: 'PYQ',
+      iq: 'Important Question',
+      video: 'Video',
+    })[contentType] || 'Content';
+  }
+
+  function v10EditModalFields(contentType, record) {
+    const safe = window.v10Esc || ((value) => String(value || ''));
+    if (contentType === 'roadmap') {
+      const video = Array.isArray(record?.videos) ? record.videos[0] || {} : {};
+      return `
+        <div class="input-group"><span class="v10-label">TOPIC NAME</span><input class="input" data-field="title" value="${safe(record?.name || record?.topicName || '')}" required></div>
+        <div class="input-group"><span class="v10-label">VIDEO URL</span><input class="input" data-field="url" value="${safe(video.url || record?.youtubeUrl || record?.url || '')}" required></div>
+        <div class="input-group"><span class="v10-label">DESCRIPTION</span><textarea class="input" data-field="body" rows="3" style="resize:vertical;">${safe(video.description || record?.description || '')}</textarea></div>`;
+    }
+    if (contentType === 'pyq') {
+      return `
+        <div class="input-group"><span class="v10-label">QUESTION</span><textarea class="input" data-field="body" rows="4" style="resize:vertical;" required>${safe(record?.question || record?.body || '')}</textarea></div>
+        <div class="v10-2col">
+          <div class="input-group"><span class="v10-label">YEAR</span><input class="input" data-field="year" type="number" value="${safe(record?.year || '')}"></div>
+          <div class="input-group"><span class="v10-label">MARKS</span><input class="input" data-field="marks" type="number" value="${safe(record?.marks || record?.count || '')}"></div>
+        </div>
+        <div class="input-group"><span class="v10-label">TOPIC</span><input class="input" data-field="topicText" value="${safe(record?.topicName || '')}"></div>`;
+    }
+    if (contentType === 'iq') {
+      const priority = record?.priority || 'med';
+      return `
+        <div class="input-group"><span class="v10-label">QUESTION</span><textarea class="input" data-field="body" rows="4" style="resize:vertical;" required>${safe(record?.question || record?.body || '')}</textarea></div>
+        <div class="input-group"><span class="v10-label">PRIORITY</span><select class="select" data-field="priority">
+          <option value="high"${priority === 'high' ? ' selected' : ''}>High</option>
+          <option value="med"${priority === 'med' || priority === 'medium' ? ' selected' : ''}>Medium</option>
+          <option value="low"${priority === 'low' ? ' selected' : ''}>Low</option>
+        </select></div>
+        <div class="input-group"><span class="v10-label">TOPIC</span><input class="input" data-field="topicText" value="${safe(record?.topicName || '')}"></div>`;
+    }
+    return `
+      <div class="input-group"><span class="v10-label">TITLE</span><input class="input" data-field="title" value="${safe(record?.title || record?.topicName || '')}" required></div>
+      <div class="input-group"><span class="v10-label">URL</span><input class="input" data-field="url" value="${safe(record?.url || record?.link || '')}"></div>
+      <div class="input-group"><span class="v10-label">DESCRIPTION</span><textarea class="input" data-field="body" rows="3" style="resize:vertical;">${safe(record?.description || record?.body || '')}</textarea></div>
+      <div class="input-group"><span class="v10-label">TOPIC</span><input class="input" data-field="topicText" value="${safe(record?.topicName || record?.title || '')}"></div>`;
+  }
+
+  async function v10RefreshAfterCrud({ contentType, subjectId, unitId }) {
+    const subject = v10ResolveSubject(subjectId);
+    const subjectName = subject?.name || subjectId;
+    if (contentType === 'roadmap') {
+      await window.v10RefreshRoadmapListInPlace?.(subjectId, unitId);
+      return;
+    }
+    await window.v10RefreshContentPane?.(contentType === 'note' ? 'notes' : contentType, subjectName, unitId);
+    if (window._v11AdminUnitId && String(window._v11AdminUnitId) === String(unitId)) {
+      await window.v11AdminUnitDetail?.(subject.id || subjectId, unitId);
+    }
+    if (window._v11CrSubj && String(window._v11CrSubj.id) === String(subjectId)) {
+      await window.v11CreatorUnitDetail?.(subject.id || subjectId, unitId);
+    }
+  }
+
+  window.v10OpenUnifiedEditModal = function v10OpenUnifiedEditModal(item) {
+    if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
+    const record = v10FindSavedContentRecord(item);
+    if (!record) {
+      showToast('This action is not available.', 'red');
+      return;
+    }
+    if (!v10CanModifyRecord(record)) {
+      showToast('Permission denied: You can only edit content you created', 'red');
+      return;
+    }
+    window.v10CloseAllPopups?.();
+    const modal = document.createElement('div');
+    modal.className = 'v11-confirm-modal';
+    modal.innerHTML = `<div class="v11-confirm-box v10-crud-modal" style="max-width:520px;">
+      <h3>Edit ${v10ContentLabel(item.contentType)}</h3>
+      ${v10EditModalFields(item.contentType, record)}
+      <div class="v10-modal-actions">
+        <button type="button" class="btn btn-ghost btn-sm" data-v10-cancel>Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" data-v10-save>Save Changes</button>
+      </div>
+    </div>`;
+    modal.querySelector('[data-v10-cancel]')?.addEventListener('click', () => modal.remove());
+    modal.querySelector('[data-v10-save]')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      if (button.disabled) return;
+      const value = (name) => modal.querySelector(`[data-field="${name}"]`)?.value.trim() || '';
+      const title = value('title');
+      const body = value('body');
+      const url = value('url');
+      if (item.contentType === 'roadmap' && (!title || !url)) { showToast('Topic name and URL are required.', 'red'); return; }
+      if (item.contentType === 'note' && !title) { showToast('Title is required.', 'red'); return; }
+      if ((item.contentType === 'pyq' || item.contentType === 'iq') && !body) { showToast('Question is required.', 'red'); return; }
+      if (url) {
+        try { new URL(url); } catch (e) { showToast('Please enter a valid URL.', 'red'); return; }
+      }
+      button.disabled = true;
+      button.textContent = 'Saving...';
+      try {
+        if (item.contentType === 'roadmap') {
+          await window.v10SaveRoadmapRecord?.(item, { title, url, body });
+        } else {
+          const metadata = {
+            ...(record.metadata || {}),
+            topicId: record.topicId || record.metadata?.topicId || '',
+            topicText: value('topicText'),
+            year: value('year'),
+            marks: value('marks'),
+            count: value('marks') || value('count'),
+            priority: value('priority'),
+          };
+          const patch = {
+            title: item.contentType === 'pyq' || item.contentType === 'iq' ? body.slice(0, 80) : title,
+            body,
+            url,
+            metadata,
+            updated_at: new Date().toISOString(),
+          };
+          await window.updateContent(record.dbContentId || record.id || item.itemId, patch);
+        }
+        modal.remove();
+        await v10RefreshAfterCrud(item);
+        showToast(`${v10ContentLabel(item.contentType)} updated successfully.`, 'green');
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = 'Save Changes';
+        showToast('Update failed: ' + error.message, 'red');
+      }
+    });
+    document.body.appendChild(modal);
+  };
+
+  window.v10OpenUnifiedDeleteModal = function v10OpenUnifiedDeleteModal(item) {
+    if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
+    const record = v10FindSavedContentRecord(item);
+    if (record && !v10CanModifyRecord(record)) {
       showToast('Permission denied: You can only delete content you created', 'red');
       return;
     }
-    if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
-    v11Confirm('Are you sure you want to delete this important question?', async () => {
-      try {
-        if (id && !String(id).startsWith('temp_')) {
-          await window.deleteContent(id);
-        }
-        await window.v10RefreshContentPane('iq', subjectName, unitId);
-        showToast('Important question deleted successfully', 'green');
-      } catch (err) {
-        showToast('Delete failed: ' + err.message, 'red');
+    v10ConfirmContentDelete(v10ContentLabel(item.contentType), async () => {
+      if (item.contentType === 'roadmap') {
+        await window.v10DeleteRoadmapRecord?.(item);
+      } else {
+        await window.deleteContent(record?.dbContentId || record?.id || item.itemId);
       }
+      await v10RefreshAfterCrud(item);
+      showToast(`${v10ContentLabel(item.contentType)} deleted successfully.`, 'green');
     });
   };
+
+  window.v10SaveRoadmapRecord = async function v10SaveRoadmapRecord(item, patch) {
+    const supabase = window.__AIMEASY_SUPABASE__;
+    if (!supabase) throw new Error('Supabase is not available.');
+    const ctx = typeof aimeasyResolveRoadmapContext === 'function'
+      ? await aimeasyResolveRoadmapContext(item.subjectId, item.unitId)
+      : { subjectId: item.subjectId, unitId: item.unitId, topics: window.__v10UnitTopicsCache?.[`${item.subjectId}:${item.unitId}`] || [] };
+    const topic = typeof aimeasyFindTopic === 'function'
+      ? aimeasyFindTopic(ctx, item.itemId)
+      : v10FindSavedContentRecord(item);
+    const dbTopicId = typeof aimeasyTopicDbId === 'function'
+      ? aimeasyTopicDbId(topic, item.itemId)
+      : topic?.id || item.itemId;
+    if (!dbTopicId) throw new Error('Topic not found in Supabase.');
+    const { error: topicError } = await supabase
+      .from('topics')
+      .update({ topic_name: patch.title })
+      .eq('id', dbTopicId)
+      .eq('subject_id', ctx.subjectId || item.subjectId)
+      .eq('unit_id', ctx.unitId || item.unitId);
+    if (topicError) throw topicError;
+    const existing = await supabase
+      .from('topic_videos')
+      .select('id')
+      .eq('topic_id', dbTopicId)
+      .order('display_order', { ascending: true })
+      .limit(1);
+    if (existing.error) throw existing.error;
+    if (existing.data?.[0]) {
+      const { error } = await supabase
+        .from('topic_videos')
+        .update({ video_url: patch.url || '', description: patch.body || '' })
+        .eq('id', existing.data[0].id);
+      if (error) throw error;
+    } else if (patch.url) {
+      const { error } = await supabase
+        .from('topic_videos')
+        .insert({ topic_id: dbTopicId, video_url: patch.url, description: patch.body || '', display_order: 1 });
+      if (error) throw error;
+    }
+  };
+
+  window.v10DeleteRoadmapRecord = async function v10DeleteRoadmapRecord(item) {
+    const supabase = window.__AIMEASY_SUPABASE__;
+    if (!supabase) throw new Error('Supabase is not available.');
+    const ctx = typeof aimeasyResolveRoadmapContext === 'function'
+      ? await aimeasyResolveRoadmapContext(item.subjectId, item.unitId)
+      : { subjectId: item.subjectId, unitId: item.unitId, topics: window.__v10UnitTopicsCache?.[`${item.subjectId}:${item.unitId}`] || [] };
+    const topic = typeof aimeasyFindTopic === 'function'
+      ? aimeasyFindTopic(ctx, item.itemId)
+      : v10FindSavedContentRecord(item);
+    const dbTopicId = typeof aimeasyTopicDbId === 'function'
+      ? aimeasyTopicDbId(topic, item.itemId)
+      : topic?.id || item.itemId;
+    if (!dbTopicId) throw new Error('Topic not found in Supabase.');
+    const { error: videoError } = await supabase.from('topic_videos').delete().eq('topic_id', dbTopicId);
+    if (videoError) throw videoError;
+    const { error } = await supabase
+      .from('topics')
+      .delete()
+      .eq('id', dbTopicId)
+      .eq('subject_id', ctx.subjectId || item.subjectId)
+      .eq('unit_id', ctx.unitId || item.unitId);
+    if (error) throw error;
+    const { data: remaining, error: orderError } = await supabase
+      .from('topics')
+      .select('id, display_order')
+      .eq('subject_id', ctx.subjectId || item.subjectId)
+      .eq('unit_id', ctx.unitId || item.unitId)
+      .order('display_order', { ascending: true });
+    if (orderError) throw orderError;
+    for (const [index, topicRow] of (remaining || []).entries()) {
+      const nextOrder = index + 1;
+      if (Number(topicRow.display_order) !== nextOrder) {
+        const { error: renumberError } = await supabase.from('topics').update({ display_order: nextOrder }).eq('id', topicRow.id);
+        if (renumberError) throw renumberError;
+      }
+    }
+  };
+
+  window.v10DynamicCrudButton = function v10DynamicCrudButton(item, feature, subject, unit) {
+    const attr = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const type = attr(item.contentType || item.type || feature || 'dynamic');
+    return `<div class="v10-crud-actions" style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+      <button type="button" class="v10-dot-btn v10-crud-action" data-action="edit" data-content-type="${type}" data-item-id="${attr(item.id)}" data-subject-id="${attr(subject)}" data-unit-id="${attr(unit)}" title="Edit" aria-label="Edit" style="font-size:.9rem;">&#9998;</button>
+      <button type="button" class="v10-dot-btn v10-crud-action danger" data-action="delete" data-content-type="${type}" data-item-id="${attr(item.id)}" data-subject-id="${attr(subject)}" data-unit-id="${attr(unit)}" title="Delete" aria-label="Delete" style="font-size:.9rem;color:var(--red);">&#128465;</button>
+    </div>`;
+  };
+
+  window.v10EditDynamicContent = function v10EditDynamicContent(item) {
+    const record = window.edusyncGetDynamicFeatureContent?.(item.id, item.feature, item.subject, item.unit);
+    if (!record) { showToast('Saved item not found.', 'red'); return; }
+    window.v10CloseAllPopups?.();
+    const esc = window.v10Esc || ((value) => String(value || ''));
+    const modal = document.createElement('div');
+    modal.className = 'v11-confirm-modal';
+    modal.innerHTML = `<div class="v11-confirm-box v10-crud-modal" style="max-width:520px;">
+      <h3>Edit ${esc(item.feature || 'Content')}</h3>
+      <div class="input-group"><span class="v10-label">TOPIC NAME</span><input class="input" data-field="title" value="${esc(record.title || '')}"></div>
+      <div class="input-group"><span class="v10-label">URL</span><input class="input" data-field="url" value="${esc(record.link || '')}"></div>
+      <div class="input-group"><span class="v10-label">DESCRIPTION</span><textarea class="input" data-field="description" rows="3">${esc(record.description || '')}</textarea></div>
+      <div class="v10-modal-actions"><button class="btn btn-ghost btn-sm" data-cancel>Cancel</button><button class="btn btn-primary btn-sm" data-save>Save Changes</button></div>
+    </div>`;
+    modal.querySelector('[data-cancel]').addEventListener('click', () => modal.remove());
+    modal.querySelector('[data-save]').addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      if (button.disabled) return;
+      const title = modal.querySelector('[data-field="title"]')?.value.trim();
+      const url = modal.querySelector('[data-field="url"]')?.value.trim() || '';
+      const description = modal.querySelector('[data-field="description"]')?.value.trim() || '';
+      if (!title) { showToast('Topic name is required.', 'red'); return; }
+      button.disabled = true;
+      button.textContent = 'Saving...';
+      try {
+        await window.updateContent(item.id, { title, body: description, url });
+        modal.remove();
+        await window.v10SAUnitDetail?.(window._v10SASubjId, item.unit);
+        showToast('Content updated successfully.', 'green');
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = 'Save Changes';
+        showToast('Update failed: ' + error.message, 'red');
+      }
+    });
+    document.body.appendChild(modal);
+  };
+
+  window.v10DeleteDynamicContent = function v10DeleteDynamicContent(item) {
+    v10ConfirmContentDelete(item.feature || 'Content', async () => {
+      await window.deleteContent(item.id);
+      await window.v10SAUnitDetail?.(window._v10SASubjId, item.unit);
+      showToast('Content deleted successfully.', 'green');
+    });
+  };
+
+  if (!window.__v10SaCrudDelegationInstalled) {
+    window.__v10SaCrudDelegationInstalled = true;
+    document.addEventListener('click', (event) => {
+      const directAction = event.target.closest?.('.v10-crud-action');
+      if (directAction) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.v10RunSaCrudAction?.(directAction.dataset.action, {
+          contentType: directAction.dataset.contentType,
+          itemId: directAction.dataset.itemId,
+          subjectId: directAction.dataset.subjectId,
+          unitId: directAction.dataset.unitId,
+        });
+        return;
+      }
+
+      const actionButton = event.target.closest?.('.v10-modern-menu [data-action]');
+      if (actionButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const popup = actionButton.closest('.v10-modern-menu');
+        const wrap = popup?.closest('.v10-dot-wrap');
+        const trigger = wrap?.querySelector('.v10-sa-crud-trigger');
+        const item = {
+          contentType: popup?.dataset.contentType || trigger?.dataset.contentType,
+          itemId: popup?.dataset.itemId || trigger?.dataset.itemId,
+          subjectId: popup?.dataset.subjectId || trigger?.dataset.subjectId,
+          unitId: popup?.dataset.unitId || trigger?.dataset.unitId,
+        };
+        popup?.remove();
+        trigger?.setAttribute('aria-expanded', 'false');
+        window.v10RunSaCrudAction?.(actionButton.dataset.action, item);
+        return;
+      }
+
+      const trigger = event.target.closest?.('.v10-sa-crud-trigger');
+      if (!trigger) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const existing = trigger.closest('.v10-dot-wrap')?.querySelector('.v10-modern-menu');
+      if (existing) {
+        existing.remove();
+        trigger.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      window.v10OpenSaActionMenu?.(trigger, {
+        contentType: trigger.dataset.contentType,
+        itemId: trigger.dataset.itemId,
+        subjectId: trigger.dataset.subjectId,
+        unitId: trigger.dataset.unitId,
+      }, event);
+    }, true);
+  }
 
   // =========================================================================
   //  ADMIN & CREATOR VIEWS HOOKS FOR UUID COMPATIBILITY
@@ -2313,11 +2544,6 @@ window.v10Esc = window.v10Esc || function(str) {
     if (!content) return;
     const units = v11GetUnits(subj.id, false, subj);
 
-    const adminVideos = JSON.parse(localStorage.getItem('edusync_admin_videos') || '[]');
-    const adminNotes = JSON.parse(localStorage.getItem('edusync_admin_notes') || '[]');
-    const adminPYQs = JSON.parse(localStorage.getItem('edusync_admin_pyqs') || '[]');
-    const adminIQs = JSON.parse(localStorage.getItem('edusync_admin_iqs') || '[]');
-
     content.innerHTML = `
     <div style="padding:2rem;max-width:1100px;margin:0 auto;width:100%;">
       <button class="v11-back" onclick="window.v11AdminSubjectsPage()">← Back to Subjects</button>
@@ -2335,10 +2561,10 @@ window.v10Esc = window.v10Esc || function(str) {
       </div>
       <div class="adm-unit-grid">
         ${units.map((u, ui) => {
-          const vC = adminVideos.filter(v => v.subject === subj.name && String(v.unit) === String(u.id)).length;
-          const nC = adminNotes.filter(n => n.subject === subj.name && String(n.unit) === String(u.id)).length;
-          const pC = adminPYQs.filter(p => p.subject === subj.name && String(p.unit) === String(u.id)).length;
-          const iC = adminIQs.filter(q => q.subject === subj.name && String(q.unit) === String(u.id)).length;
+          const vC = 0;
+          const nC = 0;
+          const pC = 0;
+          const iC = 0;
           const tC = (u.topics || []).length;
           return `<div class="adm-unit-card">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;">
@@ -2385,10 +2611,10 @@ window.v10Esc = window.v10Esc || function(str) {
       await window.v10ReloadUnitContentFromDb(subj.name, unitId);
     }
 
-    const adminVideos = JSON.parse(localStorage.getItem('edusync_admin_videos') || '[]').filter(v => v.subject === subj.name && String(v.unit) === String(unitId));
-    const adminNotes = JSON.parse(localStorage.getItem('edusync_admin_notes') || '[]').filter(n => n.subject === subj.name && String(n.unit) === String(unitId));
-    const adminPYQs = JSON.parse(localStorage.getItem('edusync_admin_pyqs') || '[]').filter(p => p.subject === subj.name && String(p.unit) === String(unitId));
-    const adminIQs = JSON.parse(localStorage.getItem('edusync_admin_iqs') || '[]').filter(q => q.subject === subj.name && String(q.unit) === String(unitId));
+    const adminVideos = window.v10GetUnitContent(subj.name, unitId, 'videos');
+    const adminNotes = window.v10GetUnitContent(subj.name, unitId, 'notes');
+    const adminPYQs = window.v10GetUnitContent(subj.name, unitId, 'pyqs');
+    const adminIQs = window.v10GetUnitContent(subj.name, unitId, 'iqs');
 
     const content = document.getElementById('admin-content');
     if (!content) return;
@@ -2443,7 +2669,7 @@ window.v10Esc = window.v10Esc || function(str) {
               <span>🎬</span>
               <div style="flex:1;min-width:0;"><div style="font-weight:600;">${v.title}</div><div style="font-size:.72rem;color:var(--primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.url}</div></div>
               <span class="badge badge-green">Live</span>
-              <button class="btn btn-danger btn-sm" onclick="window.v11AdminDeleteVideo('${v.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✕</button>
+              ${v10SaDotMenuHtml('video', v.id || v.dbContentId, subjId, unitId)}
             </div>`).join('') || '<p style="color:var(--text3);font-size:.83rem;">No videos yet.</p>'}
           </div>
         </div>
@@ -2468,8 +2694,7 @@ window.v10Esc = window.v10Esc || function(str) {
               <span>📄</span>
               <div style="flex:1;"><div style="font-weight:600;">${n.title}</div><div style="font-size:.72rem;color:var(--text3);">${n.type?.toUpperCase() || 'FILE'} · ${n.uploadedAt || ''}</div></div>
               <span class="badge badge-green">Live</span>
-              <button class="btn btn-sm" onclick="window.v11AdminEditNote('${n.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✏️</button>
-              <button class="btn btn-danger btn-sm" onclick="window.v11AdminDeleteNote('${n.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✕</button>
+              ${v10SaDotMenuHtml('note', n.id || n.dbContentId, subjId, unitId)}
             </div>`).join('') || '<p style="color:var(--text3);font-size:.83rem;">No notes yet.</p>'}
           </div>
         </div>
@@ -2492,8 +2717,7 @@ window.v10Esc = window.v10Esc || function(str) {
               <span>📝</span>
               <div style="flex:1;min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.question.substring(0, 80)}${p.question.length > 80 ? '...' : ''}</div><div style="font-size:.72rem;color:var(--text3);">Year: ${p.year} · ×${p.count || 1}</div></div>
               <span class="badge badge-green">Live</span>
-              <button class="btn btn-sm" onclick="window.v11AdminEditPYQ('${p.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✏️</button>
-              <button class="btn btn-danger btn-sm" onclick="window.v11AdminDeletePYQ('${p.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✕</button>
+              ${v10SaDotMenuHtml('pyq', p.id || p.dbContentId, subjId, unitId)}
             </div>`).join('') || '<p style="color:var(--text3);font-size:.83rem;">No PYQs yet.</p>'}
           </div>
         </div>
@@ -2520,8 +2744,7 @@ window.v10Esc = window.v10Esc || function(str) {
               <span>${q.priority === 'high' ? '🔴' : q.priority === 'low' ? '🟢' : '🟡'}</span>
               <div style="flex:1;min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${q.question.substring(0, 80)}${q.question.length > 80 ? '...' : ''}</div><div style="font-size:.72rem;color:var(--text3);">${q.priority} priority${q.tags ? ' · ' + q.tags : ''}</div></div>
               <span class="badge badge-green">Live</span>
-              <button class="btn btn-sm" onclick="window.v11AdminEditIQ('${q.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✏️</button>
-              <button class="btn btn-danger btn-sm" onclick="window.v11AdminDeleteIQ('${q.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✕</button>
+              ${v10SaDotMenuHtml('iq', q.id || q.dbContentId, subjId, unitId)}
             </div>`).join('') || '<p style="color:var(--text3);font-size:.83rem;">No important questions yet.</p>'}}
           </div>
         </div>
@@ -2549,10 +2772,10 @@ window.v10Esc = window.v10Esc || function(str) {
       await window.v10ReloadUnitContentFromDb(subj.name, unitId);
     }
 
-    const adminVideos = JSON.parse(localStorage.getItem('edusync_admin_videos') || '[]').filter(v => v.subject === subj.name && String(v.unit) === String(unitId));
-    const adminNotes = JSON.parse(localStorage.getItem('edusync_admin_notes') || '[]').filter(n => n.subject === subj.name && String(n.unit) === String(unitId));
-    const adminPYQs = JSON.parse(localStorage.getItem('edusync_admin_pyqs') || '[]').filter(p => p.subject === subj.name && String(p.unit) === String(unitId));
-    const adminIQs = JSON.parse(localStorage.getItem('edusync_admin_iqs') || '[]').filter(q => q.subject === subj.name && String(q.unit) === String(unitId));
+    const adminVideos = window.v10GetUnitContent(subj.name, unitId, 'videos');
+    const adminNotes = window.v10GetUnitContent(subj.name, unitId, 'notes');
+    const adminPYQs = window.v10GetUnitContent(subj.name, unitId, 'pyqs');
+    const adminIQs = window.v10GetUnitContent(subj.name, unitId, 'iqs');
 
     content.innerHTML = `
     <div style="padding:2rem;max-width:1100px;margin:0 auto;width:100%;">
@@ -2591,7 +2814,7 @@ window.v10Esc = window.v10Esc || function(str) {
               <span>🎬</span>
               <div style="flex:1;min-width:0;"><div style="font-weight:600;">${v.title}</div><div style="font-size:.72rem;color:var(--primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.url}</div></div>
               <span class="badge badge-green">Live</span>
-              <button class="btn btn-danger btn-sm" onclick="window.v11AdminDeleteVideo('${v.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✕</button>
+              ${v10SaDotMenuHtml('video', v.id || v.dbContentId, subjId, unitId)}
             </div>`).join('') || '<p style="color:var(--text3);font-size:.83rem;">No videos yet.</p>'}
           </div>
         </div>
@@ -2617,7 +2840,7 @@ window.v10Esc = window.v10Esc || function(str) {
               <span>📄</span>
               <div style="flex:1;"><div style="font-weight:600;">${n.title}</div><div style="font-size:.72rem;color:var(--text3);">${n.type?.toUpperCase() || 'FILE'} · ${n.uploadedAt || ''}</div></div>
               <span class="badge badge-green">Live</span>
-              <button class="btn btn-danger btn-sm" onclick="window.v11AdminDeleteNote('${n.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✕</button>
+              ${v10SaDotMenuHtml('note', n.id || n.dbContentId, subjId, unitId)}
             </div>`).join('') || '<p style="color:var(--text3);font-size:.83rem;">No notes yet.</p>'}
           </div>
         </div>
@@ -2641,7 +2864,7 @@ window.v10Esc = window.v10Esc || function(str) {
               <span>📝</span>
               <div style="flex:1;min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.question.substring(0, 80)}${p.question.length > 80 ? '...' : ''}</div><div style="font-size:.72rem;color:var(--text3);">Year: ${p.year} · ×${p.count || 1}</div></div>
               <span class="badge badge-green">Live</span>
-              <button class="btn btn-danger btn-sm" onclick="window.v11AdminDeletePYQ('${p.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✕</button>
+              ${v10SaDotMenuHtml('pyq', p.id || p.dbContentId, subjId, unitId)}
             </div>`).join('') || '<p style="color:var(--text3);font-size:.83rem;">No PYQs yet.</p>'}
           </div>
         </div>
@@ -2669,7 +2892,7 @@ window.v10Esc = window.v10Esc || function(str) {
               <span>${q.priority === 'high' ? '🔴' : q.priority === 'low' ? '🟢' : '🟡'}</span>
               <div style="flex:1;min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${q.question.substring(0, 80)}${q.question.length > 80 ? '...' : ''}</div><div style="font-size:.72rem;color:var(--text3);">${q.priority} priority${q.tags ? ' · ' + q.tags : ''}</div></div>
               <span class="badge badge-green">Live</span>
-              <button class="btn btn-danger btn-sm" onclick="window.v11AdminDeleteIQ('${q.id}','${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">✕</button>
+              ${v10SaDotMenuHtml('iq', q.id || q.dbContentId, subjId, unitId)}
             </div>`).join('') || '<p style="color:var(--text3);font-size:.83rem;">No important questions yet.</p>'}
           </div>
         </div>
@@ -2978,106 +3201,18 @@ window.v10Esc = window.v10Esc || function(str) {
     }
   }
 
-  window.v10OpenRoadmapEditModalDb = async function v10OpenRoadmapEditModalDbFixed(subjId, unitId, topicId) {
-    window.v10CloseAllPopups?.() || window.v11CloseAllPopups?.();
-    const esc = window.v10Esc || ((s) => String(s || ''));
-    const ctx = await aimeasyResolveRoadmapContext(subjId, unitId);
-    const topic = aimeasyFindTopic(ctx, topicId);
-    if (!topic) { showToast('Topic not found', 'red'); return; }
-    const videos = Array.isArray(topic.videos) ? topic.videos : [];
-    const video = videos[0] || {};
-    const modal = document.createElement('div');
-    modal.className = 'v11-confirm-modal';
-    modal.innerHTML = `
-      <div class="v11-confirm-box" style="max-width:500px;">
-        <h3 style="font-size:1.1rem;margin-bottom:1rem;font-weight:700;color:var(--primary);">Edit Topic</h3>
-        <div class="input-group" style="margin-bottom:12px;">
-          <span class="v10-label">TOPIC NAME</span>
-          <input class="input" id="v11-edit-db-topic-name" value="${esc(topic.name || topic.topicName || '')}" placeholder="Topic Name">
-        </div>
-        <div class="input-group" style="margin-bottom:12px;">
-          <span class="v10-label">URL</span>
-          <input class="input" id="v11-edit-db-topic-url" value="${esc(video.url || topic.youtubeUrl || topic.url || '')}" placeholder="Video URL">
-        </div>
-        <div class="input-group" style="margin-bottom:16px;">
-          <span class="v10-label">DESCRIPTION</span>
-          <textarea class="input" id="v11-edit-db-topic-desc" rows="3" style="resize:vertical;">${esc(video.description || topic.description || '')}</textarea>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
-          <button class="btn btn-ghost btn-sm" onclick="this.closest('.v11-confirm-modal').remove()">Cancel</button>
-          <button class="btn btn-primary btn-sm" onclick="window.v10SaveRoadmapEditModalDb('${subjId}','${unitId}','${topicId}')">Save Changes</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
+  window.v10OpenRoadmapEditModalDb = function v10OpenRoadmapEditModalDbBridge(subjId, unitId, topicId) {
+    return window.v10OpenUnifiedEditModal?.({ contentType: 'roadmap', itemId: topicId, subjectId: subjId, unitId });
   };
 
-  window.v10SaveRoadmapEditModalDb = async function v10SaveRoadmapEditModalDbFixed(subjId, unitId, topicId) {
-    if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
-    const name = document.getElementById('v11-edit-db-topic-name')?.value.trim();
-    const url = document.getElementById('v11-edit-db-topic-url')?.value.trim();
-    const desc = document.getElementById('v11-edit-db-topic-desc')?.value.trim() || '';
-    if (!name) { showToast('Topic name is required', 'red'); return; }
-    if (url) {
-      try { new URL(url); } catch (e) { showToast('Please enter a valid URL', 'red'); return; }
-    }
-    const supabase = window.__AIMEASY_SUPABASE__;
-    if (!supabase) { showToast('Supabase is not available.', 'red'); return; }
-    const ctx = await aimeasyResolveRoadmapContext(subjId, unitId);
-    const topic = aimeasyFindTopic(ctx, topicId);
-    const dbTopicId = aimeasyTopicDbId(topic, topicId);
-    if (!dbTopicId) { showToast('Topic not found in Supabase.', 'red'); return; }
-    const { error: topicError } = await supabase.from('topics').update({ topic_name: name }).eq('id', dbTopicId);
-    if (topicError) { showToast('Failed to update topic: ' + topicError.message, 'red'); return; }
-    const existing = await supabase.from('topic_videos').select('id').eq('topic_id', dbTopicId).order('display_order', { ascending: true }).limit(1);
-    if (existing.error) { showToast('Failed to load topic URL: ' + existing.error.message, 'red'); return; }
-    if (existing.data?.[0]) {
-      const { error } = await supabase.from('topic_videos').update({ video_url: url || '', description: desc }).eq('id', existing.data[0].id);
-      if (error) { showToast('Failed to update URL: ' + error.message, 'red'); return; }
-    } else if (url) {
-      const { error } = await supabase.from('topic_videos').insert({ topic_id: dbTopicId, video_url: url, description: desc, display_order: 1 });
-      if (error) { showToast('Failed to save URL: ' + error.message, 'red'); return; }
-    }
-    await supabase.from('student_url_suggestions').update({ topic_name: name }).eq('topic_id', dbTopicId);
-    document.querySelector('.v11-confirm-modal')?.remove();
-    await aimeasyRefreshRoadmapSurfaces(subjId, unitId, ctx);
-    showToast('Topic updated successfully.', 'green');
+  window.v10SaveRoadmapEditModalDb = undefined;
+
+  window.v10DeleteSavedRoadmapTopicDb = function v10DeleteSavedRoadmapTopicDbBridge(subjId, unitId, topicId) {
+    return window.v10OpenUnifiedDeleteModal?.({ contentType: 'roadmap', itemId: topicId, subjectId: subjId, unitId });
   };
 
-  window.v10DeleteSavedRoadmapTopicDb = function v10DeleteSavedRoadmapTopicDbFixed(subjId, unitId, topicId) {
-    if (window._v10SASubj?.isReadOnly) { showToast('Permission denied: Subject is read-only', 'red'); return; }
-    v11Confirm('Delete this topic and its saved URL from the database?', async () => {
-      const supabase = window.__AIMEASY_SUPABASE__;
-      if (!supabase) { showToast('Supabase is not available.', 'red'); return; }
-      const ctx = await aimeasyResolveRoadmapContext(subjId, unitId);
-      const topic = aimeasyFindTopic(ctx, topicId);
-      const dbTopicId = aimeasyTopicDbId(topic, topicId);
-      if (!dbTopicId) { showToast('Topic not found in Supabase.', 'red'); return; }
-      await supabase.from('topic_videos').delete().eq('topic_id', dbTopicId);
-      const { error } = await supabase.from('topics').delete().eq('id', dbTopicId);
-      if (error) { showToast('Failed to delete topic: ' + error.message, 'red'); return; }
-      const { data: remaining } = await supabase
-        .from('topics')
-        .select('id, display_order')
-        .eq('subject_id', ctx.subjectId)
-        .eq('unit_id', ctx.unitId)
-        .order('display_order', { ascending: true });
-      for (const [index, topic] of (remaining || []).entries()) {
-        if (Number(topic.display_order) !== index + 1) {
-          await supabase.from('topics').update({ display_order: index + 1 }).eq('id', topic.id);
-        }
-      }
-      await aimeasyRefreshRoadmapSurfaces(subjId, unitId, ctx);
-      showToast('Topic deleted.', 'green');
-    });
-  };
-
-  window.v10OpenRoadmapEditModal = function v10OpenRoadmapEditModalDbBridge(subjId, unitId, topicRef) {
-    return window.v10OpenRoadmapEditModalDb?.(subjId, unitId, topicRef);
-  };
-
-  window.v10DeleteSavedRoadmapTopic = function v10DeleteSavedRoadmapTopicDbBridge(subjId, unitId, topicRef) {
-    return window.v10DeleteSavedRoadmapTopicDb?.(subjId, unitId, topicRef);
-  };
+  window.v10OpenRoadmapEditModal = window.v10OpenRoadmapEditModalDb;
+  window.v10DeleteSavedRoadmapTopic = window.v10DeleteSavedRoadmapTopicDb;
 
   window.submitVideoSuggestion = async function submitVideoSuggestionDbFixed() {
     const titleInput = document.getElementById('suggest-title-input');

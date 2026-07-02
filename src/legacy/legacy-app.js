@@ -220,15 +220,7 @@ const UNIT_TOPICS = {
 
 const PYQ_DB = [];
 
-const AI_RESPONSES = {
-  'explain current topic': 'Great question! Let me break down the current topic for you:\n\n**Virtual Memory** is a technique that gives each process the illusion of having a large, contiguous block of memory. Key concepts:\n• Pages: Fixed-size blocks of virtual memory\n• Frames: Physical memory blocks\n• Page Table: Maps virtual to physical addresses\n• Page Fault: When a requested page isn\'t in RAM\n\nWant me to create a quiz on this topic?',
-  'create a quiz for me': 'Here\'s a quick quiz on the current unit! 🧠\n\n**Q1:** What algorithm avoids deadlock by simulating resource allocation?\na) Round Robin  b) Banker\'s Algorithm  c) FCFS  d) LRU\n\n**Q2:** When does thrashing occur?\na) CPU utilization is 100%  b) Too many page faults  c) Memory is full  d) All processes complete\n\n**Q3:** What does LRU stand for?\na) Least Recently Used  b) Last Random Unit  c) Low Resource Utilization\n\nAnswer in chat and I\'ll grade you! 🎯',
-  'summarize this unit': '📚 **Unit Summary: Operating Systems — Memory Management**\n\n1. **Memory Hierarchy**: Registers → Cache → RAM → Disk\n2. **Paging**: Divides memory into fixed-size pages, uses page tables\n3. **Segmentation**: Logical division of programs\n4. **Virtual Memory**: Uses disk as extended RAM via demand paging\n5. **Page Replacement**: FIFO, LRU, Optimal algorithms\n6. **Thrashing**: Excessive paging degrading performance\n\n**Most Important Topics for Exam**: Virtual memory, Banker\'s Algorithm, Page replacement 📌',
-  'show my weak areas': '🔍 **Your Weak Area Analysis:**\n\n**Critical (Do immediately):**\n• OS Unit 3 — Memory Management (45% quiz accuracy)\n• CN Unit 4 — Transport Layer (38% accuracy)\n\n**Needs Work:**\n• SE Unit 2 — Design Patterns\n• MP Unit 1 — 8085 Instructions\n\n**Strong Subjects:** Data Structures, DBMS (keep it up!) 💪\n\n**Recommended Plan:** Spend 30 min/day on OS + 20 min on CN for the next 5 days.',
-  'generate mind map': '🗺️ **Mind Map: Operating Systems**\n\n```\n         OS\n         │\n    ┌────┼────┐\n   CPU  MEM  I/O\n   │     │    │\n Sched  Paging Files\n   │     │    │\nFCFS  Virtual Disk\nSJF   Memory Sched\nRR   Thrash  DMA\n```\n\nKey branches: Process Management, Memory Management, File Systems, I/O Systems, Security\n\nWant a more detailed mind map for a specific unit?',
-  'generate notes for this topic': '📒 **Auto-Generated Notes: Memory Management**\n\n**1. Memory Organization**\nMemory is organized in a hierarchy based on speed and cost. Main memory (RAM) is volatile and directly accessed by CPU.\n\n**2. Paging**\n- Divides logical memory into fixed-size pages\n- Physical memory divided into frames of same size\n- Page table maps logical to physical addresses\n\n**3. Virtual Memory**\n- Extends RAM using disk space\n- Demand paging: Load pages only when needed\n- Page fault → OS loads page from secondary storage\n\n**Key Formulas:**\n• Physical Address = Frame Number × Page Size + Offset\n• Effective Access Time = (1-p) × Memory time + p × Page fault time\n\nDownload full notes as PDF?',
-  default: 'That\'s a great question! Let me help you with that. Based on your current learning context in Operating Systems, here\'s what I can share:\n\nOS is a fundamental subject that covers process management, memory management, file systems, and I/O systems. Your current progress shows you\'re doing well on process scheduling but could use more practice on memory management.\n\nWould you like me to:\n• 📝 Generate practice questions\n• 🎯 Create a focused study plan\n• 📊 Analyze your performance data\n• 🗺️ Create a topic mind map',
-};
+// Static chatbot replies removed. Answers now come from the server-side Gemini endpoint.
 
 // ═══════════════════════════════════════════════════
 //  INIT
@@ -1607,8 +1599,63 @@ async function renderIQ(subjectId, unitNum) {
 // ═══════════════════════════════════════════════════
 //  CALCULATOR
 // ═══════════════════════════════════════════════════
-const GRADES = { O: 10, 'A+': 9, A: 8, 'B+': 7, B: 6, C: 5, F: 0 };
-const DEFAULT_SUBJECTS = ['Data Structures', 'Operating Systems', 'DBMS', 'Computer Networks', 'Software Engineering'];
+const JNTUK_SEMESTERS = ['1-1', '1-2', '2-1', '2-2', '3-1', '3-2', '4-1', '4-2'];
+const GRADES = { S: 10, A: 9, B: 8, C: 7, D: 6, E: 5, F: 0, 'No Credits': 0 };
+
+function calcHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function normalizeCalcSemLabel(label) {
+  const value = String(label || '').replace(/^Semester\s+/i, '').trim();
+  if (JNTUK_SEMESTERS.includes(value)) return value;
+  const oldMatch = value.match(/^\d+$/);
+  if (oldMatch) return JNTUK_SEMESTERS[Math.max(0, Math.min(JNTUK_SEMESTERS.length - 1, Number(value) - 1))];
+  return value || JNTUK_SEMESTERS[0];
+}
+
+function makeCalcSemester(semKey) {
+  return { id: 'sem-' + semKey, semKey, label: 'Semester ' + semKey, rows: [], sgpa: null, credits: 0 };
+}
+
+function normalizeCalcRow(row = {}) {
+  const name = row.name || row.subjectName || '';
+  const dbId = row.dbId || row.subjectId || row.rawId || null;
+  const isCustom = row.isCustom !== false && !dbId;
+  return {
+    name,
+    credits: String(row.credits || '3'),
+    grade: GRADES[row.grade] !== undefined ? row.grade : 'A',
+    isCustom,
+    dbId,
+    code: row.code || '',
+  };
+}
+
+function migrateCalcState() {
+  const seen = new Set();
+  APP.calcSemesters = (APP.calcSemesters || []).map((sem, index) => {
+    const semKey = sem.semKey || normalizeCalcSemLabel(sem.label || String(index + 1));
+    const migrated = { ...makeCalcSemester(semKey), ...sem, semKey, label: 'Semester ' + semKey };
+    migrated.rows = (sem.rows || []).map(normalizeCalcRow);
+    migrated.credits = Number(sem.credits || 0);
+    return migrated;
+  }).filter((sem) => {
+    if (!JNTUK_SEMESTERS.includes(sem.semKey) || seen.has(sem.semKey)) return false;
+    seen.add(sem.semKey);
+    return true;
+  }).sort((a, b) => JNTUK_SEMESTERS.indexOf(a.semKey) - JNTUK_SEMESTERS.indexOf(b.semKey));
+
+  if (APP.currentSemId) {
+    const current = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+    if (!current && APP.calcSemesters.length) APP.currentSemId = APP.calcSemesters[0].id;
+  }
+}
+
+function getNextCalcSemesterKey() {
+  const existing = new Set((APP.calcSemesters || []).map(s => s.semKey || normalizeCalcSemLabel(s.label)));
+  return JNTUK_SEMESTERS.find(sem => !existing.has(sem)) || null;
+}
 
 function loadCalcState() {
   try {
@@ -1658,7 +1705,7 @@ async function initCalc() {
     if (sem && sem.rows && sem.rows.length) {
       sem.rows.forEach(r => addCalcRow(r.name, r.credits, r.grade));
     } else {
-      DEFAULT_SUBJECTS.forEach(s => addCalcRow(s));
+      loadSubjectsForCurrentSemester();
     }
   }
 
@@ -1732,7 +1779,7 @@ function switchSem(semId) {
   if (sem && sem.rows.length) {
     sem.rows.forEach(r => addCalcRow(r.name, r.credits, r.grade));
   } else {
-    DEFAULT_SUBJECTS.forEach(s => addCalcRow(s));
+    loadSubjectsForCurrentSemester();
   }
   renderSemTabs();
   renderCalcSemTitle();
@@ -1829,7 +1876,7 @@ async function renderCalc() {
       if (sem && sem.rows.length) {
         sem.rows.forEach(r => addCalcRow(r.name, r.credits, r.grade));
       } else {
-        DEFAULT_SUBJECTS.forEach(s => addCalcRow(s));
+        loadSubjectsForCurrentSemester();
       }
     }
   }
@@ -1885,7 +1932,7 @@ function calculateGPA() {
   document.getElementById('sgpa-grade').textContent = gradeLabel;
 
   // Grade distribution bars
-  const colors = { O: 'var(--green)', 'A+': 'var(--teal)', A: 'var(--primary)', 'B+': 'var(--lavender)', B: 'var(--amber)', C: '#f97316', F: 'var(--red)' };
+  const colors = { S: 'var(--green)', A: 'var(--teal)', B: 'var(--primary)', C: 'var(--lavender)', D: 'var(--amber)', E: '#f97316', F: 'var(--red)', 'No Credits': 'var(--text3)' };
   const maxCount = Math.max(...Object.values(gradeCount), 1);
   document.getElementById('grade-dist').innerHTML = `
     <div style="display:flex;gap:4px;align-items:flex-end;height:60px;margin-bottom:6px;">
@@ -1915,6 +1962,329 @@ function calculateGPA() {
 // ═══════════════════════════════════════════════════
 //  SKILLS UP PAGE
 // ═══════════════════════════════════════════════════
+function loadCalcState() {
+  try {
+    const saved = localStorage.getItem('edusync_cgpa_data');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && Array.isArray(parsed.calcSemesters) && parsed.calcSemesters.length) {
+        APP.calcSemesters = parsed.calcSemesters;
+        APP.currentSemId = parsed.currentSemId || parsed.calcSemesters[0].id;
+        migrateCalcState();
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load CGPA calculator state:', e);
+  }
+  return false;
+}
+
+function saveCurrentSemRows() {
+  const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+  if (!sem) return;
+  sem.rows = Array.from(document.querySelectorAll('#calc-tbody tr')).map(row => ({
+    name: row.querySelector('[data-calc-name]')?.value || '',
+    credits: row.querySelector('[data-calc-credits]')?.value || '0',
+    grade: row.querySelector('[data-calc-grade]')?.value || 'A',
+    isCustom: row.dataset.custom === 'true',
+    dbId: row.dataset.dbId || null,
+    code: row.dataset.code || '',
+  })).filter(row => row.name || row.isCustom || row.dbId);
+  saveCalcState();
+}
+
+function calculateWeightedCgpa(semesters) {
+  const credits = semesters.reduce((sum, sem) => sum + Number(sem.credits || 0), 0);
+  if (!credits) return 0;
+  return Math.min(10, semesters.reduce((sum, sem) => sum + Number(sem.sgpa || 0) * Number(sem.credits || 0), 0) / credits);
+}
+
+function updateAddSemesterState() {
+  const done = !getNextCalcSemesterKey();
+  const btn = document.getElementById('calc-add-semester-btn');
+  const msg = document.getElementById('calc-semester-limit-msg');
+  if (btn) {
+    btn.disabled = done;
+    btn.classList.toggle('disabled', done);
+  }
+  if (msg) msg.style.display = done ? 'block' : 'none';
+}
+
+async function getCalcProfileFilters() {
+  const appUser = APP.user || {};
+  let profile = null;
+  const sc = window.__AIMEASY_SUPABASE__;
+  try {
+    const session = sc ? (await sc.auth.getSession())?.data?.session : null;
+    if (session?.user?.id) {
+      const { data } = await sc.from('profiles')
+        .select('university_name,regulation_code,branch_name,branch,semester')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      profile = data;
+    }
+  } catch (e) {
+    console.warn('[Calculator] Profile filters unavailable', e);
+  }
+  const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+  return {
+    semester: sem?.semKey || normalizeCalcSemLabel(sem?.label),
+    university_name: profile?.university_name || appUser.university_name || appUser.university || null,
+    branch: profile?.branch_name || profile?.branch || appUser.branch_name || appUser.branch || null,
+    regulation_code: profile?.regulation_code || appUser.regulation_code || appUser.regulation || null,
+  };
+}
+
+function isPublishedSubject(row) {
+  const status = String(row?.status || 'active').trim().toLowerCase();
+  return !['inactive', 'deleted', 'draft', 'unpublished'].includes(status);
+}
+
+async function loadSubjectsForCurrentSemester() {
+  const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+  const tbody = document.getElementById('calc-tbody');
+  if (!sem || !tbody) return;
+  const customRows = (sem.rows || []).map(normalizeCalcRow).filter(row => row.isCustom);
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:1.3rem;">Loading published subjects...</td></tr>';
+  let autoRows = [];
+  try {
+    const filters = await getCalcProfileFilters();
+    if (window.aimeasyFetchSubjects) {
+      const { data, error } = await window.aimeasyFetchSubjects(filters);
+      if (error) throw error;
+      const gradeByDbId = new Map((sem.rows || []).filter(row => row.dbId).map(row => [String(row.dbId), row.grade]));
+      autoRows = (data || []).filter(isPublishedSubject).map(subject => ({
+        name: subject.name,
+        credits: String(subject.credits || '0'),
+        grade: gradeByDbId.get(String(subject.id)) || 'A',
+        isCustom: false,
+        dbId: subject.id,
+        code: subject.code || '',
+      }));
+    }
+  } catch (error) {
+    console.warn('[Calculator] Subject auto-load failed', error?.message || error);
+  }
+  sem.rows = [...autoRows, ...customRows];
+  tbody.innerHTML = '';
+  APP.calcRows = [];
+  if (!sem.rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:1.3rem;">No published subjects found for this semester. Use Add Custom Subject for additional papers.</td></tr>';
+  } else {
+    sem.rows.forEach(row => addCalcRow(row));
+  }
+  saveCurrentSemRows();
+  calculateGPA({ silent: true });
+}
+
+async function initCalc() {
+  if (window.__aiiensHydrationPromise) await window.__aiiensHydrationPromise;
+  loadCalcState();
+  migrateCalcState();
+  if (!APP.calcSemesters.length) {
+    const first = makeCalcSemester(JNTUK_SEMESTERS[0]);
+    APP.calcSemesters.push(first);
+    APP.currentSemId = first.id;
+  }
+  renderSemTabs();
+  renderCalcSemTitle();
+  const tbody = document.getElementById('calc-tbody');
+  if (tbody && !tbody.children.length) {
+    await loadSubjectsForCurrentSemester();
+  }
+  calculateGPA({ silent: true });
+  updateAddSemesterState();
+}
+
+async function addSemester() {
+  const nextSem = getNextCalcSemesterKey();
+  if (!nextSem) {
+    updateAddSemesterState();
+    showToast('All semesters have already been added.', 'blue');
+    return;
+  }
+  saveCurrentSemRows();
+  const sem = makeCalcSemester(nextSem);
+  APP.calcSemesters.push(sem);
+  APP.currentSemId = sem.id;
+  document.getElementById('calc-tbody').innerHTML = '';
+  APP.calcRows = [];
+  renderSemTabs();
+  renderCalcSemTitle();
+  saveCalcState();
+  await loadSubjectsForCurrentSemester();
+  showToast('Semester ' + nextSem + ' added!', 'green');
+}
+
+async function switchSem(semId) {
+  saveCurrentSemRows();
+  APP.currentSemId = semId;
+  const sem = APP.calcSemesters.find(s => s.id === semId);
+  document.getElementById('calc-tbody').innerHTML = '';
+  APP.calcRows = [];
+  await loadSubjectsForCurrentSemester();
+  renderSemTabs();
+  renderCalcSemTitle();
+  document.getElementById('sgpa-result').textContent = sem?.sgpa !== null && sem?.sgpa !== undefined ? Number(sem.sgpa).toFixed(2) : 'â€“';
+  calculateGPA({ silent: true });
+  updateAddSemesterState();
+  saveCalcState();
+}
+
+function renderSemTabs() {
+  const container = document.getElementById('sem-tabs');
+  if (!container) return;
+  migrateCalcState();
+  container.innerHTML = APP.calcSemesters.map((sem) => {
+    const cls = sem.id === APP.currentSemId ? 'btn-primary' : 'btn-ghost';
+    const label = sem.label + (sem.sgpa !== null && sem.sgpa !== undefined ? ' - ' + Number(sem.sgpa).toFixed(2) : '');
+    return '<button class="btn ' + cls + ' btn-sm" onclick="switchSem(\'' + sem.id + '\')">' + calcHtml(label) + '</button>';
+  }).join('');
+  updateAddSemesterState();
+}
+
+function renderCalcSemTitle() {
+  const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+  const el = document.getElementById('calc-sem-title');
+  if (el && sem) el.textContent = sem.label + ' Subjects';
+}
+
+function addCalcRow(rowOrName, credits, defaultGrade) {
+  const rowData = typeof rowOrName === 'object'
+    ? normalizeCalcRow(rowOrName)
+    : normalizeCalcRow({ name: rowOrName, credits, grade: defaultGrade, isCustom: true });
+  const id = Date.now() + Math.random();
+  APP.calcRows.push(id);
+  const tbody = document.getElementById('calc-tbody');
+  tbody.querySelector('td[colspan="5"]')?.parentElement?.remove();
+  const tr = document.createElement('tr');
+  tr.id = 'row-' + id;
+  tr.dataset.custom = rowData.isCustom ? 'true' : 'false';
+  if (rowData.dbId) tr.dataset.dbId = rowData.dbId;
+  if (rowData.code) tr.dataset.code = rowData.code;
+  tr.classList.add(rowData.isCustom ? 'custom-row' : 'locked-row');
+  const selGrade = rowData.grade || 'A';
+  const gradeOptions = Object.keys(GRADES).map(g => '<option value="' + g + '"' + (g === selGrade ? ' selected' : '') + '>' + g + '</option>').join('');
+  const nameField = '<input data-calc-name type="text" placeholder="Subject name" value="' + calcHtml(rowData.name) + '">';
+  const creditField = '<input data-calc-credits type="number" min="0" max="10" step="0.5" value="' + calcHtml(rowData.credits) + '">';
+  tr.innerHTML =
+    '<td class="input-cell calc-subject-cell">' + nameField + '</td>' +
+    '<td class="input-cell calc-credit-cell">' + creditField + '</td>' +
+    '<td class="input-cell calc-grade-cell"><select data-calc-grade>' + gradeOptions + '</select></td>' +
+    '<td class="calc-points-cell pts-cell">' + (GRADES[selGrade] || 0) + '</td>' +
+    '<td class="calc-delete-cell"><button style="background:none;border:none;cursor:pointer;color:var(--red);font-size:1rem;padding:4px;" onclick="removeCalcRow(\'' + id + '\')" aria-label="Remove subject">x</button></td>';
+  tbody.appendChild(tr);
+  if (selGrade === 'F') tr.classList.add('fail-row');
+  tr.querySelector('[data-calc-grade]').addEventListener('change', function () {
+    tr.querySelector('.pts-cell').textContent = GRADES[this.value] ?? 0;
+    tr.classList.toggle('fail-row', this.value === 'F');
+    saveCurrentSemRows();
+    calculateGPA({ silent: true });
+  });
+  tr.querySelectorAll('input').forEach(input => input.addEventListener('input', () => {
+    saveCurrentSemRows();
+    calculateGPA({ silent: true });
+  }));
+  saveCurrentSemRows();
+}
+
+function clearCalc() {
+  document.getElementById('calc-tbody').innerHTML = '';
+  APP.calcRows = [];
+  document.getElementById('sgpa-result').textContent = 'â€“';
+  document.getElementById('sgpa-grade').textContent = 'Calculate to see your grade';
+  document.getElementById('backlog-warn').style.display = 'none';
+  const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+  if (sem) { sem.rows = []; sem.sgpa = null; sem.credits = 0; }
+  renderSemTabs();
+  updateAddSemesterState();
+  saveCalcState();
+  showToast('Semester cleared', 'blue');
+}
+
+async function renderCalc() {
+  if (!APP.calcSemesters.length) await initCalc();
+  else {
+    migrateCalcState();
+    renderSemTabs();
+    renderCalcSemTitle();
+    if (!document.getElementById('calc-tbody').children.length) {
+      await loadSubjectsForCurrentSemester();
+    }
+    calculateGPA({ silent: true });
+  }
+  updateAddSemesterState();
+}
+
+function calculateGPA(options = {}) {
+  const rows = document.querySelectorAll('#calc-tbody tr');
+  let totalPoints = 0, totalCredits = 0;
+  const failed = [], gradeCount = {};
+  rows.forEach(row => {
+    const name = row.querySelector('[data-calc-name]')?.value || 'Unknown Subject';
+    const credits = parseFloat(row.querySelector('[data-calc-credits]')?.value) || 0;
+    const grade = row.querySelector('[data-calc-grade]')?.value || 'F';
+    const pts = GRADES[grade] ?? 0;
+    if (grade !== 'F' && grade !== 'No Credits') {
+      totalPoints += credits * pts;
+      totalCredits += credits;
+    }
+    if (grade === 'F') failed.push(name);
+    gradeCount[grade] = (gradeCount[grade] || 0) + 1;
+  });
+  if (!totalCredits) {
+    if (!options.silent) showToast('Add credit-bearing subjects first', 'red');
+    return;
+  }
+  const sgpa = parseFloat((totalPoints / totalCredits).toFixed(2));
+  const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+  if (sem) { sem.sgpa = sgpa; sem.credits = totalCredits; }
+  saveCurrentSemRows();
+  renderSemTabs();
+  document.getElementById('sgpa-result').textContent = sgpa.toFixed(2);
+  document.getElementById('sgpa-grade').textContent = sgpa >= 9 ? 'Outstanding' : sgpa >= 8 ? 'Excellent' : sgpa >= 7 ? 'Very Good' : sgpa >= 6 ? 'Good' : sgpa >= 5 ? 'Pass' : 'Needs Improvement';
+  const calcdSems = APP.calcSemesters.filter(s => s.sgpa !== null && s.sgpa !== undefined && Number(s.credits || 0) > 0);
+  const cgpa = calcdSems.length ? calculateWeightedCgpa(calcdSems) : sgpa;
+  document.getElementById('cgpa-result').textContent = cgpa.toFixed(2);
+  const summaryEl = document.getElementById('all-sems-summary');
+  const listEl = document.getElementById('all-sems-list');
+  if (summaryEl && listEl) {
+    summaryEl.style.display = calcdSems.length > 1 ? 'block' : 'none';
+    listEl.innerHTML = calcdSems.map(s =>
+      '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:0.82rem;">' +
+      '<span style="font-weight:600;">' + calcHtml(s.label) + '</span>' +
+      '<span style="color:var(--primary);font-weight:700;">' + Number(s.sgpa).toFixed(2) + '</span></div>'
+    ).join('') +
+      '<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:0.88rem;">' +
+      '<span style="font-weight:700;">Overall CGPA</span>' +
+      '<span style="color:var(--teal);font-weight:800;">' + cgpa.toFixed(2) + '</span></div>';
+  }
+  const colors = { S: 'var(--green)', A: 'var(--teal)', B: 'var(--primary)', C: 'var(--lavender)', D: 'var(--amber)', E: '#f97316', F: 'var(--red)', 'No Credits': 'var(--text3)' };
+  const maxCount = Math.max(...Object.values(gradeCount), 1);
+  const dist = document.getElementById('grade-dist');
+  if (dist) dist.innerHTML = '<div style="display:flex;gap:4px;align-items:flex-end;height:60px;margin-bottom:6px;">' +
+    Object.keys(GRADES).map(g => {
+      const cnt = gradeCount[g] || 0;
+      const h = cnt ? Math.max(8, (cnt / maxCount) * 52) : 0;
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
+        '<div style="width:100%;height:' + h + 'px;border-radius:4px 4px 0 0;background:' + (colors[g] || 'var(--border)') + ';transition:height 0.5s;"></div>' +
+        '<div style="font-size:0.65rem;font-weight:700;color:var(--text3);text-align:center;">' + calcHtml(g) + '</div></div>';
+    }).join('') + '</div>';
+  if (failed.length > 0) {
+    APP.backlogSubjects = [...new Set([...APP.backlogSubjects, ...failed])];
+    const badge = document.getElementById('backlog-badge');
+    if (badge) badge.textContent = APP.backlogSubjects.length;
+    document.getElementById('backlog-warn').style.display = 'block';
+    document.getElementById('backlog-warn-subjects').textContent = `Subjects moved to Backlog: ${failed.join(', ')}`;
+    if (!options.silent) showToast(`${failed.length} backlog subject(s) detected!`, 'red');
+  } else {
+    document.getElementById('backlog-warn').style.display = 'none';
+    if (!options.silent) showToast(`SGPA: ${sgpa} - Great work!`, 'green');
+  }
+  saveCalcState();
+}
+
 function renderSkillsPage() {
   const grid = document.getElementById('skills-grid');
   const empty = document.getElementById('skills-empty');
@@ -2063,19 +2433,40 @@ function openChat() {
   toggleChat();
 }
 
-function sendChat() {
+async function sendChat() {
   const input = document.getElementById('chat-input');
+  const sendBtn = document.querySelector('.chat-send');
+  if (window.__aiiensChatPending) return;
   const msg = input.value.trim();
   if (!msg) return;
   input.value = '';
   addChatMsg(msg, 'user');
+  window.__aiiensChatPending = true;
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.setAttribute('aria-busy', 'true');
+  }
   showTyping();
-  setTimeout(() => {
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg }),
+    });
+    const data = await response.json().catch(() => ({}));
     removeTyping();
-    const key = Object.keys(AI_RESPONSES).find(k => msg.toLowerCase().includes(k));
-    const response = AI_RESPONSES[key] || AI_RESPONSES.default;
-    addChatMsg(response, 'bot');
-  }, 1200 + Math.random() * 600);
+    addChatMsg(data.answer || "Sorry, I'm unable to answer right now. Please try again later.", 'bot');
+  } catch (error) {
+    removeTyping();
+    addChatMsg("Sorry, I'm unable to answer right now. Please try again later.", 'bot');
+  } finally {
+    window.__aiiensChatPending = false;
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.removeAttribute('aria-busy');
+    }
+    input.focus();
+  }
 }
 
 function quickChat(msg) {
@@ -2087,7 +2478,13 @@ function addChatMsg(text, type) {
   const msgs = document.getElementById('chat-messages');
   const div = document.createElement('div');
   div.className = `chat-msg ${type}`;
-  div.innerHTML = `<div class="chat-bubble">${text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</div>`;
+  const safeText = String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  div.innerHTML = `<div class="chat-bubble">${safeText.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</div>`;
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
 }
@@ -11298,6 +11695,9 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   let liveWorkshopCarouselTimer = null;
   let liveWorkshopCarouselIndex = 0;
   let liveWorkshopRenderToken = 0;
+  let studentWorkshopCarouselTimer = null;
+  let studentWorkshopCarouselIndex = 0;
+  let studentWorkshopRenderToken = 0;
   const todayKeyDb = (date = new Date()) => date.toISOString().slice(0, 10);
   const pctFromCgpa = (cgpa) => Math.max(0, Math.min(100, Number(cgpa || 0) * 9.5));
 
@@ -11314,6 +11714,60 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const user = await authUser();
     return user?.id || window.APP?.user?.id || window.APP?.user?.googleId || null;
   }
+
+  function hasLiveWorkshopPortalAuth() {
+    try {
+      return sessionStorage.getItem('aimeasy_login_portal') === 'live_workshop'
+        || localStorage.getItem('aimeasy_login_portal_backup') === 'live_workshop'
+        || sessionStorage.getItem('aiiens_live_workshop_auth') === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function markLiveWorkshopPortal() {
+    try {
+      sessionStorage.setItem('aimeasy_login_portal', 'live_workshop');
+      localStorage.setItem('aimeasy_login_portal_backup', 'live_workshop');
+      sessionStorage.setItem('aiiens_live_workshop_auth', '1');
+    } catch {}
+  }
+
+  function clearLiveWorkshopPortal() {
+    try {
+      if (sessionStorage.getItem('aimeasy_login_portal') === 'live_workshop') {
+        sessionStorage.removeItem('aimeasy_login_portal');
+      }
+      if (localStorage.getItem('aimeasy_login_portal_backup') === 'live_workshop') {
+        localStorage.removeItem('aimeasy_login_portal_backup');
+      }
+      sessionStorage.removeItem('aiiens_live_workshop_auth');
+    } catch {}
+  }
+
+  function openLiveWorkshopGoogleSignIn() {
+    markLiveWorkshopPortal();
+    window.syncGoogleAuthScreen?.();
+    window.showScreen?.('screen-google-auth');
+    window.setTimeout(() => window.updateGoogleAuthTermsState?.(), 0);
+  }
+
+  window.handleStudentWorkshopBannerClick = async function handleStudentWorkshopBannerClick() {
+    if (!hasLiveWorkshopPortalAuth()) {
+      openLiveWorkshopGoogleSignIn();
+      return;
+    }
+    await window.openLiveWorkshops?.();
+  };
+
+  window.logoutLiveWorkshop = function logoutLiveWorkshop() {
+    stopLiveWorkshopCarousel();
+    clearLiveWorkshopPortal();
+    liveWorkshopActivePage = 'dashboard';
+    window.location.hash = '#/landing';
+    window.showScreen?.('screen-landing');
+    window.showToast?.('Logged out from Live Workshop', 'green');
+  };
 
   function syncAppProfilePatch(patch) {
     window.APP = window.APP || {};
@@ -11665,11 +12119,115 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       </div>`;
   }
 
+  function normalizeWorkshopBanners(rows = []) {
+    const seen = new Set();
+    return (rows || []).filter((banner) => {
+      const image = banner?.banner_image || banner?.image_url || banner?.banner_url || '';
+      const title = banner?.banner_title || banner?.title || '';
+      const key = banner?.id || `${image}:${title}`;
+      if (!image || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  async function loadActiveWorkshopBanners() {
+    const supabase = sb();
+    if (!supabase) return [];
+    try {
+      const { data, error } = await supabase
+        .from('live_workshop_banners')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.warn('[DASHBOARD] Live workshop banners load failed:', error.message || error);
+        return [];
+      }
+      return normalizeWorkshopBanners(data || []);
+    } catch (error) {
+      console.warn('[DASHBOARD] Live workshop banners load crashed:', error?.message || error);
+      return [];
+    }
+  }
+
+  function studentWorkshopBannerSlide(banner, index) {
+    const image = banner?.banner_image || banner?.image_url || banner?.banner_url || '';
+    const title = banner?.banner_title || banner?.title || 'Live Workshop';
+    const subtitle = banner?.banner_subtitle || banner?.subtitle || 'Join expert-led live sessions';
+    return `
+      <button class="student-workshop-carousel-slide ${index === 0 ? 'active' : ''}" type="button" data-student-banner-index="${index}" onclick="handleStudentWorkshopBannerClick()" ${image ? `style="background-image:url('${esc(image)}')"` : ''}>
+        <span>${esc(title)}</span>
+        <strong>${esc(subtitle)}</strong>
+      </button>`;
+  }
+
+  function updateStudentWorkshopCarousel() {
+    const slides = Array.from(document.querySelectorAll('.student-workshop-carousel-slide'));
+    if (!slides.length) return;
+    studentWorkshopCarouselIndex = ((studentWorkshopCarouselIndex % slides.length) + slides.length) % slides.length;
+    slides.forEach((slide, index) => {
+      slide.classList.toggle('active', index === studentWorkshopCarouselIndex);
+      slide.style.transform = `translateX(${(index - studentWorkshopCarouselIndex) * 100}%)`;
+    });
+  }
+
+  function stopStudentWorkshopCarousel() {
+    if (studentWorkshopCarouselTimer) {
+      window.clearInterval(studentWorkshopCarouselTimer);
+      studentWorkshopCarouselTimer = null;
+    }
+  }
+
+  function startStudentWorkshopCarousel(count) {
+    stopStudentWorkshopCarousel();
+    studentWorkshopCarouselIndex = 0;
+    updateStudentWorkshopCarousel();
+    if (count > 1) {
+      studentWorkshopCarouselTimer = window.setInterval(() => {
+        window.moveStudentWorkshopCarousel(1);
+      }, 3000);
+    }
+  }
+
+  window.moveStudentWorkshopCarousel = function moveStudentWorkshopCarousel(delta) {
+    const slides = document.querySelectorAll('.student-workshop-carousel-slide');
+    if (!slides.length) return;
+    studentWorkshopCarouselIndex = (studentWorkshopCarouselIndex + Number(delta || 0) + slides.length) % slides.length;
+    updateStudentWorkshopCarousel();
+  };
+
+  async function renderStudentDashboardWorkshopCarousel() {
+    const root = document.getElementById('student-workshop-carousel');
+    const track = document.getElementById('student-workshop-carousel-track');
+    if (!root || !track) return;
+    const renderToken = ++studentWorkshopRenderToken;
+    stopStudentWorkshopCarousel();
+    const banners = await loadActiveWorkshopBanners();
+    if (renderToken !== studentWorkshopRenderToken) return;
+    if (!banners.length) {
+      track.innerHTML = '<div class="student-workshop-carousel-empty">Live workshop banners will appear here.</div>';
+      root.querySelectorAll('.student-carousel-arrow').forEach((button) => button.remove());
+      return;
+    }
+    track.innerHTML = banners.map((banner, index) => studentWorkshopBannerSlide(banner, index)).join('');
+    root.querySelectorAll('.student-carousel-arrow').forEach((button) => button.remove());
+    if (banners.length > 1) {
+      root.insertAdjacentHTML('beforeend', `
+        <button class="student-carousel-arrow left" type="button" onclick="moveStudentWorkshopCarousel(-1)" aria-label="Previous banner">‹</button>
+        <button class="student-carousel-arrow right" type="button" onclick="moveStudentWorkshopCarousel(1)" aria-label="Next banner">›</button>
+      `);
+    }
+    startStudentWorkshopCarousel(banners.length);
+  }
+
   async function loadDashboardSupabaseData() {
     if (document.getElementById('page-dashboard')?.style.display === 'none') return;
     const supabase = sb();
     const id = await userId();
     if (!supabase || !id) return;
+    subscribeLiveWorkshopUpdates();
+    renderStudentDashboardWorkshopCarousel();
     try {
       const { data } = await supabase.from('student_cgpa_results').select('*').eq('user_id', id).order('calculated_at', { ascending: false }).limit(1);
       const latest = data?.[0];
@@ -11729,6 +12287,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     window.navigateTo = globalThis.navigateTo = function navigateToSupabase(page) {
       const result = originalNavigateTo.apply(this, arguments);
       if (page === 'dashboard') setTimeout(() => { touchStreak(); loadDashboardSupabaseData(); }, 0);
+      else stopStudentWorkshopCarousel();
       return result;
     };
   }
@@ -11782,6 +12341,9 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
               </div>
             </nav>
             <div class="sidebar-footer">
+              <div class="nav-item" onclick="logoutLiveWorkshop()" style="color:var(--red);">
+                <span class="nav-icon">ðŸšª</span><span class="nav-label">Logout</span>
+              </div>
               <div class="nav-item" onclick="showScreen('screen-landing')">
                 <span class="nav-icon">←</span><span class="nav-label">Back to Home</span>
               </div>
@@ -11848,9 +12410,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         return;
       }
       try {
-        sessionStorage.setItem('aimeasy_login_portal', 'live_workshop');
-        localStorage.setItem('aimeasy_login_portal_backup', 'live_workshop');
-        sessionStorage.setItem('aiiens_live_workshop_auth', '1');
+        markLiveWorkshopPortal();
       } catch {}
       await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -11859,9 +12419,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       return;
     }
     try {
-      sessionStorage.setItem('aimeasy_login_portal', 'live_workshop');
-      localStorage.setItem('aimeasy_login_portal_backup', 'live_workshop');
-      sessionStorage.setItem('aiiens_live_workshop_auth', '1');
+      markLiveWorkshopPortal();
     } catch {}
     window.showScreen?.('screen-live-workshops');
     await renderLiveWorkshopDashboard();
@@ -11893,6 +12451,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         if (document.getElementById('admin-nav-liveworkshops')?.classList.contains('active')) loadAdminLiveWorkshopList();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'live_workshop_banners' }, () => {
+        if (document.getElementById('page-dashboard')?.style.display !== 'none') renderStudentDashboardWorkshopCarousel();
         if (document.getElementById('screen-live-workshops')?.classList.contains('active')) renderLiveWorkshopDashboard();
         if (document.getElementById('admin-nav-liveworkshops')?.classList.contains('active')) loadAdminLiveBannerList();
       })
@@ -12147,17 +12706,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const supabase = sb();
     const renderToken = ++liveWorkshopRenderToken;
     stopLiveWorkshopCarousel();
-    let banners = [];
-    try {
-      const { data: bannerData, error: bannerError } = await supabase
-        .from('live_workshop_banners')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-      if (!bannerError) banners = bannerData || [];
-    } catch (error) {
-      console.warn('[LIVE WORKSHOP] Banner load failed:', error?.message || error);
-    }
+    let banners = await loadActiveWorkshopBanners();
     let { data, error } = await supabase.from('live_workshops').select('*').eq('status', 'published').order('workshop_date', { ascending: true });
     if (error) {
       root.innerHTML = `<div class="empty-state-card">Could not load workshops: ${esc(error.message)}</div>`;
