@@ -11748,6 +11748,8 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
 
   function openLiveWorkshopGoogleSignIn() {
     markLiveWorkshopPortal();
+    window.APP = window.APP || {};
+    window.APP.role = 'live_workshop';
     window.syncGoogleAuthScreen?.();
     window.showScreen?.('screen-google-auth');
     window.setTimeout(() => window.updateGoogleAuthTermsState?.(), 0);
@@ -11761,10 +11763,15 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     await window.openLiveWorkshops?.();
   };
 
-  window.logoutLiveWorkshop = function logoutLiveWorkshop() {
+  window.logoutLiveWorkshop = async function logoutLiveWorkshop() {
     stopLiveWorkshopCarousel();
     clearLiveWorkshopPortal();
     liveWorkshopActivePage = 'dashboard';
+    try {
+      await sb()?.auth?.signOut?.();
+    } catch (error) {
+      console.warn('[LIVE WORKSHOP] Supabase sign out failed:', error?.message || error);
+    }
     window.location.hash = '#/landing';
     window.showScreen?.('screen-landing');
     window.showToast?.('Logged out from Live Workshop', 'green');
@@ -12402,22 +12409,17 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     ensureLiveWorkshopSurfaces();
     const user = await authUser();
     if (!user) {
-      const supabase = sb();
-      if (!supabase) {
+      if (!sb()) {
         window.showToast?.('Google login is not configured.', 'red');
         return;
       }
-      try {
-        markLiveWorkshopPortal();
-      } catch {}
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: `${window.location.origin}${window.location.pathname}#/live-workshops` },
-      });
+      openLiveWorkshopGoogleSignIn();
       return;
     }
     try {
       markLiveWorkshopPortal();
+      window.APP = window.APP || {};
+      window.APP.role = 'live_workshop';
     } catch {}
     window.showScreen?.('screen-live-workshops');
     await renderLiveWorkshopDashboard();
@@ -12471,7 +12473,12 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     if (!root) return;
     const user = await authUser();
     if (!user) {
-      root.innerHTML = '<div class="empty-state-card">Please sign in with Google to continue.</div>';
+      root.innerHTML = `
+        <section class="live-workshop-form">
+          <h2>Continue with Google</h2>
+          <p class="live-section-copy">Select your Google account to continue to the Live Workshop dashboard.</p>
+          <button class="btn btn-primary" type="button" onclick="openLiveWorkshops()">Continue with Google</button>
+        </section>`;
       return;
     }
     subscribeLiveWorkshopUpdates();
