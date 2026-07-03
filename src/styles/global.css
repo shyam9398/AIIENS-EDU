@@ -91,9 +91,14 @@ body { overflow-x: hidden; }
   overscroll-behavior: contain;
 }
 
-#screen-app.active .sidebar-footer {
-  margin-top: auto;
-  flex: 0 0 auto;
+.sidebar-footer{
+
+    margin-top:auto;
+
+    border-top:1px solid rgba(255,255,255,.08);
+
+    padding:20px 0;
+
 }
 
 #screen-app.active .main {
@@ -1920,7 +1925,7 @@ body.intro-playing .screen:not(#screen-intro) {
 .v10-upload-progress { display:none; height: 6px; background: var(--border); border-radius: 999px; overflow:hidden; margin-top:10px; }
 .v10-upload-progress.active { display:block; }
 .v10-upload-progress span { display:block; width:0; height:100%; background: var(--primary); transition: width .25s ease; }
-.v10-edit-modal { position:fixed; inset:0; z-index:6000; display:flex; align-items:center; justify-content:center; background:rgba(15,23,42,.55); padding:18px; }
+.v10-edit-modal { position:relative; inset:0; z-index:6000; display:flex; align-items:center; justify-content:center; background:rgba(15,23,42,.55); padding:18px; }
 .v10-edit-box { width:min(440px,100%); background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-lg); padding:18px; display:grid; gap:12px; }
 .v10-edit-box h3 { margin:0; font-size:1rem; }
 .v10-edit-box label { display:grid; gap:6px; font-size:.78rem; font-weight:700; color:var(--text2); }
@@ -4283,20 +4288,47 @@ body,
 }
 
 .live-workshop-screen.active {
+  display: flex;
   flex-direction: row;
+  height: 100vh;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 .live-workshop-screen .live-workshop-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  flex: 0 0 var(--sidebar-w);
+  width: var(--sidebar-w);
+  height: 100vh;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   transform: translateX(0);
+}
+
+.live-workshop-screen .live-workshop-sidebar .sidebar-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.live-workshop-screen .live-workshop-sidebar .sidebar-footer {
+  margin-top: auto;
 }
 
 .live-workshop-main {
   min-width: 0;
   flex: 1;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .live-workshop-content-wrap {
+  min-width: 0;
   padding: 1.25rem;
 }
 
@@ -4413,25 +4445,68 @@ body,
   cursor: default;
 }
 
+.live-workshop-register-overlay {
+  z-index: 6000;
+}
+
+.live-workshop-register-modal {
+  display: grid;
+  gap: 0.9rem;
+  width: min(420px, 92vw);
+  text-align: left;
+}
+
+.live-workshop-register-modal h2 {
+  font-size: 1.2rem;
+  margin: 0 0 0.25rem;
+}
+
+.live-workshop-register-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
 @media (min-width: 1025px) {
-  .live-workshop-screen .live-workshop-sidebar {
-    position: relative;
-    inset: auto;
-    left: auto;
-    flex: 0 0 var(--sidebar-w);
+  .live-workshop-screen.active {
+    display: block;
+  }
+
+  .live-workshop-screen .live-workshop-main {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: var(--sidebar-w);
+    width: auto;
+    max-width: none;
+    margin: 0;
   }
 }
 
 @media (max-width: 1024px) {
   .live-workshop-screen.active {
     flex-direction: column;
+    height: 100vh;
+    min-height: 100vh;
+    overflow: hidden;
   }
 
   .live-workshop-screen .live-workshop-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
+    width: min(280px, 86vw);
+    height: 100vh;
     transform: translateX(-105%);
     z-index: 1000;
+  }
+
+  .live-workshop-main {
+    width: 100%;
+    height: 100vh;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .live-workshop-screen .live-workshop-sidebar.open {
@@ -4535,4 +4610,28 @@ body,
     max-width: 100% !important;
     overflow-x: hidden !important;
   }
+}
+.v10-crud-overlay{
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,.6);
+    backdrop-filter: blur(4px);
+    z-index: 999999;
+}
+
+.v10-crud-modal{
+    width: min(600px,90vw);
+    max-height:90vh;
+    overflow:auto;
+
+    background:#161b29;
+
+    border-radius:18px;
+
+    border:1px solid rgba(139,92,246,.35);
+
+    box-shadow:0 20px 70px rgba(0,0,0,.45);
 }

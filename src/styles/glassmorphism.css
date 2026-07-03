@@ -352,6 +352,7 @@ textarea:focus {
 
 /* Skills / Skill Up */
 .nav-item[onclick*="skills"] .nav-icon,
+#live-nav-skillup .nav-icon,
 #admin-nav-skillup span,
 #sa-nav-skillup span {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='1.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z' /%3E%3C/svg%3E") !important;

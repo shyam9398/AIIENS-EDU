@@ -11695,6 +11695,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   let liveWorkshopCarouselTimer = null;
   let liveWorkshopCarouselIndex = 0;
   let liveWorkshopRenderToken = 0;
+  let liveWorkshopPendingRegistrationId = '';
   let studentWorkshopCarouselTimer = null;
   let studentWorkshopCarouselIndex = 0;
   let studentWorkshopRenderToken = 0;
@@ -12337,15 +12338,12 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
                 <span class="nav-icon">🏠</span><span class="nav-label">Dashboard</span>
               </div>
               <div class="nav-item" id="live-nav-skillup" onclick="switchLiveWorkshopPage('skillup');closeLiveWorkshopSidebar()">
-                <span class="nav-icon">📚</span><span class="nav-label">SkillUp Courses</span>
+                <span class="nav-icon">🎓</span><span class="nav-label">SkillUp Courses</span>
               </div>
             </nav>
             <div class="sidebar-footer">
               <div class="nav-item" onclick="logoutLiveWorkshop()" style="color:var(--red);">
                 <span class="nav-icon">ðŸšª</span><span class="nav-label">Logout</span>
-              </div>
-              <div class="nav-item" onclick="showScreen('screen-landing')">
-                <span class="nav-icon">←</span><span class="nav-label">Back to Home</span>
               </div>
             </div>
           </aside>
@@ -12477,24 +12475,6 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       return;
     }
     subscribeLiveWorkshopUpdates();
-    let registration = null;
-    try {
-      registration = await loadWorkshopRegistration();
-    } catch (error) {
-      console.warn('[LIVE WORKSHOP] Registration lookup crashed:', error?.message || error);
-    }
-    if (!registration) {
-      root.innerHTML = `
-        <section class="live-workshop-form">
-          <h2>Complete Workshop Profile</h2>
-          <div class="input-group"><label>Name</label><input class="input" id="lw-name" value="${esc(user.user_metadata?.full_name || user.email || '')}"></div>
-          <div class="input-group"><label>Mobile Number</label><input class="input" id="lw-mobile" maxlength="10" inputmode="numeric"></div>
-          <div class="input-group"><label>Role</label><select class="select" id="lw-role" onchange="document.getElementById('lw-college-wrap').style.display=this.value==='student'?'block':'none'"><option value="student">Student</option><option value="job_holder">Job Holder</option><option value="other">Other</option></select></div>
-          <div class="input-group" id="lw-college-wrap"><label>College Name</label><input class="input" id="lw-college"></div>
-          <button class="btn btn-primary" onclick="submitLiveWorkshopProfile()">Submit</button>
-        </section>`;
-      return;
-    }
     if (liveWorkshopActivePage === 'skillup') {
       await renderLiveWorkshopSkillUp(root);
     } else {
@@ -12731,8 +12711,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     );
     const allWorkshops = data || [];
     const registeredWorkshops = allWorkshops.filter((row) => registeredIds.has(row.id));
-    const today = todayKeyDb();
-    const upcomingWorkshops = allWorkshops.filter((row) => String(row.workshop_date || '') >= today);
+    const upcomingWorkshops = allWorkshops.filter((row) => !registeredIds.has(row.id));
     if (!banners.length) {
       const fallback = allWorkshops.find(row => row.banner_image);
       banners = [{
@@ -12755,20 +12734,23 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       <section class="live-workshop-section">
         <div class="section-heading">Registered Workshops</div>
         <div class="live-workshop-grid">
-          ${registeredWorkshops.length ? registeredWorkshops.map(workshopCard).join('') : '<div class="empty-state-card">registered workshops fast.</div>'}
+          ${registeredWorkshops.length ? registeredWorkshops.map((row) => workshopCard(row, 'registered')).join('') : '<div class="empty-state-card">registered workshops fast.</div>'}
         </div>
       </section>
       <section class="live-workshop-section">
         <div class="section-heading">Upcoming Workshops</div>
         <div class="live-workshop-grid">
-          ${upcomingWorkshops.length ? upcomingWorkshops.map(workshopCard).join('') : '<div class="empty-state-card">upcoming workshops available soon.</div>'}
+          ${upcomingWorkshops.length ? upcomingWorkshops.map((row) => workshopCard(row, 'upcoming')).join('') : '<div class="empty-state-card">upcoming workshops available soon.</div>'}
         </div>
       </section>
     `;
     startLiveWorkshopCarousel(banners.length);
   }
 
-  function workshopCard(row) {
+  function workshopCard(row, state = 'upcoming') {
+    const action = state === 'registered'
+      ? `<a class="btn btn-primary" href="${esc(row.join_link)}" target="_blank" rel="noreferrer">Join</a>`
+      : `<button class="btn btn-primary" type="button" onclick="openLiveWorkshopRegisterModal('${js(row.id)}')">Register</button>`;
     return `
       <article class="live-workshop-card">
         ${row.banner_image ? `<img class="live-workshop-card-img" src="${esc(row.banner_image)}" alt="${esc(row.workshop_name)} banner" loading="lazy">` : ''}
@@ -12776,9 +12758,96 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         <p><strong>Speaker:</strong> ${esc(row.speaker_name)}</p>
         <p><strong>Date:</strong> ${esc(row.workshop_date)} <strong>Time:</strong> ${esc(row.workshop_time)}</p>
         <p>${esc(row.description || '')}</p>
-        <a class="btn btn-primary" href="${esc(row.join_link)}" target="_blank" rel="noreferrer">Join</a>
+        ${action}
       </article>`;
   }
+
+  window.openLiveWorkshopRegisterModal = async function openLiveWorkshopRegisterModal(workshopId) {
+    const user = await authUser();
+    if (!user) {
+      openLiveWorkshopGoogleSignIn();
+      return;
+    }
+    liveWorkshopPendingRegistrationId = String(workshopId || '');
+    if (!liveWorkshopPendingRegistrationId) return;
+    document.getElementById('live-workshop-register-modal')?.remove();
+    document.getElementById('screen-live-workshops')?.insertAdjacentHTML('beforeend', `
+      <div class="modal-overlay live-workshop-register-overlay open" id="live-workshop-register-modal">
+        <div class="modal live-workshop-register-modal" role="dialog" aria-modal="true" aria-labelledby="lw-register-title">
+          <h2 id="lw-register-title">Register Workshop</h2>
+          <div class="input-group"><label>Full Name</label><input class="input" id="lw-register-name" value="${esc(user.user_metadata?.full_name || user.email || '')}"></div>
+          <div class="input-group"><label>Phone Number</label><input class="input" id="lw-register-phone" inputmode="tel" autocomplete="tel"></div>
+          <div class="input-group"><label>Category</label><select class="select" id="lw-register-category"><option value="student">Student</option><option value="job_holder">Job Holder</option><option value="other">Other</option></select></div>
+          <div class="live-workshop-register-actions">
+            <button class="btn btn-ghost" type="button" onclick="closeLiveWorkshopRegisterModal()">Cancel</button>
+            <button class="btn btn-primary" type="button" onclick="submitLiveWorkshopRegistration()">Register</button>
+          </div>
+        </div>
+      </div>`);
+  };
+
+  window.closeLiveWorkshopRegisterModal = function closeLiveWorkshopRegisterModal() {
+    liveWorkshopPendingRegistrationId = '';
+    document.getElementById('live-workshop-register-modal')?.remove();
+  };
+
+  window.submitLiveWorkshopRegistration = async function submitLiveWorkshopRegistration() {
+    const supabase = sb();
+    const id = await userId();
+    const workshopId = liveWorkshopPendingRegistrationId;
+    if (!supabase || !id || !workshopId) return;
+    const nameVal = document.getElementById('lw-register-name')?.value?.trim() || '';
+    const phoneVal = document.getElementById('lw-register-phone')?.value?.trim() || '';
+    const category = document.getElementById('lw-register-category')?.value || '';
+
+    if (!nameVal) {
+      window.showToast?.('Full name is required', 'red');
+      return;
+    }
+    if (!/^[0-9+\-\s()]{7,20}$/.test(phoneVal)) {
+      window.showToast?.('Enter a valid phone number', 'red');
+      return;
+    }
+    if (!['student', 'job_holder', 'other'].includes(category)) {
+      window.showToast?.('Please select a category', 'red');
+      return;
+    }
+
+    const row = {
+      user_id: id,
+      workshop_id: workshopId,
+      name: nameVal,
+      mobile_number: phoneVal,
+      role_type: category,
+      college_name: null,
+      created_at: new Date().toISOString(),
+    };
+
+    const existing = await supabase
+      .from('live_workshop_registrations')
+      .select('id')
+      .eq('user_id', id)
+      .eq('workshop_id', workshopId)
+      .limit(1)
+      .maybeSingle();
+    if (existing.error) {
+      console.warn('[LIVE WORKSHOP] Registration check failed:', existing.error.message || existing.error);
+      window.showToast?.('Could not verify registration. Please try again.', 'red');
+      return;
+    }
+    const request = existing.data?.id
+      ? supabase.from('live_workshop_registrations').update(row).eq('id', existing.data.id)
+      : supabase.from('live_workshop_registrations').insert(row);
+    const { error } = await request;
+    if (error) {
+      window.showToast?.('Registration failed: ' + error.message, 'red');
+      return;
+    }
+    window.closeLiveWorkshopRegisterModal();
+    window.showToast?.('Workshop registered', 'green');
+    window.updateLandingStats?.();
+    await renderLiveWorkshopDashboard();
+  };
 
   async function renderAdminLiveWorkshops() {
     ensureLiveWorkshopSurfaces();
