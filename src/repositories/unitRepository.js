@@ -11,7 +11,7 @@ export async function fetchUnits(subjectId) {
 
 export async function createUnit(subjectId, unit) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  const sortOrder = Number(unit.id || unit.sort_order || 0);
+  const sortOrder = Number(unit.sort_order || unit.order || 0);
   return supabase
     .from('units')
     .insert({
@@ -25,7 +25,7 @@ export async function createUnit(subjectId, unit) {
 
 export async function updateUnit(id, unit) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  const sortOrder = Number(unit.id || unit.sort_order || 0);
+  const sortOrder = Number(unit.sort_order || unit.order || 0);
   return supabase
     .from('units')
     .update({

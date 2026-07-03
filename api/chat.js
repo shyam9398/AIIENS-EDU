@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 const FRIENDLY_ERROR = "Sorry, I'm unable to answer right now. Please try again later.";
-const MODEL = 'gemini-2.0-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const IS_DEV = process.env.NODE_ENV !== 'production';
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -50,9 +51,13 @@ async function readTable(supabase, table, select, orderColumn) {
     let query = supabase.from(table).select(select).limit(80);
     if (orderColumn) query = query.order(orderColumn, { ascending: false });
     const { data, error } = await query;
-    if (error) return [];
+    if (error) {
+      console.warn(`[CHAT] Supabase ${table} load failed:`, error.message || error);
+      return [];
+    }
     return data || [];
-  } catch {
+  } catch (error) {
+    console.warn(`[CHAT] Supabase ${table} exception:`, error?.message || error);
     return [];
   }
 }
@@ -60,7 +65,10 @@ async function readTable(supabase, table, select, orderColumn) {
 async function loadSupabaseContext(message) {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) return '';
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('[CHAT] Supabase context skipped: missing Supabase URL or anon key.');
+    return '';
+  }
 
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -101,7 +109,9 @@ async function loadSupabaseContext(message) {
     formatContext('Workshops', rankedWorkshops, (row) => `- ${cleanText(row.workshop_name)} by ${cleanText(row.speaker_name)} on ${cleanText(row.workshop_date)}: ${cleanText(row.description, 400)}`),
   ].filter(Boolean);
 
-  return cleanText(sections.join('\n\n'), 9000);
+  const context = cleanText(sections.join('\n\n'), 9000);
+  console.log('[CHAT] Supabase context loaded:', { sections: sections.length, size: context.length });
+  return context;
 }
 
 function buildPrompt(message, context) {
@@ -120,49 +130,88 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    res.status(405).json({ answer: FRIENDLY_ERROR });
+    res.status(405).json({ error: 'Method not allowed. Use POST.' });
     return;
   }
 
-  const apiKey = process.env.VITE_GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   const { message } = parseBody(req);
   const cleanMessage = cleanText(message, 2000);
 
-  if (!apiKey || !cleanMessage) {
-    res.status(200).json({ answer: FRIENDLY_ERROR });
+  console.log('[CHAT] Incoming user message:', cleanMessage.slice(0, 220));
+  console.log('[CHAT] Gemini API key status:', apiKey ? `loaded (${apiKey.slice(0, 4)}...${apiKey.slice(-4)})` : 'missing');
+
+  if (!cleanMessage) {
+    res.status(400).json({ error: 'Message is required.' });
+    return;
+  }
+
+  if (!apiKey) {
+    const messageText = 'Gemini API key is missing. Set GEMINI_API_KEY or VITE_GEMINI_API_KEY on the server.';
+    console.error('[CHAT]', messageText);
+    res.status(IS_DEV ? 500 : 200).json(IS_DEV ? { error: messageText } : { answer: FRIENDLY_ERROR });
     return;
   }
 
   try {
-    const context = await loadSupabaseContext(cleanMessage);
+    let context = '';
+    try {
+      context = await loadSupabaseContext(cleanMessage);
+    } catch (contextError) {
+      console.warn('[CHAT] Supabase context failed; continuing without context:', contextError?.message || contextError);
+    }
+    const requestBody = {
+      contents: [{ role: 'user', parts: [{ text: buildPrompt(cleanMessage, context) }] }],
+      generationConfig: {
+        temperature: 0.45,
+        maxOutputTokens: 900,
+      },
+    };
+    console.log('[CHAT] Gemini request start:', { model: MODEL, bodySize: JSON.stringify(requestBody).length });
+    console.log('[CHAT] Gemini request body:', JSON.stringify(requestBody));
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: buildPrompt(cleanMessage, context) }] }],
-          generationConfig: {
-            temperature: 0.45,
-            maxOutputTokens: 900,
-          },
-        }),
+        body: JSON.stringify(requestBody),
       },
     );
 
+    console.log('[CHAT] Gemini response status:', geminiResponse.status, geminiResponse.statusText);
+
+    const rawText = await geminiResponse.text();
     if (!geminiResponse.ok) {
-      res.status(200).json({ answer: FRIENDLY_ERROR });
+      console.error('[CHAT] Gemini error response:', rawText);
+      res.status(IS_DEV ? geminiResponse.status : 200).json(IS_DEV ? { error: rawText || geminiResponse.statusText } : { answer: FRIENDLY_ERROR });
       return;
     }
 
-    const data = await geminiResponse.json();
+    let data = {};
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch (parseError) {
+      console.error('[CHAT] Gemini JSON parse failed:', parseError?.message || parseError, rawText);
+      res.status(IS_DEV ? 502 : 200).json(IS_DEV ? { error: 'Gemini returned invalid JSON.' } : { answer: FRIENDLY_ERROR });
+      return;
+    }
+    console.log('[CHAT] Gemini response:', JSON.stringify(data).slice(0, 4000));
     const answer = (data.candidates?.[0]?.content?.parts || [])
       .map((part) => part.text || '')
       .join('\n')
       .trim();
 
-    res.status(200).json({ answer: answer || FRIENDLY_ERROR });
-  } catch {
-    res.status(200).json({ answer: FRIENDLY_ERROR });
+    if (!answer) {
+      console.error('[CHAT] Gemini returned no candidate text:', JSON.stringify(data).slice(0, 2000));
+      res.status(IS_DEV ? 502 : 200).json(IS_DEV ? { error: 'Gemini returned an empty answer.' } : { answer: FRIENDLY_ERROR });
+      return;
+    }
+
+    console.log('[CHAT] Parsed answer:', answer.slice(0, 1000));
+    console.log('[CHAT] Final response returned to frontend.');
+    res.status(200).json({ answer });
+  } catch (error) {
+    console.error('[CHAT] Unhandled exception:', error?.stack || error?.message || error);
+    res.status(IS_DEV ? 500 : 200).json(IS_DEV ? { error: error?.message || 'Chat request failed.' } : { answer: FRIENDLY_ERROR });
   }
 }

@@ -256,8 +256,8 @@ export async function fetchUnitRoadmap({ subject, unit }) {
     .select('*')
     .eq('subject_id', subjectResult.data.id)
     .eq('unit_id', unitResult.data.id)
-    .order('created_at', { ascending: true })
-    .order('display_order', { ascending: true });
+    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: true });
   if (topicResult.error) {
     logRoadmap('FETCH FAILED', topicResult.error);
     return { data: null, error: topicResult.error };
@@ -281,8 +281,8 @@ export async function fetchUnitRoadmap({ subject, unit }) {
   const videos = videoResult.data || [];
   const topics = (topicResult.data || [])
     .sort((a, b) => {
-      const created = String(a.created_at || '').localeCompare(String(b.created_at || ''));
-      return created || Number(a.display_order || 0) - Number(b.display_order || 0);
+      const ordered = Number(a.display_order || 0) - Number(b.display_order || 0);
+      return ordered || String(a.created_at || '').localeCompare(String(b.created_at || ''));
     })
     .map((topic, index) => {
       const legacyTopicId = topic.id;
@@ -518,7 +518,7 @@ export async function fetchUnits(subjectId) {
 
 export async function createUnit(subjectId, unit) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  const sortOrder = Number(unit.id || unit.sort_order || 0);
+  const sortOrder = Number(unit.sort_order || unit.order || 0);
   return supabase
     .from('units')
     .insert({
@@ -532,7 +532,7 @@ export async function createUnit(subjectId, unit) {
 
 export async function updateUnit(id, unit) {
   if (!supabase) return { data: null, error: new Error('Supabase not configured') };
-  const sortOrder = Number(unit.id || unit.sort_order || 0);
+  const sortOrder = Number(unit.sort_order || unit.order || 0);
   return supabase
     .from('units')
     .update({

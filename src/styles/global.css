@@ -2932,9 +2932,9 @@ body,
   flex-direction: column;
   gap: 3px;
   overflow: hidden;
-  color: var(--text1);
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border) 80%, white 12%);
+  color: #f8fafc;
+  background: rgba(12, 18, 32, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(18px) saturate(145%);
@@ -2947,7 +2947,7 @@ body,
   align-items: center;
   gap: 9px;
   padding: 9px 11px;
-  color: var(--text1);
+  color: #f8fafc;
   background: transparent;
   border: 0;
   border-radius: 8px;
@@ -2957,12 +2957,12 @@ body,
 }
 
 .v10-modern-menu .adm-popup-item:hover {
-  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  background: rgba(99, 102, 241, 0.22);
   transform: translateX(2px);
 }
 
 .v10-modern-menu .adm-popup-item.red:hover {
-  background: color-mix(in srgb, var(--red) 15%, transparent);
+  background: rgba(239, 68, 68, 0.22);
 }
 
 .v10-saved-topic-number {
