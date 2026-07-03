@@ -1643,12 +1643,12 @@ body.intro-playing .screen:not(#screen-intro) {
   margin-right: 0;
 }
 .video-sidebar.collapsed {
-  flex: 0 0 0;
-  width: 0;
-  min-width: 0;
+  flex: 0 0 48px;
+  width: 48px;
+  min-width: 48px;
   margin-right: 0;
-  border: 0;
-  background: transparent;
+  border: 1px solid rgba(148,163,184,0.2);
+  background: #f6f8ff;
   overflow: visible;
 }
 .video-sidebar-header {
@@ -1674,20 +1674,28 @@ body.intro-playing .screen:not(#screen-intro) {
 .sidebar-toggle-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
 .video-sidebar.collapsed .sidebar-header-label { display: none; }
 .video-sidebar.collapsed .video-sidebar-header {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 40px;
-  height: 40px;
-  min-height: 40px;
+  width: 48px;
+  height: 100%;
+  min-height: 132px;
   justify-content: center;
-  padding: 0;
+  padding: 0.65rem 0;
   border: 1px solid rgba(148,163,184,0.24);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: rgba(255,255,255,0.92);
   box-shadow: 0 10px 24px rgba(15,23,42,0.12);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+.video-sidebar.collapsed .sidebar-header-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+}
+.video-sidebar.collapsed .sidebar-toggle-btn {
+  transform: rotate(90deg);
 }
 .video-sidebar-body { overflow-y: auto; flex: 1; }
 .video-sidebar.collapsed .video-sidebar-body { display: none; }
@@ -3122,6 +3130,38 @@ body,
 
   .video-player-area {
     width: 100%;
+    order: 1;
+  }
+
+  .video-sidebar {
+    order: 2;
+  }
+
+  .video-sidebar .video-sidebar-body {
+    max-height: min(42vh, 280px);
+  }
+
+  .video-sidebar.collapsed {
+    border: 1px solid rgba(148,163,184,0.2);
+    background: #f6f8ff;
+  }
+
+  .video-sidebar.collapsed .video-sidebar-header {
+    width: 100%;
+    height: auto;
+    min-height: 44px;
+    writing-mode: horizontal-tb;
+    padding: 0.72rem 0.85rem;
+    justify-content: space-between;
+  }
+
+  .video-sidebar.collapsed .sidebar-header-label {
+    display: inline-flex;
+    font-size: 0.82rem;
+  }
+
+  .video-sidebar.collapsed .sidebar-toggle-btn {
+    transform: none;
   }
 
   .video-controls {
@@ -3133,7 +3173,7 @@ body,
   }
 
   .video-sidebar.collapsed .video-sidebar-body {
-    display: block;
+    display: none;
   }
 
   .content-card,

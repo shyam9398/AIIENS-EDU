@@ -3564,22 +3564,26 @@ window.v10Esc = window.v10Esc || function(str) {
     }
     const authUser = supabase.auth?.getUser ? (await supabase.auth.getUser())?.data?.user : null;
     const topicName = title || topic?.topicName || topic?.name || currentItem.title || currentItem.topicName || 'Suggested URL';
+    const student = window.APP?.user || {};
     const suggestionPayload = {
-      student_id: authUser?.id || window.APP?.user?.id || window.APP?.user?.googleId || null,
-      student_name: window.APP?.user?.name || 'Student',
+      student_id: authUser?.id || student.id || student.googleId || null,
+      student_name: student.name || student.full_name || authUser?.user_metadata?.full_name || authUser?.email || 'Student',
       subject_id: subjectId,
       unit_id: unitId,
       topic_id: topicId,
       subject_name: subject.name || '',
       unit_name: roadmap?.data?.unitName || `Unit ${unitNum}`,
       topic_name: topicName,
+      branch: subject.branch || student.branch || student.branch_name || '',
+      university: subject.university_name || subject.uni || student.university_name || student.university || '',
+      regulation: subject.regulation_code || subject.reg || student.regulation_code || student.regulation || '',
       url,
       description,
       status: 'pending',
     };
     let { error } = await supabase.from('student_url_suggestions').insert(suggestionPayload);
-    if (error && /subject_name|unit_name|topic_name/i.test(error.message || '')) {
-      const { subject_name, unit_name, topic_name, ...requiredPayload } = suggestionPayload;
+    if (error && /subject_name|unit_name|topic_name|branch|university|regulation/i.test(error.message || '')) {
+      const { subject_name, unit_name, topic_name, branch, university, regulation, ...requiredPayload } = suggestionPayload;
       const retry = await supabase.from('student_url_suggestions').insert(requiredPayload);
       error = retry.error;
     }
@@ -3609,6 +3613,103 @@ window.v10Esc = window.v10Esc || function(str) {
     const matchIndex = (APP._videoItems || []).findIndex(item => Number(item.topicIndex) === Number(topicIndex) && Number(item.videoIndex) === Number(urlIndex));
     if (matchIndex >= 0) selectVideoItem(matchIndex);
     else aimeasyOriginalSelectTopicUrl?.(topicIndex, urlIndex);
+  };
+
+  const approvalEsc = (value) => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const approvalValidUrl = (value) => {
+    try { return Boolean(value) && Boolean(new URL(String(value))); } catch { return false; }
+  };
+  const approvalReadLocal = (key, fallback = []) => {
+    try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; }
+  };
+
+  window.renderApprovalLinksProduction = renderApprovalLinksProduction = async function renderApprovalLinksProductionFixed(owner = 'admin') {
+    const content = document.getElementById(owner === 'admin' ? 'admin-content' : 'sa-content');
+    if (!content) return;
+    const supabase = window.__AIMEASY_SUPABASE__;
+    let requests = [];
+    if (supabase) {
+      const fullSelect = 'id, topic_name, title, url, description, status, created_at, student_id, student_name, subject_id, unit_id, topic_id, subject_name, unit_name, branch, university, regulation, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)';
+      let result = await supabase
+        .from('student_url_suggestions')
+        .select(fullSelect)
+        .order('created_at', { ascending: false });
+      if (result.error && /branch|university|regulation|subject_name|unit_name|topic_name/i.test(result.error.message || '')) {
+        result = await supabase
+          .from('student_url_suggestions')
+          .select('id, topic_name, title, url, description, status, created_at, student_id, student_name, subject_id, unit_id, topic_id, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)')
+          .order('created_at', { ascending: false });
+      }
+      if (result.error) {
+        console.warn('[SUGGESTIONS] Approval load failed:', result.error.message || result.error);
+      } else {
+        requests = result.data || [];
+      }
+    } else {
+      requests = approvalReadLocal('edusync_url_requests', []);
+    }
+
+    const pending = requests.filter(request => (request.status || 'pending') === 'pending').length;
+    const approved = requests.filter(request => request.status === 'approved').length;
+    const rejected = requests.filter(request => request.status === 'rejected').length;
+    content.innerHTML = `
+      <div class="admin-dashboard-wrap approval-workspace">
+        <div class="admin-section-head approval-page-head">
+          <div>
+            <h2>URL Approvals</h2>
+            <p>Review submitted learning links and keep the content library clean.</p>
+          </div>
+          <div class="approval-stat-cards" aria-label="URL approval statistics">
+            <div class="approval-stat-card approved"><span>Approved URLs</span><strong>${approvalEsc(approved)}</strong></div>
+            <div class="approval-stat-card rejected"><span>Rejected URLs</span><strong>${approvalEsc(rejected)}</strong></div>
+          </div>
+        </div>
+        <div class="approval-summary-line"><span class="badge badge-amber">${approvalEsc(pending)} pending</span></div>
+        <div class="approval-card-grid">
+          ${requests.length ? requests.map((request, index) => {
+            const status = request.status || 'pending';
+            const url = String(request.url || '').trim();
+            const valid = approvalValidUrl(url);
+            const topic = request.topics?.topic_name || request.topic_name || request.topic || request.title || 'Not specified';
+            const subjectName = request.subjects?.name || request.subject_name || request.subject || 'Subject';
+            const unitName = request.units?.title || request.unit_name || request.unitName || ('Unit ' + (request.units?.sort_order || request.unit || '-'));
+            const branch = request.branch || request.subjects?.branch || '-';
+            const regulation = request.regulation || request.subjects?.regulation_code || '-';
+            const university = request.university || request.subjects?.university_name || '-';
+            const submittedAt = request.created_at ? new Date(request.created_at).toLocaleString() : request.submittedAt || request.date || '-';
+            const actionArg = request.id ? `'${approvalEsc(request.id)}'` : index;
+            return `<div class="approval-card approval-${approvalEsc(status)}">
+              <div class="approval-card-top">
+                <div class="approval-card-title">
+                  <span>Topic</span>
+                  <h3>${approvalEsc(topic)}</h3>
+                </div>
+                <span class="badge ${status === 'approved' ? 'badge-green' : status === 'rejected' ? 'badge-red' : 'badge-amber'}">${approvalEsc(status)}</span>
+              </div>
+              <div class="approval-detail-grid approval-meta-grid">
+                <div><span>Subject</span><strong>${approvalEsc(subjectName)}</strong></div>
+                <div><span>Unit</span><strong>${approvalEsc(unitName)}</strong></div>
+                <div><span>Branch</span><strong>${approvalEsc(branch)}</strong></div>
+                <div><span>Regulation</span><strong>${approvalEsc(regulation)}</strong></div>
+                <div><span>University</span><strong>${approvalEsc(university)}</strong></div>
+                <div><span>Student</span><strong>${approvalEsc(request.student_name || request.submittedBy || request.student_id || 'Student')}</strong></div>
+                <div><span>Submitted Time</span><strong>${approvalEsc(submittedAt)}</strong></div>
+              </div>
+              ${request.description ? `<p class="approval-description">${approvalEsc(request.description)}</p>` : ''}
+              <div class="approval-url-row ${valid ? '' : 'invalid'}">
+                <span class="approval-url-label">Suggested URL</span>
+                ${valid
+                  ? `<a href="${approvalEsc(url)}" target="_blank" rel="noopener noreferrer" class="approval-url-text">${approvalEsc(url)} <span class="external-link-icon">&nearr;</span></a>`
+                  : `<span class="approval-url-text invalid">Invalid URL: ${approvalEsc(url || '-')}</span>`}
+              </div>
+              <div class="approval-actions">
+                <button class="icon-action-btn approval-icon-approve" onclick="adminApproveUrl(${actionArg})" title="Approve" aria-label="Approve URL">&#10003;</button>
+                <button class="icon-action-btn danger approval-icon-reject" onclick="adminRejectUrl(${actionArg})" title="Reject" aria-label="Reject URL">&times;</button>
+              </div>
+            </div>`;
+          }).join('') : '<div class="empty-state-card">No URL requests yet.</div>'}
+        </div>
+      </div>`;
   };
 
   window.addEventListener('aimeasy:data-changed', () => {
