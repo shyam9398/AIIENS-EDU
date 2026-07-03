@@ -1925,11 +1925,11 @@ body.intro-playing .screen:not(#screen-intro) {
 .v10-upload-progress { display:none; height: 6px; background: var(--border); border-radius: 999px; overflow:hidden; margin-top:10px; }
 .v10-upload-progress.active { display:block; }
 .v10-upload-progress span { display:block; width:0; height:100%; background: var(--primary); transition: width .25s ease; }
-.v10-edit-modal { position:relative; inset:0; z-index:6000; display:flex; align-items:center; justify-content:center; background:rgba(15,23,42,.55); padding:18px; }
-.v10-edit-box { width:min(440px,100%); background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-lg); padding:18px; display:grid; gap:12px; }
-.v10-edit-box h3 { margin:0; font-size:1rem; }
-.v10-edit-box label { display:grid; gap:6px; font-size:.78rem; font-weight:700; color:var(--text2); }
-.v10-edit-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:4px; }
+.v10-edit-modal { position:fixed; inset:0; z-index:6000; display:flex; align-items:center; justify-content:center; background:rgba(15,23,42,.55); padding:24px; }
+.v10-edit-box { width:min(440px,100%); background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-lg); padding:26px 24px 24px; display:grid; gap:16px; }
+.v10-edit-box h3 { margin:0 0 4px; font-size:1rem; }
+.v10-edit-box label { display:grid; gap:8px; font-size:.78rem; font-weight:700; color:var(--text2); }
+.v10-edit-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:8px; padding-top:4px; }
 
 .note-row {
   display: flex; align-items: center; gap: 12px;
@@ -2999,6 +2999,10 @@ body,
 .v10-crud-modal h3 { margin: 0 0 8px; }
 .v10-crud-modal p { margin: 0 0 20px; color: var(--text2); }
 .v10-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.v10-crud-modal h3 { margin: 0 0 14px; }
+.v10-crud-modal .input-group { margin-bottom: 14px; }
+.v10-crud-modal .input-group:last-of-type { margin-bottom: 0; }
+.v10-crud-modal .v10-modal-actions { margin-top: 18px; padding-top: 6px; }
 
 @keyframes v10MenuIn {
   from { opacity: 0; transform: translateY(-5px) scale(0.98); }
@@ -4626,6 +4630,9 @@ body,
     width: min(600px,90vw);
     max-height:90vh;
     overflow:auto;
+    padding:28px 26px 24px;
+    display:grid;
+    gap:14px;
 
     background:#161b29;
 

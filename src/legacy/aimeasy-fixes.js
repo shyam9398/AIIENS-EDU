@@ -1732,8 +1732,6 @@ window.v10Esc = window.v10Esc || function(str) {
             const crudAttrs = `data-content-type="roadmap" data-item-id="${esc(topicKey)}" data-subject-id="${esc(subjId)}" data-unit-id="${esc(unitId)}"`;
             const menuHtml = isReadOnly ? '' : `
               <div class="v10-crud-actions v10-dot-wrap" style="position:absolute;top:10px;right:10px;display:flex;gap:4px;" onclick="event.stopPropagation()">
-                <button type="button" class="v10-dot-btn v10-crud-action" ${crudAttrs} data-action="edit" title="Edit topic" aria-label="Edit topic" style="font-size:.82rem;">&#9998;</button>
-                <button type="button" class="v10-dot-btn v10-crud-action" ${crudAttrs} data-action="delete" title="Delete topic" aria-label="Delete topic" style="font-size:.82rem;color:var(--red);">&#128465;</button>
                 <button type="button" class="v10-dot-btn v10-sa-crud-trigger" data-content-type="roadmap" data-item-id="${esc(topicKey)}" data-subject-id="${esc(subjId)}" data-unit-id="${esc(unitId)}" title="Options" aria-label="Topic options" aria-haspopup="menu" aria-expanded="false" style="font-size:1.05rem;">&#8942;</button>
               </div>`;
             const viewBtn = url
@@ -1913,7 +1911,8 @@ window.v10Esc = window.v10Esc || function(str) {
       const { data, error } = await window.aimeasySaveUnitRoadmap({ subject, unit, topics: orderedTopics });
       if (error) throw error;
       v10PersistSubjectDbIds(subjId, unitId, data);
-      container.innerHTML = `<div id="v10-rm-empty-${unitId}" style="text-align:center;padding:1.8rem;color:var(--text3);"><div style="font-weight:600;font-size:.88rem;">No topics queued</div><div style="font-size:.76rem;margin-top:4px;">Click "+ Add Topic" to build the roadmap</div></div>`;
+      container.innerHTML = window.v10TopicRowHTML(subjId, unitId, 0, '', [''], 1, '');
+      window.v10RenderRoadmapBuilderFlow?.(unitId);
       await window.v10RefreshRoadmapListInPlace(subjId, unitId);
       showToast('Learning Roadmap saved successfully.', 'green');
     } catch (error) {
@@ -2346,17 +2345,19 @@ window.v10Esc = window.v10Esc || function(str) {
         <div class="input-group"><span class="v10-label">DESCRIPTION</span><textarea class="input" data-field="body" rows="3" style="resize:vertical;">${safe(video.description || record?.description || '')}</textarea></div>`;
     }
     if (contentType === 'pyq') {
+      const year = record?.year || record?.metadata?.year || '';
+      const marks = record?.marks || record?.count || record?.metadata?.marks || record?.metadata?.count || '';
       return `
         <div class="input-group"><span class="v10-label">TOPIC</span><input class="input" data-field="topicText" value="${safe(record?.topicName || record?.title || '')}" required></div>
-        <div class="input-group"><span class="v10-label">URL</span><input class="input" data-field="url" value="${safe(record?.url || record?.link || '')}"></div>
-        <div class="input-group"><span class="v10-label">DESCRIPTION</span><textarea class="input" data-field="body" rows="4" style="resize:vertical;">${safe(record?.question || record?.body || record?.description || '')}</textarea></div>`;
+        <div class="input-group"><span class="v10-label">YEAR</span><input class="input" data-field="year" value="${safe(year)}" required></div>
+        <div class="input-group"><span class="v10-label">MARKS</span><input class="input" data-field="marks" value="${safe(marks)}"></div>
+        <div class="input-group"><span class="v10-label">QUESTION</span><textarea class="input" data-field="body" rows="4" style="resize:vertical;" required>${safe(record?.question || record?.body || record?.description || '')}</textarea></div>`;
     }
     if (contentType === 'iq') {
       const priority = record?.priority || 'med';
       return `
         <div class="input-group"><span class="v10-label">TOPIC</span><input class="input" data-field="topicText" value="${safe(record?.topicName || '')}"></div>
         <div class="input-group"><span class="v10-label">QUESTION</span><textarea class="input" data-field="body" rows="4" style="resize:vertical;" required>${safe(record?.question || record?.body || '')}</textarea></div>
-        <div class="input-group"><span class="v10-label">DESCRIPTION</span><textarea class="input" data-field="description" rows="3" style="resize:vertical;">${safe(record?.description || record?.metadata?.description || '')}</textarea></div>
         <div class="input-group"><span class="v10-label">PRIORITY</span><select class="select" data-field="priority">
           <option value="high"${priority === 'high' ? ' selected' : ''}>High</option>
           <option value="med"${priority === 'med' || priority === 'medium' ? ' selected' : ''}>Medium</option>
@@ -2366,7 +2367,7 @@ window.v10Esc = window.v10Esc || function(str) {
     if (contentType === 'note') {
       return `
         <div class="input-group"><span class="v10-label">TOPIC</span><input class="input" data-field="title" value="${safe(record?.topicName || record?.title || '')}" required></div>
-        <div class="input-group"><span class="v10-label">FILE URL</span><input class="input" data-field="url" value="${safe(record?.url || record?.link || '')}"></div>
+        <div class="input-group"><span class="v10-label">NOTE URL</span><input class="input" data-field="url" value="${safe(record?.url || record?.link || '')}"></div>
         <div class="input-group"><span class="v10-label">DESCRIPTION</span><textarea class="input" data-field="body" rows="3" style="resize:vertical;">${safe(record?.description || record?.body || '')}</textarea></div>`;
     }
     return `
@@ -2426,6 +2427,8 @@ window.v10Esc = window.v10Esc || function(str) {
       if (item.contentType === 'roadmap' && (!title || !url)) { showToast('Topic name and URL are required.', 'red'); return; }
       if (item.contentType === 'note' && !title) { showToast('Title is required.', 'red'); return; }
       if (item.contentType === 'pyq' && !topicText) { showToast('Topic is required.', 'red'); return; }
+      if (item.contentType === 'pyq' && !value('year')) { showToast('Year is required.', 'red'); return; }
+      if (item.contentType === 'pyq' && !body) { showToast('Question is required.', 'red'); return; }
       if (item.contentType === 'iq' && !body) { showToast('Question is required.', 'red'); return; }
       if (url) {
         try { new URL(url); } catch (e) { showToast('Please enter a valid URL.', 'red'); return; }
