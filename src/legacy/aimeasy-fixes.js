@@ -3268,7 +3268,12 @@ window.v10Esc = window.v10Esc || function(str) {
       subject_id: subjectId,
       unit_id: unitId,
       topic_id: topicId,
+      subject_name: subject.name || subject.title || '',
+      unit_name: roadmap?.data?.unitName || `Unit ${unitNum}`,
       topic_name: topicName,
+      branch: subject.branch || window.APP?.user?.branch || '',
+      university: subject.university_name || subject.uni || window.APP?.user?.university || '',
+      regulation: subject.regulation_code || subject.reg || window.APP?.user?.regulation || '',
       url,
       description,
       status: 'pending',
@@ -3581,12 +3586,7 @@ window.v10Esc = window.v10Esc || function(str) {
       description,
       status: 'pending',
     };
-    let { error } = await supabase.from('student_url_suggestions').insert(suggestionPayload);
-    if (error && /subject_name|unit_name|topic_name|branch|university|regulation/i.test(error.message || '')) {
-      const { subject_name, unit_name, topic_name, branch, university, regulation, ...requiredPayload } = suggestionPayload;
-      const retry = await supabase.from('student_url_suggestions').insert(requiredPayload);
-      error = retry.error;
-    }
+    const { error } = await supabase.from('student_url_suggestions').insert(suggestionPayload);
     if (error) { showToast('Suggestion save failed: ' + error.message, 'red'); return; }
     if (titleInput) titleInput.value = '';
     if (urlInput) urlInput.value = '';
@@ -3629,7 +3629,7 @@ window.v10Esc = window.v10Esc || function(str) {
     const supabase = window.__AIMEASY_SUPABASE__;
     let requests = [];
     if (supabase) {
-      const fullSelect = 'id, topic_name, title, url, description, status, created_at, student_id, student_name, subject_id, unit_id, topic_id, subject_name, unit_name, branch, university, regulation, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)';
+      const fullSelect = 'id, topic_name, url, description, status, created_at, student_id, student_name, subject_id, unit_id, topic_id, subject_name, unit_name, branch, university, regulation, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)';
       let result = await supabase
         .from('student_url_suggestions')
         .select(fullSelect)
@@ -3637,7 +3637,7 @@ window.v10Esc = window.v10Esc || function(str) {
       if (result.error && /branch|university|regulation|subject_name|unit_name|topic_name/i.test(result.error.message || '')) {
         result = await supabase
           .from('student_url_suggestions')
-          .select('id, topic_name, title, url, description, status, created_at, student_id, student_name, subject_id, unit_id, topic_id, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)')
+          .select('id, topic_name, url, description, status, created_at, student_id, student_name, subject_id, unit_id, topic_id, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)')
           .order('created_at', { ascending: false });
       }
       if (result.error) {
@@ -3670,7 +3670,7 @@ window.v10Esc = window.v10Esc || function(str) {
             const status = request.status || 'pending';
             const url = String(request.url || '').trim();
             const valid = approvalValidUrl(url);
-            const topic = request.topics?.topic_name || request.topic_name || request.topic || request.title || 'Not specified';
+            const topic = request.topics?.topic_name || request.topic_name || request.topic || 'Not specified';
             const subjectName = request.subjects?.name || request.subject_name || request.subject || 'Subject';
             const unitName = request.units?.title || request.unit_name || request.unitName || ('Unit ' + (request.units?.sort_order || request.unit || '-'));
             const branch = request.branch || request.subjects?.branch || '-';

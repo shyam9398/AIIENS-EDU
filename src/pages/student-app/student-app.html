@@ -155,9 +155,12 @@
       <!-- ── UNITS ── -->
       <div id="page-units" style="display:none;">
         <button class="back-btn" onclick="navigateTo('subjects')">← Back to Subjects</button>
+        <div class="student-detail-head">
         <div class="units-header">
           <h2 id="units-subject-name" style="font-size:1.4rem;"></h2>
           <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;" id="units-tags"></div>
+        </div>
+        <button class="back-btn back-btn-compact" onclick="navigateTo('subjects')">Back</button>
         </div>
         <div class="units-grid" id="units-grid"></div>
       </div>
@@ -191,6 +194,7 @@
             </div>
             <!-- RIGHT: Video + topic notes -->
             <div class="video-player-area">
+              <div class="mobile-video-topic-title" id="video-mobile-topic-title">Select a topic</div>
               <!-- Video embed -->
               <div class="video-embed-wrapper" id="video-embed-wrapper">
                 <div class="video-placeholder" id="video-placeholder">

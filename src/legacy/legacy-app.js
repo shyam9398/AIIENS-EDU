@@ -456,6 +456,7 @@ window.resolveAppUser = resolveAppUser;
 
 function navigateTo(page) {
   console.log('[LEGACY NAVIGATE]', page);
+  try { closeSidebar?.(); } catch {}
   // Hide all pages
   document.querySelectorAll('[id^="page-"]').forEach(p => p.style.display = 'none');
   // Update nav
@@ -687,6 +688,7 @@ async function openSubject(id) {
   }
   if (!subj) return;
   APP.currentSubject = subj;
+  window.aiiensTrackRecentSubject?.(subj);
   addToRecentlyOpened(subj.name, subj.code, subj.icon, subj.id);
   recordStudyActivity('subject_opened', { subjectId: subj.id, subjectName: subj.name });
   navigateTo('units');
@@ -1074,6 +1076,8 @@ function selectVideoItem(idx) {
   if (nowLabel) nowLabel.textContent = title;
   const topicTitleEl = document.getElementById('video-topic-title');
   if (topicTitleEl) topicTitleEl.textContent = title;
+  const mobileTopicTitleEl = document.getElementById('video-mobile-topic-title');
+  if (mobileTopicTitleEl) mobileTopicTitleEl.textContent = title;
 
   const sid = APP.currentSubject?.id || 'os';
   const uid = APP.currentUnit || 1;
@@ -1140,6 +1144,8 @@ function selectTopicUrl(topicIndex, urlIndex) {
   if (nowLabel) nowLabel.textContent = title;
   const topicTitleEl = document.getElementById('video-topic-title');
   if (topicTitleEl) topicTitleEl.textContent = title;
+  const mobileTopicTitleEl = document.getElementById('video-mobile-topic-title');
+  if (mobileTopicTitleEl) mobileTopicTitleEl.textContent = title;
 
   const sid = APP.currentSubject?.id || 'os';
   const uid = APP.currentUnit || 1;
@@ -1387,10 +1393,8 @@ async function renderNotes(subjectId, unitNum) {
       <div class="note-actions">
         ${n.link ? `
           <button class="btn btn-ghost btn-sm" onclick="previewNoteInline('${n.link.replace(/'/g, "\\'")}','${n.title.replace(/'/g, "\\'")}')">👁️ Preview</button>
-          <button class="btn btn-primary btn-sm" onclick="downloadNote('${n.link.replace(/'/g, "\\'")}','${n.title.replace(/'/g, "\\'")}')">📥 Download</button>
         ` : `
           <button class="btn btn-ghost btn-sm" onclick="showToast('📄 No file linked','amber')">Preview</button>
-          <button class="btn btn-primary btn-sm" onclick="showToast('📥 No download available','amber')">Download</button>
         `}
       </div>
     </div>`).join('') :
@@ -2285,7 +2289,134 @@ function calculateGPA(options = {}) {
   saveCalcState();
 }
 
+async function renderStudentSkillUpPage() {
+  const root = document.getElementById('page-skills');
+  const supabase = window.__AIMEASY_SUPABASE__;
+  if (!root) return;
+  if (!supabase) {
+    root.innerHTML = '<div class="empty-state-card">Supabase is required to load SkillUp.</div>';
+    return;
+  }
+  const user = await supabase.auth?.getUser?.().then(({ data }) => data?.user).catch(() => null);
+  const [{ data: banners }, { data: workshops }, { data: registrations }, { data: contentItems }] = await Promise.all([
+    supabase.from('live_workshop_banners').select('*').eq('is_active', true).order('created_at', { ascending: false }),
+    supabase.from('live_workshops').select('*').eq('status', 'published').order('workshop_date', { ascending: true }),
+    user?.id
+      ? supabase.from('live_workshop_registrations').select('*').eq('user_id', user.id)
+      : Promise.resolve({ data: [] }),
+    supabase.from('content_items').select('*').order('created_at', { ascending: false }),
+  ]);
+  const rows = workshops || [];
+  const registeredIds = new Set((registrations || []).map(row => row.workshop_id).filter(Boolean));
+  const registered = rows.filter(row => registeredIds.has(row.id));
+  const upcoming = rows.filter(row => !registeredIds.has(row.id));
+  const bannerRows = (banners || []).length ? banners : [{
+    banner_title: 'SkillUp Workshops',
+    banner_subtitle: 'Build practical skills with published sessions and courses',
+    banner_image: rows.find(row => row.banner_image)?.banner_image || '',
+  }];
+  const courseGroups = new Map();
+  (contentItems || []).filter(isSkillUpContentItem).forEach((item) => {
+    let metadata = item.metadata || {};
+    if (typeof metadata === 'string') {
+      try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+    }
+    const key = metadata.courseId || metadata.course_id || metadata.course || metadata.skill || item.subject_id || item.created_by || item.id;
+    if (!courseGroups.has(key)) courseGroups.set(key, []);
+    courseGroups.get(key).push({ ...item, metadata });
+  });
+  const courses = Array.from(courseGroups.entries()).map(([key, items], index) => {
+    const first = items[0] || {};
+    return {
+      id: key,
+      name: first.metadata?.course || first.metadata?.skill || first.title || 'SkillUp Content',
+      description: first.body || first.description || '',
+      category: first.metadata?.category || 'SkillUp',
+      level: first.metadata?.level || 'Self-paced',
+      duration: first.metadata?.duration || 'Self-paced',
+      videos: items.filter(item => item.content_type === 'video').length,
+      notes: items.filter(item => ['note', 'pdf'].includes(item.content_type)).length,
+      createdBy: first.created_by || 'Admin/Sub Admin',
+      index,
+    };
+  });
+  const bannerSlide = (banner, index) => {
+    const image = banner.banner_image || banner.image_url || banner.banner_url || '';
+    return `<article class="live-workshop-carousel-slide ${index === 0 ? 'active' : ''}" ${image ? `style="background-image:url('${String(image).replace(/'/g, "\\'")}')"` : ''}>
+      <div class="live-workshop-carousel-copy"><span>${v10Html(banner.banner_title || banner.title || 'SkillUp')}</span><h1>${v10Html(banner.banner_subtitle || banner.subtitle || 'Upcoming expert sessions')}</h1></div>
+    </article>`;
+  };
+  root.innerHTML = `
+    <div class="live-skillup-page">
+      <section class="live-workshop-carousel live-skillup-banner" aria-label="SkillUp banners">
+        <div class="live-workshop-carousel-track">${bannerRows.map(bannerSlide).join('')}</div>
+      </section>
+      <section class="live-workshop-section"><div class="section-heading">Registered Workshops</div><div class="live-workshop-scroll-row">${registered.length ? registered.map(row => studentSkillUpWorkshopCard(row, true)).join('') : '<div class="empty-state-card live-scroll-empty">No registered workshops yet.</div>'}</div></section>
+      <section class="live-workshop-section"><div class="section-heading">Upcoming Workshops</div><div class="live-workshop-scroll-row">${upcoming.length ? upcoming.map(row => studentSkillUpWorkshopCard(row, false)).join('') : '<div class="empty-state-card live-scroll-empty">Upcoming workshops available soon.</div>'}</div></section>
+      <section class="live-workshop-section"><div class="section-heading">Courses</div><div class="live-skillup-grid">${courses.length ? courses.map(studentSkillUpCourseCard).join('') : '<div class="empty-state-card">Courses will appear here as soon as Admin or Sub Admin publishes content.</div>'}</div></section>
+    </div>`;
+  enableSkillUpHorizontalScrolling(root);
+}
+
+function isSkillUpContentItem(item) {
+  let metadata = item?.metadata || {};
+  if (typeof metadata === 'string') {
+    try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+  }
+  if (item?.content_type === 'feature' || metadata.type === 'platform_feature') return false;
+  return Boolean(
+    metadata.courseId || metadata.course_id || metadata.skillId || metadata.skill_id ||
+    metadata.course || metadata.skill || metadata.type === 'skillup' || metadata.module === 'skillup'
+  );
+}
+
+function skillUpTheme(value, index = 0) {
+  const seed = String(value ?? index);
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+  return `skillup-theme-${Math.abs(hash) % 5}`;
+}
+
+function enableSkillUpHorizontalScrolling(root = document) {
+  root.querySelectorAll?.('.live-workshop-scroll-row, .live-skillup-grid').forEach((row) => {
+    if (row.dataset.wheelScrollReady) return;
+    row.dataset.wheelScrollReady = 'true';
+    row.addEventListener('wheel', (event) => {
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || row.scrollWidth <= row.clientWidth) return;
+      event.preventDefault();
+      row.scrollBy({ left: event.deltaY, behavior: 'smooth' });
+    }, { passive: false });
+  });
+}
+
+function studentSkillUpWorkshopCard(row, registered, index = 0) {
+  const action = registered
+    ? `<a class="btn btn-primary" href="${v10EscapeAttr(row.join_link || '#')}" target="_blank" rel="noreferrer">Join</a>`
+    : `<button class="btn btn-primary" type="button" onclick="openLiveWorkshopRegisterModal?.('${v10EscapeJs(row.id)}')">Register</button>`;
+  return `<article class="live-workshop-card ${skillUpTheme(row.id, index)}">
+    ${row.banner_image ? `<img class="live-workshop-card-img" src="${v10EscapeAttr(row.banner_image)}" alt="${v10Html(row.workshop_name)} banner" loading="lazy">` : ''}
+    <h3>${v10Html(row.workshop_name)}</h3>
+    <div class="live-workshop-info-pills">
+      <span>${v10Html(row.speaker_name || 'Speaker TBA')}</span>
+      <span>${v10Html(row.workshop_date || '')}</span>
+      <span>${v10Html(row.workshop_time || '')}</span>
+    </div>
+    <p class="live-workshop-description">${v10Html(row.description || '')}</p>
+    <div class="live-workshop-card-action">${action}</div>
+  </article>`;
+}
+
+function studentSkillUpCourseCard(card) {
+  return `<article class="subject-card live-skillup-card" style="animation-delay:${(card.index || 0) * 0.06}s">
+    <div class="subject-card-header"><div class="subject-icon">Course</div><div class="subject-name">${v10Html(card.name)}</div><div class="subject-code">${v10Html(card.category)} - ${v10Html(card.level)}</div></div>
+    <div class="subject-card-body"><div class="subject-meta"><span class="badge badge-teal">${Number(card.videos || 0)} Videos</span><span class="badge badge-lavender">${Number(card.notes || 0)} PDFs/Notes</span><span class="badge badge-primary">${v10Html(card.duration)}</span></div>
+    <p style="font-size:0.78rem;color:var(--text2);margin:8px 0;">${v10Html(card.description || '')}</p><p style="font-size:0.72rem;color:var(--text3);margin:0;">Published by ${v10Html(card.createdBy || 'Admin/Sub Admin')}</p></div>
+  </article>`;
+}
+
 function renderSkillsPage() {
+  renderStudentSkillUpPage();
+  return;
   const grid = document.getElementById('skills-grid');
   const empty = document.getElementById('skills-empty');
   if (!grid) return;
@@ -9480,7 +9611,11 @@ function persistMarkedReviews() {
 
 async function syncTopicProgressToDb({ subjectId, unitId, topicIndex, topicId, status }) {
   const supabase = window.__AIMEASY_SUPABASE__;
-  const userId = APP.user?.id || APP.user?.googleId;
+  let userId = APP.user?.id || APP.user?.googleId;
+  try {
+    const { data } = await supabase?.auth?.getUser?.();
+    userId = data?.user?.id || userId;
+  } catch {}
   if (!supabase || !userId || !subjectId || !unitId || topicIndex === undefined || topicIndex === null) return;
   try {
     const { error } = await supabase
@@ -9495,6 +9630,7 @@ async function syncTopicProgressToDb({ subjectId, unitId, topicIndex, topicId, s
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,subject_key,unit_key,topic_index' });
     if (error) console.warn('[STUDENT] Progress DB sync failed:', error.message || error);
+    else window.dispatchEvent(new CustomEvent('aiiens:student-progress-changed'));
   } catch (error) {
     console.warn('[STUDENT] Progress DB sync failed:', error?.message || error);
   }
@@ -9594,7 +9730,7 @@ renderVideoList = async function renderVideoListDbSubtopics(subjectId, unitNum) 
     const suggestedVideos = (suggestionsByTopic.get(String(topic.id || topic.dbContentId || '')) || []).map((row) => ({
       id: row.id,
       url: row.url,
-      title: row.title || 'Suggested URL',
+      title: row.topic_name || 'Suggested URL',
       description: row.description || '',
       source: 'suggestion',
     }));
@@ -9664,6 +9800,8 @@ selectVideoItem = function selectVideoItemFlat(idx) {
   if (nowLabel) nowLabel.textContent = displayTitle;
   const topicTitleEl = document.getElementById('video-topic-title');
   if (topicTitleEl) topicTitleEl.textContent = displayTitle;
+  const mobileTopicTitleEl = document.getElementById('video-mobile-topic-title');
+  if (mobileTopicTitleEl) mobileTopicTitleEl.textContent = displayTitle;
 
   const sid = APP.currentSubject?.id || 'os';
   const uid = APP.currentUnit || 1;
@@ -9732,7 +9870,8 @@ nextVideo = function nextVideoFlat() {
   }
   if (APP.currentVideoIndex < total - 1) {
     selectVideoItem(APP.currentVideoIndex + 1);
-    document.querySelector(`.video-item[data-topic-index="${APP._videoItems?.[APP.currentVideoIndex]?.topicIndex ?? APP.currentVideoIndex}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    document.querySelector('#screen-app.active > .main')?.scrollTo({ top: 0, behavior: 'smooth' });
+    document.getElementById('page-unit-content')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     showToast('Progress saved', 'green');
   } else {
     showToast('Unit complete', 'green');
@@ -11979,7 +12118,9 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     };
     const { error } = await supabase.from('student_recent_subjects').upsert(row, { onConflict: 'user_id,subject_id' });
     if (error) console.warn('[DASHBOARD] Recent subject save failed:', error.message || error);
+    else window.dispatchEvent(new CustomEvent('aiiens:student-dashboard-changed'));
   }
+  window.aiiensTrackRecentSubject = saveRecentSubjectToDb;
 
   const originalAddRecent = window.addToRecentlyOpened || globalThis.addToRecentlyOpened;
   window.addToRecentlyOpened = globalThis.addToRecentlyOpened = function addRecentSupabase(name, code, icon, id) {
@@ -12029,11 +12170,19 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const supabase = sb();
     const id = await userId();
     if (!supabase || !id) return null;
+    let completedRows = [];
     let completedTopics = 0;
     let totalTopics = 0;
+    let unitsCompleted = 0;
     try {
-      const { count } = await supabase.from('student_topic_progress').select('id', { count: 'exact', head: true }).eq('user_id', id).eq('status', 'completed');
-      completedTopics = count || 0;
+      const { data, error } = await supabase
+        .from('student_topic_progress')
+        .select('id, subject_key, unit_key, topic_index, topic_id, updated_at')
+        .eq('user_id', id)
+        .eq('status', 'completed');
+      if (error) throw error;
+      completedRows = data || [];
+      completedTopics = completedRows.length;
     } catch (error) {
       console.warn('[DASHBOARD] Progress count failed:', error?.message || error);
     }
@@ -12056,7 +12205,21 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     } catch (error) {
       console.warn('[DASHBOARD] Topic total failed:', error?.message || error);
     }
+    try {
+      unitsCompleted = await countCompletedUnitsFromProgress(supabase, completedRows);
+    } catch (error) {
+      console.warn('[DASHBOARD] Completed unit count failed:', error?.message || error);
+    }
+    totalTopics = Math.max(totalTopics, completedTopics);
     const learningPercentage = totalTopics ? Math.round((completedTopics / totalTopics) * 100) : 0;
+    const weekStart = startOfWeek();
+    const weeklyRows = completedRows.filter(progress => progress.updated_at && new Date(progress.updated_at) >= weekStart);
+    const activeSubjects = new Set(weeklyRows.map(progress => progress.subject_key).filter(Boolean)).size;
+    const learningSessions = new Set(weeklyRows.map(progress => {
+      const date = new Date(progress.updated_at);
+      return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+    }).filter(Boolean)).size;
+    const weeklyCompletion = totalTopics ? Math.min(100, Math.round((weeklyRows.length / totalTopics) * 100)) : 0;
     const row = {
       user_id: id,
       total_topics: totalTopics,
@@ -12064,10 +12227,51 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       completed_videos: completedTopics,
       learning_percentage: learningPercentage,
       updated_at: new Date().toISOString(),
+      units_completed: unitsCompleted,
+      weekly_completion: weeklyCompletion,
+      active_subjects: activeSubjects,
+      learning_sessions: learningSessions,
     };
-    const { error } = await supabase.from('student_learning_summaries').upsert(row, { onConflict: 'user_id' });
+    const { units_completed, ...summaryRow } = row;
+    const { error } = await supabase.from('student_learning_summaries').upsert(summaryRow, { onConflict: 'user_id' });
     if (error) console.warn('[DASHBOARD] Learning summary save failed:', error.message || error);
     return row;
+  }
+
+  async function countCompletedUnitsFromProgress(supabase, completedRows = []) {
+    const topicIds = [...new Set((completedRows || []).map(row => row.topic_id).filter(Boolean))];
+    if (!topicIds.length) {
+      return new Set((completedRows || []).map(row => `${row.subject_key}:${row.unit_key}`).filter(Boolean)).size;
+    }
+    const { data: completedTopics, error: completedError } = await supabase
+      .from('topics')
+      .select('id, unit_id')
+      .in('id', topicIds);
+    if (completedError) throw completedError;
+    const completedByUnit = new Map();
+    (completedTopics || []).forEach((topic) => {
+      const unitId = topic.unit_id;
+      if (!unitId) return;
+      if (!completedByUnit.has(unitId)) completedByUnit.set(unitId, new Set());
+      completedByUnit.get(unitId).add(topic.id);
+    });
+    const unitIds = [...completedByUnit.keys()];
+    if (!unitIds.length) return 0;
+    const { data: unitTopics, error: totalError } = await supabase
+      .from('topics')
+      .select('id, unit_id')
+      .in('unit_id', unitIds);
+    if (totalError) throw totalError;
+    const totalByUnit = new Map();
+    (unitTopics || []).forEach((topic) => {
+      if (!topic.unit_id) return;
+      totalByUnit.set(topic.unit_id, (totalByUnit.get(topic.unit_id) || 0) + 1);
+    });
+    return unitIds.filter((unitId) => {
+      const total = totalByUnit.get(unitId) || 0;
+      const completed = completedByUnit.get(unitId)?.size || 0;
+      return total > 0 && completed >= total;
+    }).length;
   }
 
   const originalMarkTopicCompleted = window.markTopicCompleted || globalThis.markTopicCompleted;
@@ -12234,6 +12438,19 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const supabase = sb();
     const id = await userId();
     if (!supabase || !id) return;
+    if (!window.__aiiensStudentProgressChannel) {
+      window.__aiiensStudentProgressChannel = supabase.channel(`student-dashboard-progress-${id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'student_topic_progress', filter: `user_id=eq.${id}` }, () => {
+          if (document.getElementById('page-dashboard')?.style.display !== 'none') loadDashboardSupabaseData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'student_recent_subjects', filter: `user_id=eq.${id}` }, () => {
+          if (document.getElementById('page-dashboard')?.style.display !== 'none') loadDashboardSupabaseData();
+        })
+        .subscribe?.();
+    }
+    let summary = null;
+    let recentSubjects = [];
+    let streak = null;
     subscribeLiveWorkshopUpdates();
     renderStudentDashboardWorkshopCarousel();
     try {
@@ -12247,7 +12464,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       console.warn('[DASHBOARD] CGPA load failed:', error?.message || error);
     }
     try {
-      const summary = await refreshLearningSummary();
+      summary = await refreshLearningSummary();
       const progressEl = document.querySelector('#page-dashboard .metric-card.teal .metric-val');
       const progressTrend = document.querySelector('#page-dashboard .metric-card.teal .metric-trend');
       if (summary && progressEl) progressEl.textContent = `${summary.learning_percentage}%`;
@@ -12257,26 +12474,28 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         tracker.innerHTML = `
           <div class="section-heading">Learning Progress</div>
           <div class="weekly-summary compact-weekly-summary">
-            <div><strong>${esc(summary.completed_topics)}</strong><span>Topics Completed</span></div>
-            <div><strong>${esc(summary.completed_videos)}</strong><span>Videos Completed</span></div>
-            <div><strong>${esc(summary.learning_percentage)}%</strong><span>Overall Learning</span></div>
+            <div><strong>${esc(summary.weekly_completion || 0)}%</strong><span>Weekly Completion</span></div>
+            <div><strong>${esc(summary.units_completed || 0)}</strong><span>Units Completed</span></div>
+            <div><strong>${esc(summary.active_subjects || 0)}</strong><span>Active Subjects</span></div>
+            <div><strong>${esc(summary.learning_sessions || 0)}</strong><span>Learning Sessions</span></div>
           </div>
-          <div class="weekly-mini-progress"><span style="width:${Math.max(4, Math.min(100, Number(summary.learning_percentage) || 0))}%"></span></div>`;
+          <div class="weekly-mini-progress" role="progressbar" aria-label="Overall learning completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(summary.learning_percentage)}"><span style="width:${Math.max(0, Math.min(100, Number(summary.learning_percentage) || 0))}%"></span></div>`;
       }
     } catch (error) {
       console.warn('[DASHBOARD] Learning summary load failed:', error?.message || error);
     }
     try {
       const { data } = await supabase.from('student_recent_subjects').select('*').eq('user_id', id).order('last_opened_at', { ascending: false }).limit(5);
+      recentSubjects = data || [];
       const listEl = document.getElementById('recently-opened-list') || document.querySelector('#page-dashboard .dash-row-3 .card');
       if (listEl) {
-        listEl.innerHTML = `<div class="section-heading">Recently Opened</div>` + ((data || []).length ? (data || []).map(item => `
+        listEl.innerHTML = `<div class="section-heading">Recently Opened</div>` + (recentSubjects.length ? recentSubjects.map(item => `
           <div class="recent-item">
             <div class="recent-info">
               <div class="recent-title">${esc(item.subject_name)}</div>
-              <div class="recent-sub">${esc(item.subject_code || 'Subject')} - ${esc(new Date(item.last_opened_at).toLocaleString())}</div>
+              <div class="recent-sub">${esc([item.subject_code || 'Subject', item.branch].filter(Boolean).join(' · '))} · ${esc(formatRecentTime(item.last_opened_at))}</div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="openSubjectFromRecent('${js('custom_' + item.subject_id)}')">Continue</button>
+            <button class="btn btn-primary btn-sm" onclick="openSubjectFromRecent('${js(String(item.subject_id).includes('-') ? 'custom_' + item.subject_id : item.subject_id)}')">Continue Learning</button>
           </div>`).join('') : '<div class="empty-state-card">No subjects opened yet.</div>');
       }
     } catch (error) {
@@ -12284,11 +12503,45 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     }
     try {
       const { data } = await supabase.from('student_streaks').select('*').eq('user_id', id).maybeSingle();
-      if (data) renderStreak(data);
+      streak = data || null;
+      if (streak) renderStreak(streak);
     } catch (error) {
       console.warn('[DASHBOARD] Streak load failed:', error?.message || error);
     }
+    renderSupabaseAchievements({ summary, recentSubjects, streak });
   }
+
+  function renderSupabaseAchievements({ summary, recentSubjects, streak }) {
+    const achievementsEl = document.getElementById('achievements-list');
+    if (!achievementsEl) return;
+    const unitsCompleted = Number(summary?.units_completed || 0);
+    const videosCompleted = Number(summary?.completed_videos || 0);
+    const streakDays = Math.max(Number(streak?.current_streak || 0), Number(streak?.best_streak || 0));
+    const items = [
+      { label: 'First Subject Opened', icon: '📖', earned: (recentSubjects || []).length >= 1 },
+      { label: 'First Unit Completed', icon: '✓', earned: unitsCompleted >= 1 },
+      { label: '5 Units Completed', icon: '⚡', earned: unitsCompleted >= 5 },
+      { label: '10 Units Completed', icon: '★', earned: unitsCompleted >= 10 },
+      { label: '7-Day Streak', icon: '🔥', earned: streakDays >= 7 },
+      { label: '30-Day Streak', icon: '♛', earned: streakDays >= 30 },
+      { label: '100 Videos Watched', icon: '▶', earned: videosCompleted >= 100 },
+    ];
+    achievementsEl.innerHTML = items.map(item => `
+      <div class="achievement-card ${item.earned ? 'earned' : 'locked'}">
+        <div class="achievement-icon">${esc(item.earned ? item.icon : 'Lock')}</div>
+        <div>${esc(item.label)}</div>
+        <div class="achievement-progress"><span style="width:${item.earned ? 100 : 25}%"></span></div>
+      </div>
+    `).join('');
+  }
+
+  window.aiiensLoadStudentDashboard = loadDashboardSupabaseData;
+  window.addEventListener('aiiens:student-progress-changed', () => {
+    if (document.getElementById('page-dashboard')?.style.display !== 'none') loadDashboardSupabaseData();
+  });
+  window.addEventListener('aiiens:student-dashboard-changed', () => {
+    if (document.getElementById('page-dashboard')?.style.display !== 'none') loadDashboardSupabaseData();
+  });
 
   const originalNavigateTo = window.navigateTo || globalThis.navigateTo;
   if (typeof originalNavigateTo === 'function') {
@@ -12330,7 +12583,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       const position = appShell && footer ? 'beforebegin' : 'beforeend';
       const html = `
         <div class="screen live-workshop-screen" id="screen-live-workshops">
-          <div class="sidebar-backdrop" id="live-workshop-sidebar-backdrop" onclick="closeLiveWorkshopSidebar()"></div>
+          ${false ? `<div class="sidebar-backdrop" id="live-workshop-sidebar-backdrop" onclick="closeLiveWorkshopSidebar()"></div>
           <aside class="sidebar live-workshop-sidebar" id="live-workshop-sidebar">
             <div class="sidebar-header">
               <div class="sidebar-logo">
@@ -12353,17 +12606,23 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
                 <span class="nav-icon">ðŸšª</span><span class="nav-label">Logout</span>
               </div>
             </div>
-          </aside>
+          </aside>` : ''}
           <main class="main live-workshop-main">
             <header class="topbar live-workshop-topbar">
               <div class="topbar-left">
-                <button class="hamburger-btn" onclick="toggleLiveWorkshopSidebar()" aria-label="Open menu">
+                ${false ? `<button class="hamburger-btn" onclick="toggleLiveWorkshopSidebar()" aria-label="Open menu">
                   <span></span><span></span><span></span>
-                </button>
+                </button>` : ''}
+                <div class="live-workshop-brand" aria-label="AIIENS EDU"><span>A</span><strong>AIIENS EDU</strong></div>
                 <div>
                   <div class="page-title" id="live-workshop-title">Dashboard</div>
                   <div class="breadcrumb">Live Workshops / <span id="live-workshop-breadcrumb">Dashboard</span></div>
                 </div>
+              </div>
+              <div class="live-workshop-topbar-actions">
+                <button class="btn btn-ghost active" id="live-topnav-dashboard" onclick="switchLiveWorkshopPage('dashboard')">Workshops</button>
+                <button class="btn btn-ghost" id="live-topnav-skillup" onclick="switchLiveWorkshopPage('skillup')">Courses</button>
+                <button class="btn btn-ghost" onclick="logoutLiveWorkshop()">Logout</button>
               </div>
             </header>
             <div class="page-content live-workshop-content-wrap">
@@ -12397,6 +12656,8 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     liveWorkshopActivePage = page === 'skillup' ? 'skillup' : 'dashboard';
     document.getElementById('live-nav-dashboard')?.classList.toggle('active', liveWorkshopActivePage === 'dashboard');
     document.getElementById('live-nav-skillup')?.classList.toggle('active', liveWorkshopActivePage === 'skillup');
+    document.getElementById('live-topnav-dashboard')?.classList.toggle('active', liveWorkshopActivePage === 'dashboard');
+    document.getElementById('live-topnav-skillup')?.classList.toggle('active', liveWorkshopActivePage === 'skillup');
     const label = liveWorkshopActivePage === 'skillup' ? 'SkillUp Courses' : 'Dashboard';
     const title = document.getElementById('live-workshop-title');
     const breadcrumb = document.getElementById('live-workshop-breadcrumb');
@@ -12599,9 +12860,6 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
 
   async function loadLiveWorkshopSkillUpItems() {
     const supabase = sb();
-    const skills = JSON.parse(localStorage.getItem('edusync_skills') || '[]');
-    const skillVideos = JSON.parse(localStorage.getItem('edusync_skill_videos') || '[]');
-    const skillNotes = JSON.parse(localStorage.getItem('edusync_skill_notes') || '[]');
     let contentItems = [];
     if (supabase) {
       try {
@@ -12614,18 +12872,58 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         console.warn('[LIVE WORKSHOP] SkillUp content load failed:', error?.message || error);
       }
     }
-    return { skills, skillVideos, skillNotes, contentItems };
+    return { contentItems };
   }
 
   async function renderLiveWorkshopSkillUp(root) {
-    const { skills, skillVideos, skillNotes, contentItems } = await loadLiveWorkshopSkillUpItems();
+    const supabase = sb();
+    const renderToken = ++liveWorkshopRenderToken;
+    stopLiveWorkshopCarousel();
+    const { contentItems } = await loadLiveWorkshopSkillUpItems();
+    const skills = [];
+    const skillVideos = [];
+    const skillNotes = [];
+    let banners = await loadActiveWorkshopBanners();
+    let workshops = [];
+    let registrations = [];
+    if (supabase) {
+      const { data: workshopRows, error: workshopError } = await supabase
+        .from('live_workshops')
+        .select('*')
+        .eq('status', 'published')
+        .order('workshop_date', { ascending: true });
+      if (workshopError) console.warn('[LIVE WORKSHOP] SkillUp workshop load failed:', workshopError.message || workshopError);
+      workshops = workshopRows || [];
+      const user = await authUser();
+      if (user?.id) {
+        const { data: regRows, error: regError } = await supabase
+          .from('live_workshop_registrations')
+          .select('*')
+          .eq('user_id', user.id);
+        if (regError) console.warn('[LIVE WORKSHOP] SkillUp registration load failed:', regError.message || regError);
+        registrations = regRows || [];
+      }
+    }
+    if (renderToken !== liveWorkshopRenderToken) return;
+    const registeredIds = new Set((registrations || []).map(row => row.workshop_id).filter(Boolean));
+    const registeredWorkshops = workshops.filter(row => registeredIds.has(row.id));
+    const upcomingWorkshops = workshops.filter(row => !registeredIds.has(row.id));
+    if (!banners.length) {
+      const fallback = workshops.find(row => row.banner_image);
+      banners = [{
+        id: 'skillup-fallback-banner',
+        banner_image: fallback?.banner_image || '',
+        banner_title: 'SkillUp Workshops',
+        banner_subtitle: 'Build practical skills with published sessions and courses',
+      }];
+    }
     const contentByCourse = new Map();
-    (contentItems || []).forEach((item) => {
+    (contentItems || []).filter(isSkillUpContentItem).forEach((item) => {
       let meta = item.metadata || {};
       if (typeof meta === 'string') {
         try { meta = JSON.parse(meta); } catch { meta = {}; }
       }
-      const key = meta.skillId || meta.skill_id || item.subject_id || 'content-items';
+      const key = meta.courseId || meta.course_id || meta.skillId || meta.skill_id || meta.course || meta.skill || item.subject_id || item.created_by || item.id;
       if (!contentByCourse.has(key)) contentByCourse.set(key, []);
       contentByCourse.get(key).push({ ...item, metadata: meta });
     });
@@ -12643,6 +12941,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         duration: first.metadata?.duration || 'Self-paced',
         videos: videos.length,
         notes: notes.length,
+        createdBy: first.created_by || 'Admin/Sub Admin',
         index,
       };
     });
@@ -12658,15 +12957,39 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       notes: skillNotes.filter(n => n.skillId == skill.id).length,
       index,
     }));
-    const cards = [...localCards, ...contentCards];
+    const cards = contentCards;
     root.innerHTML = `
+      <div class="live-skillup-page">
+        <section class="live-workshop-carousel live-skillup-banner" aria-label="SkillUp workshop banners">
+          <div class="live-workshop-carousel-track" id="live-workshop-carousel-track">
+            ${banners.map((banner, index) => liveWorkshopBannerSlide(banner, index)).join('')}
+          </div>
+          ${banners.length > 1 ? `
+            <button class="live-carousel-arrow left" type="button" onclick="moveLiveWorkshopCarousel(-1)" aria-label="Previous banner">‹</button>
+            <button class="live-carousel-arrow right" type="button" onclick="moveLiveWorkshopCarousel(1)" aria-label="Next banner">›</button>
+          ` : ''}
+        </section>
+        <section class="live-workshop-section">
+          <div class="section-heading">Registered Workshops</div>
+          <div class="live-workshop-scroll-row" aria-label="Registered workshops">
+            ${registeredWorkshops.length ? registeredWorkshops.map((row) => workshopCard(row, 'registered')).join('') : '<div class="empty-state-card live-scroll-empty">No registered workshops yet.</div>'}
+          </div>
+        </section>
+        <section class="live-workshop-section">
+          <div class="section-heading">Upcoming Workshops</div>
+          <div class="live-workshop-scroll-row" aria-label="Upcoming workshops">
+            ${upcomingWorkshops.length ? upcomingWorkshops.map((row) => workshopCard(row, 'upcoming')).join('') : '<div class="empty-state-card live-scroll-empty">Upcoming workshops available soon.</div>'}
+          </div>
+        </section>
       <section class="live-workshop-section">
         <div class="section-heading">📚 SkillUp Courses</div>
-        <p class="live-section-copy">Courses use the same SkillUp content source already managed by Admin/SubAdmin.</p>
         <div class="live-skillup-grid">
           ${cards.length ? cards.map(skillUpCard).join('') : '<div class="empty-state-card">SkillUp courses will appear here as soon as Admin or SubAdmin publishes content.</div>'}
         </div>
-      </section>`;
+      </section>
+      </div>`;
+    enableSkillUpHorizontalScrolling(root);
+    startLiveWorkshopCarousel(banners.length);
   }
 
   function skillUpCard(card) {
@@ -12684,6 +13007,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
             <span class="badge badge-primary">${esc(card.duration)}</span>
           </div>
           <p style="font-size:0.78rem;color:var(--text2);margin:8px 0;">${esc(card.description || '')}</p>
+          <p style="font-size:0.72rem;color:var(--text3);margin:0;">Published by ${esc(card.createdBy || 'Admin/Sub Admin')}</p>
           <div class="progress-bar" style="margin-top:8px;"><div class="progress-fill" style="width:0%;"></div></div>
         </div>
       </article>`;
@@ -12719,6 +13043,32 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const allWorkshops = data || [];
     const registeredWorkshops = allWorkshops.filter((row) => registeredIds.has(row.id));
     const upcomingWorkshops = allWorkshops.filter((row) => !registeredIds.has(row.id));
+    const { contentItems } = await loadLiveWorkshopSkillUpItems();
+    const courseGroups = new Map();
+    (contentItems || []).filter(isSkillUpContentItem).forEach((item) => {
+      let meta = item.metadata || {};
+      if (typeof meta === 'string') {
+        try { meta = JSON.parse(meta); } catch { meta = {}; }
+      }
+      const key = meta.courseId || meta.course_id || meta.skillId || meta.skill_id || meta.course || meta.skill || item.id;
+      if (!courseGroups.has(key)) courseGroups.set(key, []);
+      courseGroups.get(key).push({ ...item, metadata: meta });
+    });
+    const courseCards = Array.from(courseGroups.entries()).map(([key, items], index) => {
+      const first = items[0] || {};
+      return {
+        id: key,
+        name: first.metadata?.course || first.metadata?.skill || first.title || 'SkillUp Course',
+        description: first.body || first.description || '',
+        category: first.metadata?.category || 'SkillUp',
+        level: first.metadata?.level || 'Self-paced',
+        duration: first.metadata?.duration || 'Self-paced',
+        videos: items.filter(item => item.content_type === 'video').length,
+        notes: items.filter(item => ['note', 'pdf'].includes(item.content_type)).length,
+        createdBy: first.created_by || 'Admin/Sub Admin',
+        index,
+      };
+    });
     if (!banners.length) {
       const fallback = allWorkshops.find(row => row.banner_image);
       banners = [{
@@ -12740,17 +13090,24 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       </section>
       <section class="live-workshop-section">
         <div class="section-heading">Registered Workshops</div>
-        <div class="live-workshop-grid">
+        <div class="live-workshop-scroll-row">
           ${registeredWorkshops.length ? registeredWorkshops.map((row) => workshopCard(row, 'registered')).join('') : '<div class="empty-state-card">registered workshops fast.</div>'}
         </div>
       </section>
       <section class="live-workshop-section">
         <div class="section-heading">Upcoming Workshops</div>
-        <div class="live-workshop-grid">
+        <div class="live-workshop-scroll-row">
           ${upcomingWorkshops.length ? upcomingWorkshops.map((row) => workshopCard(row, 'upcoming')).join('') : '<div class="empty-state-card">upcoming workshops available soon.</div>'}
         </div>
       </section>
+      <section class="live-workshop-section live-courses-highlight">
+        <div class="section-heading">Courses</div>
+        <div class="live-skillup-grid">
+          ${courseCards.length ? courseCards.map(skillUpCard).join('') : '<div class="empty-state-card live-scroll-empty">SkillUp courses will appear here when published.</div>'}
+        </div>
+      </section>
     `;
+    enableSkillUpHorizontalScrolling(root);
     startLiveWorkshopCarousel(banners.length);
   }
 
@@ -12759,13 +13116,16 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       ? `<a class="btn btn-primary" href="${esc(row.join_link)}" target="_blank" rel="noreferrer">Join</a>`
       : `<button class="btn btn-primary" type="button" onclick="openLiveWorkshopRegisterModal('${js(row.id)}')">Register</button>`;
     return `
-      <article class="live-workshop-card">
+      <article class="live-workshop-card ${skillUpTheme(row.id)}">
         ${row.banner_image ? `<img class="live-workshop-card-img" src="${esc(row.banner_image)}" alt="${esc(row.workshop_name)} banner" loading="lazy">` : ''}
         <h3>${esc(row.workshop_name)}</h3>
-        <p><strong>Speaker:</strong> ${esc(row.speaker_name)}</p>
-        <p><strong>Date:</strong> ${esc(row.workshop_date)} <strong>Time:</strong> ${esc(row.workshop_time)}</p>
-        <p>${esc(row.description || '')}</p>
-        ${action}
+        <div class="live-workshop-info-pills">
+          <span>${esc(row.speaker_name || 'Speaker TBA')}</span>
+          <span>${esc(row.workshop_date)}</span>
+          <span>${esc(row.workshop_time)}</span>
+        </div>
+        <p class="live-workshop-description">${esc(row.description || '')}</p>
+        <div class="live-workshop-card-action">${action}</div>
       </article>`;
   }
 
@@ -12778,7 +13138,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     liveWorkshopPendingRegistrationId = String(workshopId || '');
     if (!liveWorkshopPendingRegistrationId) return;
     document.getElementById('live-workshop-register-modal')?.remove();
-    document.getElementById('screen-live-workshops')?.insertAdjacentHTML('beforeend', `
+    (document.querySelector('.screen.active') || document.body).insertAdjacentHTML('beforeend', `
       <div class="modal-overlay live-workshop-register-overlay open" id="live-workshop-register-modal">
         <div class="modal live-workshop-register-modal" role="dialog" aria-modal="true" aria-labelledby="lw-register-title">
           <h2 id="lw-register-title">Register Workshop</h2>
@@ -12854,6 +13214,9 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     window.showToast?.('Workshop registered', 'green');
     window.updateLandingStats?.();
     await renderLiveWorkshopDashboard();
+    if (document.getElementById('page-skills')?.style.display !== 'none') {
+      await renderStudentSkillUpPage();
+    }
   };
 
   async function renderAdminLiveWorkshops() {

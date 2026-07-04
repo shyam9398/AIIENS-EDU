@@ -3409,6 +3409,225 @@ body,
   }
 }
 
+@media (max-width: 768px) {
+  .videos-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .video-player-area {
+    display: contents;
+  }
+
+  .mobile-video-topic-title {
+    order: 1;
+    display: block;
+    width: 100%;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.92rem;
+    font-weight: 800;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .video-embed-wrapper {
+    order: 2;
+  }
+
+  .video-controls {
+    order: 3;
+  }
+
+  .video-player-area > .card {
+    order: 4;
+    padding: 0.75rem !important;
+  }
+
+  #video-topic-title {
+    display: none;
+  }
+
+  #video-topic-desc {
+    margin-bottom: 0 !important;
+    font-size: 0.76rem !important;
+    line-height: 1.35 !important;
+  }
+
+  #topic-inline-notes {
+    max-height: 118px;
+    overflow: auto;
+    margin-top: 8px !important;
+    padding-top: 8px !important;
+  }
+
+  .video-sidebar,
+  .video-sidebar.collapsed {
+    order: 5;
+  }
+
+  .video-suggest-box {
+    order: 6;
+    margin-top: 0;
+    padding: 0.9rem;
+  }
+
+  .live-workshop-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .live-workshop-topbar .topbar-left {
+    align-items: center;
+  }
+
+  .live-workshop-brand span {
+    width: 42px;
+    height: 42px;
+  }
+
+  .live-workshop-brand strong {
+    display: inline;
+    font-size: 0.9rem;
+  }
+
+  .live-workshop-topbar-actions {
+    justify-content: flex-start;
+  }
+
+  .live-workshop-carousel,
+  .live-skillup-banner {
+    min-height: 132px;
+    max-height: 148px;
+  }
+
+  .live-workshop-scroll-row,
+  .live-skillup-grid {
+    grid-auto-columns: minmax(218px, 78vw);
+  }
+}
+
+@media (max-width: 600px) {
+  #page-calculator,
+  #page-calculator * {
+    max-width: 100%;
+  }
+
+  #page-calculator [style*="justify-content:flex-end"] {
+    display: grid !important;
+    grid-template-columns: 1fr;
+  }
+
+  .calc-table {
+    overflow: visible;
+  }
+
+  .calc-table table {
+    min-width: 0;
+  }
+
+  .calc-table table,
+  .calc-table thead,
+  .calc-table tbody,
+  .calc-table tr,
+  .calc-table td {
+    display: block;
+    width: 100% !important;
+  }
+
+  .calc-table thead {
+    position: absolute;
+    width: 1px !important;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .calc-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(86px, 0.45fr);
+    gap: 0.65rem;
+    padding: 0.85rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .calc-table td {
+    height: auto;
+    padding: 0;
+    border-bottom: 0;
+    text-align: left !important;
+  }
+
+  .calc-table td::before {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--text3);
+    font-size: 0.66rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0;
+  }
+
+  .calc-table td:nth-child(1) {
+    grid-column: 1 / -1;
+  }
+
+  .calc-table td:nth-child(1)::before { content: "Subject"; }
+  .calc-table td:nth-child(2)::before { content: "Credits"; }
+  .calc-table td:nth-child(3)::before { content: "Grade"; }
+  .calc-table td:nth-child(4)::before { content: "Points"; }
+  .calc-table td:nth-child(5)::before { content: "Remove"; }
+
+  .calc-table .input-cell input,
+  .calc-table .input-cell select {
+    min-height: 38px;
+    font-size: 0.82rem;
+  }
+
+  .calc-table .calc-delete-cell button {
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    background: var(--red-light) !important;
+  }
+
+  .calc-results {
+    gap: 0.75rem;
+  }
+
+  .result-card {
+    padding: 1rem;
+  }
+
+  .result-big {
+    font-size: 2.6rem;
+  }
+
+  .grade-chart {
+    height: 54px;
+    gap: 3px;
+  }
+
+  #all-sems-list > div {
+    gap: 0.75rem;
+    overflow-wrap: anywhere;
+  }
+
+  .student-detail-head {
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .back-btn-compact {
+    padding: 0.42rem 0.72rem;
+    font-size: 0.78rem;
+  }
+}
+
 @media (max-width: 360px) {
   .admin-content,
   .cc-wizard-wrap,
@@ -4388,7 +4607,8 @@ body,
 
 .live-workshop-carousel {
   position: relative;
-  min-height: 260px;
+  min-height: 200px;
+  max-height: 220px;
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 1.5rem;
@@ -4470,23 +4690,280 @@ body,
   overflow: hidden;
 }
 
+.live-workshop-screen .live-workshop-main { width: 100%; max-width: none; margin: 0; }
+.live-workshop-topbar-actions { display: flex; align-items: center; gap: 0.45rem; }
+.live-workshop-topbar-actions .btn.active { color: var(--teal); background: var(--teal-light); }
+.live-workshop-brand { display: flex; align-items: center; gap: 0.5rem; margin-left: 0.35rem; }
+.live-workshop-brand span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: #fff; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--teal)); }
+
+.live-skillup-page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.live-skillup-banner {
+  min-height: 200px;
+  max-height: 220px;
+}
+
+.live-workshop-scroll-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(210px, 240px);
+  gap: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.1rem 0 0.7rem;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.live-workshop-scroll-row .live-workshop-card {
+  scroll-snap-align: start;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 270px;
+  padding: 0.8rem;
+  border-color: color-mix(in srgb, var(--skillup-accent, var(--primary)) 38%, var(--border));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--skillup-accent, var(--primary)) 18%, var(--surface)), var(--surface) 58%);
+}
+
+.live-workshop-scroll-row .live-workshop-card h3 {
+  font-size: 0.92rem;
+  line-height: 1.25;
+  margin: 0.55rem 0 0.35rem;
+}
+
+.live-workshop-scroll-row .live-workshop-card p {
+  font-size: 0.74rem;
+  line-height: 1.32;
+  margin: 0.18rem 0;
+}
+
+.live-workshop-scroll-row .live-workshop-card .btn {
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+.live-workshop-card-action {
+  margin-top: auto;
+  padding-top: 0.6rem;
+}
+
+.live-workshop-card-action .btn {
+  min-height: 32px;
+  padding: 0.38rem 0.8rem;
+  font-size: 0.76rem;
+}
+
+.live-workshop-info-pills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.45rem 0; }
+.live-workshop-info-pills span { max-width: 100%; padding: 0.24rem 0.48rem; overflow: hidden; color: var(--text2); font-size: 0.68rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; border: 1px solid color-mix(in srgb, var(--skillup-accent, var(--primary)) 35%, var(--border)); border-radius: 999px; background: color-mix(in srgb, var(--skillup-accent, var(--primary)) 10%, var(--surface2)); }
+.live-workshop-description { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+.skillup-theme-0 { --skillup-accent: #3b82f6; }
+.skillup-theme-1 { --skillup-accent: #8b5cf6; }
+.skillup-theme-2 { --skillup-accent: #22c55e; }
+.skillup-theme-3 { --skillup-accent: #f97316; }
+.skillup-theme-4 { --skillup-accent: #06b6d4; }
+
+.live-scroll-empty {
+  width: min(320px, 86vw);
+}
+
 .live-workshop-card-img {
-  width: calc(100% + 2.4rem);
-  max-width: calc(100% + 2.4rem);
-  height: 150px;
+  width: calc(100% + 1.6rem);
+  max-width: calc(100% + 1.6rem);
+  height: 92px;
   object-fit: cover;
   display: block;
-  margin: -1.2rem -1.2rem 1rem;
+  margin: -0.8rem -0.8rem 0.55rem;
 }
 
 .live-skillup-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1rem;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 250px);
+  gap: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.15rem 0 0.75rem;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
 }
 
 .live-skillup-card {
   cursor: default;
+  scroll-snap-align: start;
+}
+
+.live-courses-highlight { padding: 1rem; border: 1px solid color-mix(in srgb, var(--teal) 28%, var(--border)); border-radius: var(--radius-lg); background: linear-gradient(135deg, color-mix(in srgb, var(--teal) 8%, var(--surface)), var(--surface)); }
+
+.live-skillup-card .subject-icon {
+  font-size: 0.82rem;
+  width: auto;
+  min-width: 42px;
+  padding: 0 0.55rem;
+}
+
+.live-workshop-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.live-workshop-topbar .topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.live-workshop-brand {
+  flex: 0 0 auto;
+  margin-left: 0;
+}
+
+.live-workshop-brand span {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: #101827;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 10px 24px rgba(15,23,42,0.14);
+}
+
+.live-workshop-brand strong {
+  color: var(--text);
+  font-size: 0.98rem;
+  white-space: nowrap;
+  letter-spacing: 0;
+}
+
+.live-workshop-carousel,
+.live-skillup-banner {
+  min-height: 150px;
+  max-height: 170px;
+  border-radius: 16px;
+}
+
+.live-workshop-carousel-copy h1 {
+  font-size: clamp(1.25rem, 2.6vw, 2rem);
+  max-width: 620px;
+}
+
+.live-workshop-scroll-row {
+  grid-auto-columns: minmax(224px, 252px);
+  gap: 0.85rem;
+  scroll-behavior: smooth;
+}
+
+.live-workshop-scroll-row .live-workshop-card {
+  min-height: 0;
+  padding: 0.72rem;
+  border: 1px solid rgba(148,163,184,0.26);
+  border-radius: 18px;
+  background: #111827;
+  box-shadow: 0 12px 28px rgba(15,23,42,0.16);
+  color: #f8fafc;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.live-workshop-scroll-row .live-workshop-card:hover {
+  transform: scale(0.985);
+  border-color: rgba(148,163,184,0.46);
+  box-shadow: 0 10px 22px rgba(15,23,42,0.2);
+}
+
+.live-workshop-scroll-row .live-workshop-card h3 {
+  color: #f8fafc;
+  font-size: 0.9rem;
+  margin: 0.48rem 0 0.38rem;
+}
+
+.live-workshop-scroll-row .live-workshop-card p {
+  color: #cbd5e1;
+}
+
+.live-workshop-info-pills {
+  margin: 0.35rem 0 0.45rem;
+}
+
+.live-workshop-info-pills span {
+  color: #dbeafe;
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.12);
+  font-size: 0.66rem;
+  padding: 0.22rem 0.48rem;
+}
+
+.live-workshop-card-img {
+  width: calc(100% + 1.44rem);
+  max-width: calc(100% + 1.44rem);
+  height: 76px;
+  margin: -0.72rem -0.72rem 0.48rem;
+  border-radius: 18px 18px 0 0;
+}
+
+.live-workshop-card-action {
+  padding-top: 0.5rem;
+}
+
+.live-workshop-card-action .btn,
+.live-workshop-scroll-row .live-workshop-card .btn {
+  min-height: 30px;
+  padding: 0.34rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+}
+
+.live-workshop-description {
+  -webkit-line-clamp: 2;
+  min-height: 2.05em;
+}
+
+.student-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+#page-units > .back-btn:not(.back-btn-compact) {
+  display: none;
+}
+
+.student-detail-head .units-header {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.back-btn-compact {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+  border: 1px solid rgba(148,163,184,0.24);
+  border-radius: 999px;
+  background: #111827;
+  color: #f8fafc;
+  padding: 0.48rem 0.8rem;
+  box-shadow: 0 8px 18px rgba(15,23,42,0.12);
+}
+
+.back-btn-compact::before {
+  content: "<";
+  font-weight: 800;
+}
+
+.back-btn-compact:hover {
+  background: #1f2937;
+  color: #fff;
+}
+
+.mobile-video-topic-title {
+  display: none;
 }
 
 .live-workshop-register-overlay {
@@ -4522,7 +4999,7 @@ body,
     top: 0;
     right: 0;
     bottom: 0;
-    left: var(--sidebar-w);
+    left: 0;
     width: auto;
     max-width: none;
     margin: 0;
@@ -4530,6 +5007,10 @@ body,
 }
 
 @media (max-width: 1024px) {
+  .live-workshop-scroll-row {
+    grid-auto-columns: minmax(220px, 42vw);
+  }
+
   .live-workshop-screen.active {
     flex-direction: column;
     height: 100vh;
@@ -4564,8 +5045,16 @@ body,
   }
 
   .live-workshop-carousel {
-    min-height: 220px;
+    min-height: 132px;
+    max-height: 148px;
   }
+
+  .live-workshop-scroll-row,
+  .live-skillup-grid { grid-auto-columns: minmax(220px, 86vw); }
+  .live-workshop-topbar { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .live-workshop-topbar-actions { flex-wrap: wrap; justify-content: flex-start; }
+  .live-workshop-topbar-actions .btn { padding: 0.35rem 0.5rem; font-size: 0.72rem; }
+  .live-workshop-brand strong { display: inline; }
 
   .live-workshop-carousel-slide {
     padding: 1.25rem;
