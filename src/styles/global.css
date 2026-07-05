@@ -5473,3 +5473,43 @@ body,
 
     box-shadow:0 20px 70px rgba(0,0,0,.45);
 }
+
+.live-workshop-scroll-row,
+.live-skillup-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 320px);
+  grid-template-columns: none;
+  overflow-x: auto !important;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}
+
+.live-workshop-scroll-row::-webkit-scrollbar,
+.live-skillup-grid::-webkit-scrollbar {
+  display: block;
+  height: 8px;
+}
+
+.live-workshop-scroll-row::-webkit-scrollbar-thumb,
+.live-skillup-grid::-webkit-scrollbar-thumb {
+  background: rgba(100,116,139,0.42);
+  border-radius: 999px;
+}
+
+.live-workshop-scroll-row .live-workshop-card,
+.live-skillup-grid .live-skillup-card {
+  scroll-snap-align: start;
+}
+
+@media (max-width: 640px) {
+  .live-workshop-scroll-row,
+  .live-skillup-grid {
+    grid-auto-columns: minmax(240px, 82vw);
+  }
+}

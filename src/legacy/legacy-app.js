@@ -1669,7 +1669,7 @@ function normalizeCalcSemLabel(label) {
 }
 
 function makeCalcSemester(semKey) {
-  return { id: 'sem-' + semKey, semKey, label: 'Semester ' + semKey, rows: [], sgpa: null, credits: 0 };
+  return { id: 'sem-' + semKey, semKey, label: semKey, rows: [], sgpa: null, credits: 0 };
 }
 
 function normalizeCalcRow(row = {}) {
@@ -1690,7 +1690,7 @@ function migrateCalcState() {
   const seen = new Set();
   APP.calcSemesters = (APP.calcSemesters || []).map((sem, index) => {
     const semKey = sem.semKey || normalizeCalcSemLabel(sem.label || String(index + 1));
-    const migrated = { ...makeCalcSemester(semKey), ...sem, semKey, label: 'Semester ' + semKey };
+    const migrated = { ...makeCalcSemester(semKey), ...sem, semKey, label: semKey };
     migrated.rows = (sem.rows || []).map(normalizeCalcRow);
     migrated.credits = Number(sem.credits || 0);
     return migrated;
@@ -1704,11 +1704,27 @@ function migrateCalcState() {
     const current = APP.calcSemesters.find(s => s.id === APP.currentSemId);
     if (!current && APP.calcSemesters.length) APP.currentSemId = APP.calcSemesters[0].id;
   }
+  ensurePrecedingCalcSemesters();
 }
 
 function getNextCalcSemesterKey() {
   const existing = new Set((APP.calcSemesters || []).map(s => s.semKey || normalizeCalcSemLabel(s.label)));
   return JNTUK_SEMESTERS.find(sem => !existing.has(sem)) || null;
+}
+
+function ensurePrecedingCalcSemesters() {
+  const semesters = APP.calcSemesters || [];
+  if (!semesters.length) return;
+  const present = new Set(semesters.map(s => s.semKey));
+  const maxIndex = semesters.reduce((max, sem) => Math.max(max, JNTUK_SEMESTERS.indexOf(sem.semKey)), -1);
+  for (let i = 0; i <= maxIndex; i += 1) {
+    const semKey = JNTUK_SEMESTERS[i];
+    if (!present.has(semKey)) {
+      semesters.push(makeCalcSemester(semKey));
+      present.add(semKey);
+    }
+  }
+  APP.calcSemesters = semesters.sort((a, b) => JNTUK_SEMESTERS.indexOf(a.semKey) - JNTUK_SEMESTERS.indexOf(b.semKey));
 }
 
 function legacyLoadCalcStateDisabled() {
@@ -2028,6 +2044,7 @@ const AIIENS_EXISTING_SUPABASE_SCHEMA = {
     'unit_name', 'topic_name', 'title', 'url', 'description', 'status',
     'created_at', 'approved_by', 'approved_at',
   ]),
+  student_cgpa_results: new Set(['id', 'user_id', 'semester_key', 'sgpa', 'cgpa', 'percentage', 'payload', 'calculated_at']),
   subject_syllabus: new Set(['id', 'subject_id', 'subject_name', 'drive_url', 'created_by', 'created_at', 'updated_at']),
   content_items: new Set(['id', 'subject_id', 'unit_id', 'content_type', 'title', 'body', 'url', 'metadata', 'created_by', 'created_at', 'updated_at']),
   subjects: new Set(['id', 'name', 'code', 'branch', 'regulation_code', 'semester', 'university_name', 'created_by', 'created_at']),
@@ -2074,6 +2091,7 @@ function normalizeCgpaPayload(row = {}) {
   return {
     currentSemId: payload.currentSemId || semesters[0]?.id || '',
     calcSemesters: semesters,
+    backlogSubjects: Array.isArray(payload.backlogSubjects) ? payload.backlogSubjects : [],
   };
 }
 
@@ -2082,9 +2100,12 @@ async function loadCalcState() {
   const id = await studentSupabaseUserId();
   if (!supabase || !id) return false;
   try {
-    verifyStudentSupabaseAccess('student_cgpa', [], 'CGPA load');
-    const { data, error } = await studentTableRequest('student_cgpa', [], (table) =>
-      table.select('*').limit(1)
+    verifyStudentSupabaseAccess('student_cgpa_results', [], 'CGPA load');
+    const { data, error } = await studentTableRequest('student_cgpa_results', [], (table) =>
+      table.select('id,user_id,semester_key,sgpa,cgpa,percentage,payload,calculated_at')
+        .eq('user_id', id)
+        .order('calculated_at', { ascending: false })
+        .limit(1)
     , 'CGPA load');
     if (error) throw error;
     const row = data?.[0] || null;
@@ -2092,7 +2113,9 @@ async function loadCalcState() {
     if (parsed.calcSemesters.length) {
       APP.calcSemesters = parsed.calcSemesters;
       APP.currentSemId = parsed.currentSemId || parsed.calcSemesters[0].id;
+      APP.backlogSubjects = parsed.backlogSubjects || [];
       migrateCalcState();
+      syncBacklogFromCalcSemesters();
       return true;
     }
   } catch (error) {
@@ -2102,18 +2125,38 @@ async function loadCalcState() {
 }
 
 async function saveCalcState() {
+  const supabase = window.__AIMEASY_SUPABASE__;
   const id = await studentSupabaseUserId();
-  if (!id) return;
+  if (!supabase || !id) return;
   const semesters = APP.calcSemesters || [];
   const calcdSems = semesters.filter(s => s.sgpa !== null && s.sgpa !== undefined && Number(s.credits || 0) > 0);
   const latest = semesters.find(s => s.id === APP.currentSemId) || calcdSems[calcdSems.length - 1] || semesters[0] || {};
   const cgpa = calcdSems.length ? Number(calculateWeightedCgpa(calcdSems).toFixed(2)) : Number(latest.sgpa || 0);
   const sgpa = Number(latest.sgpa || 0);
-  const payload = { currentSemId: APP.currentSemId || null, semesters };
+  const percentage = Number(Math.max(0, Math.min(100, (cgpa - 0.75) * 10)).toFixed(2));
+  const payload = { currentSemId: APP.currentSemId || null, semesters, backlogSubjects: syncBacklogFromCalcSemesters(false) };
   try {
-    verifyStudentSupabaseAccess('student_cgpa', [], 'CGPA save');
-    reportSupabaseSchemaGap('CGPA save skipped', `student_cgpa is not defined in supabase/schema.sql; calculator payload was not saved (${payload.semesters.length} semester(s)).`);
-    const { error } = { error: null };
+    verifyStudentSupabaseAccess('student_cgpa_results', ['user_id', 'semester_key', 'sgpa', 'cgpa', 'percentage', 'payload', 'calculated_at'], 'CGPA save');
+    const row = {
+      user_id: id,
+      semester_key: latest.semKey || normalizeCalcSemLabel(latest.label),
+      sgpa,
+      cgpa,
+      percentage,
+      payload,
+      calculated_at: new Date().toISOString(),
+    };
+    const { data: existing, error: lookupError } = await supabase
+      .from('student_cgpa_results')
+      .select('id')
+      .eq('user_id', id)
+      .order('calculated_at', { ascending: false })
+      .limit(1);
+    if (lookupError) throw lookupError;
+    const latestId = existing?.[0]?.id;
+    const { error } = latestId
+      ? await supabase.from('student_cgpa_results').update(row).eq('id', latestId).eq('user_id', id)
+      : await supabase.from('student_cgpa_results').insert(row);
     if (error) throw error;
     window.aiiensProgressService?.track?.('gpa_calculated', { cgpa, sgpa });
   } catch (error) {
@@ -2133,7 +2176,50 @@ function saveCurrentSemRows() {
     dbId: row.dataset.dbId || null,
     code: row.dataset.code || '',
   })).filter(row => row.name || row.isCustom || row.dbId);
+  syncBacklogFromCalcSemesters();
   saveCalcState();
+}
+
+function syncBacklogFromCalcSemesters(updateBadge = true) {
+  const backlog = [];
+  const seen = new Set();
+  (APP.calcSemesters || []).forEach((sem) => {
+    (sem.rows || []).map(normalizeCalcRow).forEach((row) => {
+      if (row.grade !== 'F') return;
+      const name = row.name || 'Unknown Subject';
+      const key = [sem.semKey, row.dbId || row.code || name].join(':');
+      if (seen.has(key)) return;
+      seen.add(key);
+      backlog.push({
+        key,
+        name,
+        semKey: sem.semKey,
+        label: sem.label || sem.semKey,
+        subjectId: row.dbId || null,
+        dbId: row.dbId || null,
+        code: row.code || '',
+        credits: row.credits || '0',
+      });
+    });
+  });
+  APP.backlogSubjects = backlog;
+  if (updateBadge) {
+    const badge = document.getElementById('backlog-badge');
+    if (badge) badge.textContent = String(backlog.length);
+  }
+  return backlog;
+}
+
+function renderCalcRowsForSemester(sem) {
+  const tbody = document.getElementById('calc-tbody');
+  if (!tbody || !sem) return;
+  tbody.innerHTML = '';
+  APP.calcRows = [];
+  if (!sem.rows?.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:1.3rem;">No saved subjects for this semester yet.</td></tr>';
+    return;
+  }
+  sem.rows.map(normalizeCalcRow).forEach(row => addCalcRow(row));
 }
 
 function calculateWeightedCgpa(semesters) {
@@ -2204,6 +2290,22 @@ async function loadSubjectsForCurrentSemester() {
         dbId: subject.id,
         code: subject.code || '',
       }));
+    } else if (window.__AIMEASY_SUPABASE__) {
+      let query = window.__AIMEASY_SUPABASE__.from('subjects').select('*').eq('semester', filters.semester);
+      if (filters.branch) query = query.eq('branch', filters.branch);
+      if (filters.regulation_code) query = query.eq('regulation_code', filters.regulation_code);
+      if (filters.university_name) query = query.eq('university_name', filters.university_name);
+      const { data, error } = await query.order('name', { ascending: true });
+      if (error) throw error;
+      const gradeByDbId = new Map((sem.rows || []).filter(row => row.dbId).map(row => [String(row.dbId), row.grade]));
+      autoRows = (data || []).filter(isPublishedSubject).map(subject => ({
+        name: subject.name,
+        credits: String(subject.credits || '0'),
+        grade: gradeByDbId.get(String(subject.id)) || 'A',
+        isCustom: false,
+        dbId: subject.id,
+        code: subject.code || '',
+      }));
     }
   } catch (error) {
     console.warn('[Calculator] Subject auto-load failed', error?.message || error);
@@ -2233,7 +2335,9 @@ async function initCalc() {
   renderCalcSemTitle();
   const tbody = document.getElementById('calc-tbody');
   if (tbody && !tbody.children.length) {
-    await loadSubjectsForCurrentSemester();
+    const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+    if (sem?.rows?.length) renderCalcRowsForSemester(sem);
+    else await loadSubjectsForCurrentSemester();
   }
   calculateGPA({ silent: true });
   updateAddSemesterState();
@@ -2265,7 +2369,8 @@ async function switchSem(semId) {
   const sem = APP.calcSemesters.find(s => s.id === semId);
   document.getElementById('calc-tbody').innerHTML = '';
   APP.calcRows = [];
-  await loadSubjectsForCurrentSemester();
+  if (sem?.rows?.length) renderCalcRowsForSemester(sem);
+  else await loadSubjectsForCurrentSemester();
   renderSemTabs();
   renderCalcSemTitle();
   document.getElementById('sgpa-result').textContent = sem?.sgpa !== null && sem?.sgpa !== undefined ? Number(sem.sgpa).toFixed(2) : 'â€“';
@@ -2352,7 +2457,9 @@ async function renderCalc() {
     renderSemTabs();
     renderCalcSemTitle();
     if (!document.getElementById('calc-tbody').children.length) {
-      await loadSubjectsForCurrentSemester();
+      const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+      if (sem?.rows?.length) renderCalcRowsForSemester(sem);
+      else await loadSubjectsForCurrentSemester();
     }
     calculateGPA({ silent: true });
   }
@@ -2376,6 +2483,16 @@ function calculateGPA(options = {}) {
     gradeCount[grade] = (gradeCount[grade] || 0) + 1;
   });
   if (!totalCredits) {
+    saveCurrentSemRows();
+    const backlog = syncBacklogFromCalcSemesters();
+    const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+    const failedThisSem = backlog.filter(item => item.semKey === sem?.semKey);
+    const badge = document.getElementById('backlog-badge');
+    if (badge) badge.textContent = String(backlog.length);
+    if (failedThisSem.length) {
+      document.getElementById('backlog-warn').style.display = 'block';
+      document.getElementById('backlog-warn-subjects').textContent = `Subjects moved to Backlog: ${failedThisSem.map(item => `${item.semKey} ${item.name}`).join(', ')}`;
+    }
     if (!options.silent) showToast('Add credit-bearing subjects first', 'red');
     return;
   }
@@ -2383,6 +2500,8 @@ function calculateGPA(options = {}) {
   const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
   if (sem) { sem.sgpa = sgpa; sem.credits = totalCredits; }
   saveCurrentSemRows();
+  const backlog = syncBacklogFromCalcSemesters();
+  const failedThisSem = backlog.filter(item => item.semKey === sem?.semKey);
   renderSemTabs();
   document.getElementById('sgpa-result').textContent = sgpa.toFixed(2);
   document.getElementById('sgpa-grade').textContent = sgpa >= 9 ? 'Outstanding' : sgpa >= 8 ? 'Excellent' : sgpa >= 7 ? 'Very Good' : sgpa >= 6 ? 'Good' : sgpa >= 5 ? 'Pass' : 'Needs Improvement';
@@ -2413,13 +2532,12 @@ function calculateGPA(options = {}) {
         '<div style="width:100%;height:' + h + 'px;border-radius:4px 4px 0 0;background:' + (colors[g] || 'var(--border)') + ';transition:height 0.5s;"></div>' +
         '<div style="font-size:0.65rem;font-weight:700;color:var(--text3);text-align:center;">' + calcHtml(g) + '</div></div>';
     }).join('') + '</div>';
-  if (failed.length > 0) {
-    APP.backlogSubjects = [...new Set([...APP.backlogSubjects, ...failed])];
+  if (failedThisSem.length > 0) {
     const badge = document.getElementById('backlog-badge');
-    if (badge) badge.textContent = APP.backlogSubjects.length;
+    if (badge) badge.textContent = String(backlog.length);
     document.getElementById('backlog-warn').style.display = 'block';
-    document.getElementById('backlog-warn-subjects').textContent = `Subjects moved to Backlog: ${failed.join(', ')}`;
-    if (!options.silent) showToast(`${failed.length} backlog subject(s) detected!`, 'red');
+    document.getElementById('backlog-warn-subjects').textContent = `Subjects moved to Backlog: ${failedThisSem.map(item => `${item.semKey} ${item.name}`).join(', ')}`;
+    if (!options.silent) showToast(`${failedThisSem.length} backlog subject(s) detected!`, 'red');
   } else {
     document.getElementById('backlog-warn').style.display = 'none';
     if (!options.silent) showToast(`SGPA: ${sgpa} - Great work!`, 'green');
@@ -2649,6 +2767,7 @@ function openSkillCourse(id) {
 // ═══════════════════════════════════════════════════
 function renderBacklog() {
   const grid = document.getElementById('backlog-grid');
+  syncBacklogFromCalcSemesters();
   if (!APP.backlogSubjects.length) {
     grid.innerHTML = `<div class="backlog-empty">
       <div class="empty-icon">🎉</div>
@@ -2657,6 +2776,31 @@ function renderBacklog() {
     </div>`;
     return;
   }
+  const backlogCards = APP.backlogSubjects.map((item, i) => {
+    const s = typeof item === 'string' ? { key: item, name: item, semKey: '', code: '', credits: '3' } : item;
+    const semBadge = s.semKey ? '<span class="badge badge-red" style="margin-left:8px;">' + calcHtml(s.semKey) + '</span>' : '';
+    return `
+    <div class="subject-card" onclick="openBacklogSubject('${calcHtml(s.key || s.name)}')" style="animation-delay:${i * 0.07}s">
+      <div class="subject-card-header" style="background:linear-gradient(135deg,var(--red-light),#fff);">
+        <div class="subject-icon">!</div>
+        <div class="subject-name">${calcHtml(s.name)} ${semBadge}</div>
+        <div class="subject-code">${calcHtml(s.code || 'Backlog')} - Needs Attention</div>
+      </div>
+      <div class="subject-card-body">
+        <div class="subject-meta">
+          <span class="badge badge-red">Backlog</span>
+          <span class="badge badge-primary">${calcHtml(s.credits || '0')} Cr</span>
+        </div>
+        <div class="subject-progress-row">
+          <span class="subject-progress-label">Completion</span>
+          <span class="subject-progress-val" style="color:var(--red);">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:0%;background:var(--red);"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+  grid.innerHTML = `<div class="subject-grid">${backlogCards}</div>`;
+  return;
   grid.innerHTML = `<div class="subject-grid">${APP.backlogSubjects.map((s, i) => `
     <div class="subject-card" onclick="openBacklogSubject('${s}')" style="animation-delay:${i * 0.07}s">
       <div class="subject-card-header" style="background:linear-gradient(135deg,var(--red-light),#fff);">
@@ -2679,6 +2823,33 @@ function renderBacklog() {
 }
 
 function openBacklogSubject(name) {
+  const item = (APP.backlogSubjects || []).find(s => {
+    if (typeof s === 'string') return s === name;
+    return s.key === name || s.name === name;
+  });
+  if (item && typeof item === 'object') {
+    const rawId = item.subjectId || item.dbId || '';
+    APP.currentSubject = {
+      id: rawId ? 'custom_' + rawId : 'default',
+      rawId: rawId || undefined,
+      name: item.name || name,
+      code: item.code || '',
+      sem: item.semKey || '',
+      semester: item.semKey || '',
+      icon: '!',
+      credits: Number(item.credits || 3) || 3,
+      progress: 0,
+      isCustom: Boolean(rawId),
+    };
+    document.querySelectorAll('[id^="page-"]').forEach(p => p.style.display = 'none');
+    document.getElementById('page-units').style.display = 'block';
+    document.getElementById('units-subject-name').textContent = `! ${APP.currentSubject.name}`;
+    document.getElementById('units-tags').innerHTML = `<span class="badge badge-red">Backlog</span>${APP.currentSubject.sem ? `<span class="badge badge-primary">${calcHtml(APP.currentSubject.sem)}</span>` : ''}<span class="badge badge-teal">${APP.currentSubject.credits} Credits</span>`;
+    document.getElementById('topbar-title').textContent = APP.currentSubject.name;
+    document.getElementById('topbar-breadcrumb').innerHTML = `Backlog / <span>${calcHtml(APP.currentSubject.name)}</span>`;
+    renderUnits(APP.currentSubject);
+    return;
+  }
   APP.currentSubject = { id: 'default', name, icon: '⚠️', credits: 3, progress: 0 };
   document.querySelectorAll('[id^="page-"]').forEach(p => p.style.display = 'none');
   document.getElementById('page-units').style.display = 'block';
