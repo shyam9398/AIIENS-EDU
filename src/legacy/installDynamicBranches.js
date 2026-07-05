@@ -19,7 +19,7 @@ import {
 } from '../repositories/universityRepository.js';
 
 async function preloadRuntimeBranches(universityName = null) {
-  const rows = await fetchActiveBranches({ universityName });
+  const rows = await fetchActiveBranches({ universityName, includeGlobalBranches: true });
   window.__aiiensRuntimeBranchNames = rows.map((row) => row.name);
   window.__aiiensCatalogBranches = rows;
   return window.__aiiensRuntimeBranchNames;

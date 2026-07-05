@@ -52,6 +52,11 @@ import {
   deleteUnit,
 } from '../repositories/unitRepository.js';
 import {
+  deleteSubjectSyllabus,
+  fetchSubjectSyllabus,
+  upsertSubjectSyllabus,
+} from '../repositories/syllabusRepository.js';
+import {
   createCurriculumBlueprint,
   fetchWorkflowDashboardCounts,
   listCurriculumContent,
@@ -1040,6 +1045,9 @@ if (!/^[0-9]{10}$/.test(phone)) {
   window.aimeasyCreateUnit = withCurriculumRefresh(createUnit, 'unit');
   window.aimeasyUpdateUnit = withCurriculumRefresh(updateUnit, 'unit');
   window.aimeasyDeleteUnit = withCurriculumRefresh(deleteUnit, 'unit');
+  window.aimeasyFetchSyllabus = fetchSubjectSyllabus;
+  window.aimeasySaveSyllabus = withCurriculumRefresh(upsertSubjectSyllabus, 'syllabus');
+  window.aimeasyDeleteSyllabus = withCurriculumRefresh(deleteSubjectSyllabus, 'syllabus');
   window.aimeasyCreateCurriculumBlueprint = createCurriculumBlueprint;
   window.aimeasyListCurriculums = listCurriculums;
   window.aimeasyListCurriculumContent = listCurriculumContent;

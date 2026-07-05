@@ -541,17 +541,18 @@ function patchVideoApproval() {
     if (!value) return '-';
     try { return new Date(value).toLocaleString(); } catch { return String(value); }
   };
+  const normalizeStatus = (value) => String(value || 'pending').trim().toLowerCase();
 
   async function fetchSuggestionCounts(supabase) {
-    const statuses = ['pending', 'approved', 'rejected'];
-    const counts = {};
-    await Promise.all(statuses.map(async (status) => {
-      const { count, error } = await supabase
-        .from('student_url_suggestions')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', status);
-      counts[status] = error ? 0 : (count || 0);
-    }));
+    const counts = { pending: 0, approved: 0, rejected: 0 };
+    const { data, error } = await supabase
+      .from('student_url_suggestions')
+      .select('status');
+    if (error) return counts;
+    (data || []).forEach((row) => {
+      const status = normalizeStatus(row.status);
+      if (counts[status] !== undefined) counts[status] += 1;
+    });
     return counts;
   }
 
@@ -559,11 +560,10 @@ function patchVideoApproval() {
     const supabase = sb();
     const badge = document.getElementById('admin-approval-badge');
     if (!badge || !supabase) return;
-    const { count, error } = await supabase
+    const { data, error } = await supabase
       .from('student_url_suggestions')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'pending');
-    const pending = error ? 0 : (count || 0);
+      .select('id, status');
+    const pending = error ? 0 : (data || []).filter((row) => normalizeStatus(row.status) === 'pending').length;
     badge.textContent = String(pending);
     badge.style.display = pending ? 'inline-flex' : 'none';
   }
@@ -583,14 +583,12 @@ function patchVideoApproval() {
     let result = await supabase
       .from('student_url_suggestions')
       .select(fullSelect)
-      .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
     if (result.error && /branch|university|regulation|subject_name|unit_name|topic_name|student_name/i.test(result.error.message || '')) {
       result = await supabase
         .from('student_url_suggestions')
         .select('id, topic_name, url, description, status, created_at, student_id, subject_id, unit_id, topic_id, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)')
-        .eq('status', 'pending')
         .order('created_at', { ascending: false });
     }
 
@@ -600,7 +598,7 @@ function patchVideoApproval() {
       return;
     }
 
-    const requests = result.data || [];
+    const requests = (result.data || []).filter((request) => normalizeStatus(request.status) === 'pending');
     const counts = await fetchSuggestionCounts(supabase);
     await updateApprovalBadge();
 
@@ -1383,6 +1381,18 @@ function setupRealtimeChannels() {
       await window.aiiensRenderBranchList?.();
       await refreshCatalog();
       await refreshCatalogUi(document);
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'student_url_suggestions' }, async () => {
+      await window.aiiensRefreshUrlApprovalBadge?.();
+      const activeScreen = document.querySelector('.screen.active')?.id;
+      const adminSection = document.querySelector('#screen-admin .admin-nav-item.active')?.id?.replace('admin-nav-', '');
+      const subadminSection = document.querySelector('#screen-subadmin .admin-nav-item.active')?.id?.replace('sa-nav-', '');
+      if (activeScreen === 'screen-admin' && ['approvals', 'url-approvals', 'urls'].includes(adminSection)) {
+        await window.renderApprovalLinksProduction?.('admin');
+      }
+      if (activeScreen === 'screen-subadmin' && ['urls', 'approvals', 'url-approvals'].includes(subadminSection)) {
+        await window.renderApprovalLinksProduction?.('subadmin');
+      }
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'regulations' }, () => {
       window.aimeasyRefreshRegulationUI?.();

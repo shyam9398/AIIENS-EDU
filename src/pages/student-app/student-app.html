@@ -122,17 +122,29 @@
 
         <div class="dash-row-3">
           <div class="progress-tracker" style="animation:fadeIn 0.4s 0.25s ease both">
-            <div class="section-heading">📈 Weekly Progress</div>
+            <div class="section-heading">Learning Progress</div>
+            <div class="weekly-summary compact-weekly-summary">
+              <div><strong>0%</strong><span>Weekly Completion</span></div>
+              <div><strong>0</strong><span>Units Completed</span></div>
+              <div><strong>0</strong><span>Active Subjects</span></div>
+              <div><strong>0</strong><span>Learning Sessions</span></div>
+            </div>
+            <div class="weekly-mini-progress" role="progressbar" aria-label="Overall learning completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span style="width:0%"></span></div>
           </div>
 
           <div class="card" style="animation:fadeIn 0.4s 0.3s ease both">
             <div class="section-heading">🕐 Recently Opened Subjects</div>
-            <div id="recently-opened-list"></div>
+            <div id="recently-opened-list"><div class="empty-state-card">No subjects opened yet.</div></div>
           </div>
 
           <div class="card" style="animation:fadeIn 0.4s 0.35s ease both">
             <div class="section-heading">🎖️ Achievements</div>
-            <div id="achievements-list" class="achievement-grid"></div>
+            <div id="achievements-list" class="achievement-grid">
+              <div class="achievement-card locked"><div class="achievement-icon">Lock</div><div>First Subject Opened</div><div class="achievement-progress"><span style="width:25%"></span></div></div>
+              <div class="achievement-card locked"><div class="achievement-icon">Lock</div><div>First Unit Completed</div><div class="achievement-progress"><span style="width:25%"></span></div></div>
+              <div class="achievement-card locked"><div class="achievement-icon">Lock</div><div>5 Units Completed</div><div class="achievement-progress"><span style="width:25%"></span></div></div>
+              <div class="achievement-card locked"><div class="achievement-icon">Lock</div><div>10 Units Completed</div><div class="achievement-progress"><span style="width:25%"></span></div></div>
+            </div>
           </div>
         </div>
       </div>

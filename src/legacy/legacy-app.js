@@ -457,6 +457,7 @@ window.resolveAppUser = resolveAppUser;
 function navigateTo(page) {
   console.log('[LEGACY NAVIGATE]', page);
   try { closeSidebar?.(); } catch {}
+  if (page !== 'unit-content') stopStudentVideoPlayback?.();
   // Hide all pages
   document.querySelectorAll('[id^="page-"]').forEach(p => p.style.display = 'none');
   // Update nav
@@ -720,6 +721,7 @@ async function renderUnits(subj) {
   grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text3);"><div style="font-size:3rem;margin-bottom:1rem;">⏳</div><div style="font-weight:700;font-size:1rem;">Loading units...</div></div>';
 
   let units = [];
+  let syllabus = null;
   const rawSubjectId = subj.rawId || subj.id.toString().replace('custom_', '');
 
   if (window.aimeasyFetchUnits) {
@@ -729,15 +731,15 @@ async function renderUnits(subj) {
     }
   }
 
-  if (!units.length) {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text3);"><div style="font-size:2.5rem;margin-bottom:0.8rem;">\u{1F4CB}</div><div style="font-weight:700;">No units defined yet</div><div style="font-size:0.82rem;margin-top:4px;">The Sub Admin has not created units for this subject yet.</div></div>';
-    return;
+  if (window.aimeasyFetchSyllabus) {
+    const { data } = await window.aimeasyFetchSyllabus(rawSubjectId);
+    syllabus = data || null;
   }
 
   const branch = subj.branch || APP.user?.branch || APP.user?.branch_name || '';
   // Legacy completed topics cache removed – fetching from Supabase directly
 
-  grid.innerHTML = units.map((u, i) => {
+  const unitCards = units.map((u, i) => {
     // In Supabase architecture, we don't fetch all nested counts synchronously to keep the list fast
     // These will be detailed inside the unit content view
     const topicCount = 0;
@@ -767,6 +769,27 @@ async function renderUnits(subj) {
       + '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>'
       + '</div></div>';
   }).join('');
+
+  const syllabusUrl = syllabus?.drive_url || syllabus?.url || '';
+  const syllabusCard = '<div class="unit-card syllabus-unit-card" onclick="openSyllabusPreview(\'' + v10EscapeJs(syllabusUrl) + '\')" style="animation-delay:' + (units.length * 0.07) + 's">'
+    + '<div class="unit-num">PDF</div>'
+    + '<div class="unit-name">Syllabus</div>'
+    + '<div class="unit-topics">' + (syllabusUrl ? 'Open syllabus preview' : 'Syllabus not added yet') + '</div>'
+    + '<div style="display:flex;gap:6px;justify-content:center;margin-bottom:10px;flex-wrap:wrap;">'
+    + '<span class="badge badge-primary">' + (syllabusUrl ? 'Preview' : 'Pending') + '</span>'
+    + (syllabusUrl ? '<button class="btn btn-ghost btn-sm" type="button" onclick="event.stopPropagation();openSyllabusPreview(\'' + v10EscapeJs(syllabusUrl) + '\')">View</button>' : '')
+    + '</div>'
+    + '<div class="unit-progress-wrap">'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
+    + '<span style="font-size:0.72rem;color:var(--text3);">Subject</span>'
+    + '<span style="font-size:0.72rem;font-weight:700;color:var(--primary);">Syllabus</span>'
+    + '</div>'
+    + '<div class="progress-bar"><div class="progress-fill" style="width:' + (syllabusUrl ? 100 : 0) + '%"></div></div>'
+    + '</div></div>';
+
+  grid.innerHTML = unitCards
+    ? unitCards + syllabusCard
+    : '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text3);"><div style="font-size:2.5rem;margin-bottom:0.8rem;">\u{1F4CB}</div><div style="font-weight:700;">No units defined yet</div><div style="font-size:0.82rem;margin-top:4px;">The Sub Admin has not created units for this subject yet.</div></div>' + syllabusCard;
 }
 
 // ═══════════════════════════════════════════════════
@@ -811,6 +834,7 @@ function openUnit(unitNum, subjectId) {
 }
 
 function switchTab(tab) {
+  if (tab !== 'videos') stopStudentVideoPlayback?.();
   // UPDATE: Fix tab switching — deactivate all panes and buttons first
   document.querySelectorAll('.content-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-pane').forEach(p => {
@@ -830,6 +854,7 @@ function switchTab(tab) {
 }
 
 function backToUnits() {
+  stopStudentVideoPlayback?.();
   document.querySelectorAll('[id^="page-"]').forEach(p => p.style.display = 'none');
   document.getElementById('page-units').style.display = 'block';
   document.getElementById('topbar-title').textContent = APP.currentSubject?.name || 'Subject';
@@ -979,6 +1004,32 @@ function storeStudentVideoPosition(item, idx, seconds) {
   sessionStorage.setItem(studentVideoResumeKey(item, idx), String(Math.max(0, Math.floor(seconds))));
 }
 
+function stopStudentVideoPlayback({ clear = false } = {}) {
+  const wrapper = document.getElementById('video-embed-wrapper') || document.querySelector('.video-embed-wrapper');
+  try { window.aimeasyStudentVideoPlayer?.pauseVideo?.(); } catch {}
+  try { window.aimeasyStudentVideoPlayer?.stopVideo?.(); } catch {}
+  try { window.aimeasyStudentVideoPlayer?.destroy?.(); } catch {}
+  window.aimeasyStudentVideoPlayer = null;
+  wrapper?.querySelectorAll('video').forEach((video) => {
+    try {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    } catch {}
+  });
+  wrapper?.querySelectorAll('iframe').forEach((iframe) => {
+    try {
+      iframe.src = 'about:blank';
+      iframe.removeAttribute('src');
+    } catch {}
+  });
+  if (wrapper) delete wrapper.dataset.videoKey;
+  if (clear && wrapper) {
+    wrapper.innerHTML = '<div class="video-placeholder"><div style="font-size:3rem;margin-bottom:4px;">Video</div><div style="opacity:0.75;font-size:0.95rem;color:#fff;">Select the Videos tab to continue watching.</div></div>';
+  }
+}
+window.stopStudentVideoPlayback = stopStudentVideoPlayback;
+
 function ensureYouTubeIframeApi(callback) {
   if (window.YT?.Player) {
     callback();
@@ -1004,44 +1055,13 @@ function ensureYouTubeIframeApi(callback) {
 
 function renderStudentYouTubeVideo(wrapper, item, idx, videoId, title) {
   const startSeconds = studentVideoStartSeconds(item, idx);
-  wrapper.innerHTML = '<div id="student-video-player" style="width:100%;height:100%;border-radius:var(--radius-lg);overflow:hidden;"></div>';
+  stopStudentVideoPlayback?.();
+  const src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&enablejsapi=1&playsinline=1&rel=0&modestbranding=1&start=${startSeconds}`;
+  wrapper.dataset.videoKey = `youtube:${idx}:${videoId}`;
+  wrapper.innerHTML = `<iframe id="student-video-player" width="100%" height="100%" src="${src}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="border-radius:var(--radius-lg);"></iframe>`;
   console.log('[VIDEO] Embed Created', { videoId, title, startSeconds });
   window.aimeasyStudentVideoPlayer = null;
-  ensureYouTubeIframeApi(() => {
-    const host = document.getElementById('student-video-player');
-    if (!host) return;
-    window.aimeasyStudentVideoPlayer = new YT.Player('student-video-player', {
-      width: '100%',
-      height: '100%',
-      videoId,
-      playerVars: {
-        autoplay: 1,
-        start: startSeconds,
-        rel: 0,
-      },
-      events: {
-        onReady(event) {
-          if (startSeconds > 0) event.target.seekTo(startSeconds, true);
-          event.target.playVideo();
-          console.log('[VIDEO] Player Loaded', { videoId, title });
-          console.log('[STUDENT] Video Loaded', { videoId, title });
-        },
-        onStateChange(event) {
-          const player = event.target;
-          if (player?.getCurrentTime) {
-            storeStudentVideoPosition(item, idx, player.getCurrentTime());
-          }
-        }
-      }
-    });
-  });
-  const fallbackSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&start=${startSeconds}`;
-  window.setTimeout(() => {
-    const host = document.getElementById('student-video-player');
-    if (host && !host.querySelector('iframe') && !window.aimeasyStudentVideoPlayer) {
-      host.outerHTML = `<iframe id="student-video-player" width="100%" height="100%" src="${fallbackSrc}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="border-radius:var(--radius-lg);"></iframe>`;
-    }
-  }, 1200);
+  console.log('[STUDENT] Video Loaded', { videoId, title });
 }
 
 window.aimeasySaveStudentVideoPosition = function aimeasySaveStudentVideoPosition() {
@@ -7191,7 +7211,7 @@ async function v10SASubjects(forceRefresh) {
       <h2 style="font-size:1.4rem;font-weight:800;letter-spacing:-.02em;">📚 My Subjects (${mySubs.length})</h2>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost btn-sm" onclick="v10SASubjects()">🔄 Refresh</button>
-        <button class="btn btn-primary" onclick="document.getElementById('v10-sa-create-form').style.display='block';document.getElementById('v10-sa-create-form').scrollIntoView({behavior:'smooth'})">+ Add Subject</button>
+        <button class="btn btn-primary" onclick="window.v10SAOpenCreateSubjectForm ? window.v10SAOpenCreateSubjectForm() : (document.getElementById('v10-sa-create-form').style.display='block', document.getElementById('v10-sa-create-form').scrollIntoView({behavior:'smooth'}))">+ Add Subject</button>
       </div>
     </div>
     ${createForm}
@@ -9316,7 +9336,9 @@ function achievementList(subjects) {
 }
 
 function formatRecentTime(iso) {
-  const diffMs = Date.now() - new Date(iso).getTime();
+  const time = new Date(iso).getTime();
+  if (!Number.isFinite(time)) return 'Recently';
+  const diffMs = Date.now() - time;
   const mins = Math.max(0, Math.floor(diffMs / 60000));
   if (mins < 1) return 'Just now';
   if (mins < 60) return `${mins} min ago`;
@@ -9325,6 +9347,42 @@ function formatRecentTime(iso) {
   const days = Math.floor(hours / 24);
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
+
+function syllabusPreviewUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  const driveFile = raw.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+  if (driveFile?.[1]) return `https://drive.google.com/file/d/${driveFile[1]}/preview`;
+  const driveOpen = raw.match(/drive\.google\.com\/open\?id=([^&]+)/i);
+  if (driveOpen?.[1]) return `https://drive.google.com/file/d/${driveOpen[1]}/preview`;
+  const driveUc = raw.match(/drive\.google\.com\/uc\?[^#]*id=([^&]+)/i);
+  if (driveUc?.[1]) return `https://drive.google.com/file/d/${driveUc[1]}/preview`;
+  return raw;
+}
+
+function openSyllabusPreview(url) {
+  const preview = syllabusPreviewUrl(url);
+  if (!preview) {
+    showToast?.('Syllabus link is not available yet.', 'amber');
+    return;
+  }
+  if (typeof previewNoteInline === 'function') {
+    previewNoteInline(preview, 'Syllabus');
+    return;
+  }
+
+  const modal = document.getElementById('note-preview-modal');
+  const bodyEl = document.getElementById('note-preview-body');
+  const titleEl = document.getElementById('note-preview-title');
+  const dlBtn = document.getElementById('note-download-btn');
+  if (!modal || !bodyEl) return;
+  if (titleEl) titleEl.textContent = 'Syllabus';
+  if (dlBtn) dlBtn.onclick = function () { downloadNote(preview, 'Syllabus'); };
+  bodyEl.innerHTML = `<iframe src="${v10EscapeAttr(preview)}" allow="autoplay"></iframe>`;
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+window.openSyllabusPreview = openSyllabusPreview;
 
 function updateStudentDashboardMetrics() {
   loadCalcState();
@@ -9376,13 +9434,18 @@ function updateStudentDashboardMetrics() {
   if (progressTracker) {
     const heading = progressTracker.querySelector('.section-heading');
     progressTracker.innerHTML = '';
-    if (heading) progressTracker.appendChild(heading);
+    if (heading) {
+      heading.textContent = 'Learning Progress';
+      progressTracker.appendChild(heading);
+    }
     progressTracker.insertAdjacentHTML('beforeend', `
-      <div class="weekly-summary">
+      <div class="weekly-summary compact-weekly-summary">
         <div><strong>${weekly.weeklyCompletion}%</strong><span>Weekly Completion</span></div>
-        <div><strong>${weekly.unitsCompleted}</strong><span>Units Completed This Week</span></div>
-        <div><strong>${weekly.subjectsActive}</strong><span>Subjects Active This Week</span></div>
+        <div><strong>${weekly.unitsCompleted}</strong><span>Units Completed</span></div>
+        <div><strong>${weekly.subjectsActive}</strong><span>Active Subjects</span></div>
+        <div><strong>${readStudentJson('edusync_study_activity', []).length}</strong><span>Learning Sessions</span></div>
       </div>
+      <div class="weekly-mini-progress" role="progressbar" aria-label="Overall learning completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${weekly.weeklyCompletion}"><span style="width:${Math.max(0, Math.min(100, Number(weekly.weeklyCompletion) || 0))}%"></span></div>
     `);
 
     subjects.slice(0, 5).forEach((s, idx) => {
@@ -9829,9 +9892,12 @@ renderVideoList = async function renderVideoListDbSubtopics(subjectId, unitNum) 
   list.innerHTML = groupedHtml;
   if (APP._videoItems.length) {
     const restoredIndex = Math.min(APP.currentVideoIndex, APP._videoItems.length - 1);
-    selectVideoItem(restoredIndex);
     const restoredTab = unitState.tab || APP.currentTab;
-    if (restoredTab && restoredTab !== 'videos') window.setTimeout(() => switchTab(restoredTab), 0);
+    if (restoredTab && restoredTab !== 'videos') {
+      window.setTimeout(() => switchTab(restoredTab), 0);
+    } else {
+      selectVideoItem(restoredIndex);
+    }
   } else {
     const wrapper = document.getElementById('video-embed-wrapper') || document.querySelector('.video-embed-wrapper');
     if (wrapper) {
@@ -9875,6 +9941,13 @@ selectVideoItem = function selectVideoItemFlat(idx) {
   const url = item.url || '';
   const videoId = convertYouTubeToEmbed(url);
   if (videoId) {
+    const videoKey = `youtube:${idx}:${videoId}`;
+    if (wrapper.dataset.videoKey === videoKey && wrapper.querySelector('#student-video-player')) {
+      if (descEl) descEl.textContent = '';
+      renderTopicInlineNotes(item.title, sid, uid, item.topicIndex);
+      window.renderPendingUrls?.();
+      return;
+    }
     renderStudentYouTubeVideo(wrapper, item, idx, videoId, displayTitle);
     if (descEl) descEl.textContent = '';
     renderTopicInlineNotes(item.title, sid, uid, item.topicIndex);
@@ -9882,6 +9955,14 @@ selectVideoItem = function selectVideoItemFlat(idx) {
     return;
   }
   if (url) {
+    const videoKey = `url:${idx}:${url}`;
+    if (wrapper.dataset.videoKey === videoKey && (wrapper.querySelector('iframe') || wrapper.querySelector('video'))) {
+      if (descEl) descEl.textContent = '';
+      renderTopicInlineNotes(item.title, sid, uid, item.topicIndex);
+      window.renderPendingUrls?.();
+      return;
+    }
+    wrapper.dataset.videoKey = videoKey;
     if (/\.(mp4|webm|ogg)(\?|#|$)/i.test(url)) {
       wrapper.innerHTML = `<video src="${v10EscapeAttr(url)}" controls autoplay playsinline style="width:100%;height:100%;border-radius:var(--radius-lg);background:#000;"></video>`;
     } else {
@@ -10535,7 +10616,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const progressTracker = document.querySelector('#page-dashboard .progress-tracker');
     if (progressTracker) {
       progressTracker.innerHTML = `
-        <div class="section-heading">Weekly Progress</div>
+        <div class="section-heading">Learning Progress</div>
         <div class="weekly-summary compact-weekly-summary">
           <div><strong>${esc(weekly.weeklyCompletion)}%</strong><span>Weekly Completion</span></div>
           <div><strong>${esc(weekly.unitsCompleted)}</strong><span>Units Completed</span></div>
@@ -12011,6 +12092,15 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       const cgpa = clampNumber(details.cgpa, NaN);
       if (Number.isFinite(cgpa)) patch.cgpa = cgpa;
     }
+    if (normalized === 'learning_summary_refreshed') {
+      patch.completed_topics = clampNumber(details.completedTopics, clampNumber(row.completed_topics));
+      patch.completed_videos = clampNumber(details.completedVideos, clampNumber(row.completed_videos));
+      patch.completed_units = clampNumber(details.completedUnits, clampNumber(row.completed_units));
+      patch.syllabus_percentage = clampNumber(details.syllabusPercentage, clampNumber(row.syllabus_percentage));
+      patch.weekly_completion = clampNumber(details.weeklyCompletion, clampNumber(row.weekly_completion));
+      patch.active_subjects = clampNumber(details.activeSubjects, clampNumber(row.active_subjects));
+      patch.learning_sessions = Math.max(clampNumber(details.learningSessions, 0), clampNumber(row.learning_sessions));
+    }
 
     const completedTopics = clampNumber(patch.completed_topics, clampNumber(row.completed_topics));
     const completedUnits = clampNumber(patch.completed_units, clampNumber(row.completed_units));
@@ -12019,7 +12109,9 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const completedSubjects = clampNumber(patch.completed_subjects, clampNumber(row.completed_subjects));
     const activeSubjects = clampNumber(patch.active_subjects, clampNumber(row.active_subjects));
     const denominator = Math.max(1, completedTopics + completedVideos + notesRead + activeSubjects * 10);
-    patch.syllabus_percentage = Math.max(clampNumber(row.syllabus_percentage), Math.min(100, Math.round(((completedTopics + completedVideos + notesRead) / denominator) * 100)));
+    if (normalized !== 'learning_summary_refreshed') {
+      patch.syllabus_percentage = Math.max(clampNumber(row.syllabus_percentage), Math.min(100, Math.round(((completedTopics + completedVideos + notesRead) / denominator) * 100)));
+    }
     patch.first_unit_completed = completedUnits >= 1 || Boolean(row.first_unit_completed);
     patch.five_units_completed = completedUnits >= 5 || Boolean(row.five_units_completed);
     patch.ten_units_completed = completedUnits >= 10 || Boolean(row.ten_units_completed);
@@ -12440,6 +12532,15 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const { units_completed, ...summaryRow } = row;
     const { error } = await supabase.from('student_learning_summaries').upsert(summaryRow, { onConflict: 'user_id' });
     if (error) console.warn('[DASHBOARD] Learning summary save failed:', error.message || error);
+    await updateStudentDashboardProgress('learning_summary_refreshed', {
+      completedTopics,
+      completedVideos: completedTopics,
+      completedUnits: unitsCompleted,
+      syllabusPercentage: learningPercentage,
+      weeklyCompletion,
+      activeSubjects,
+      learningSessions,
+    });
     return row;
   }
 
@@ -12482,13 +12583,17 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   const originalMarkTopicCompleted = window.markTopicCompleted || globalThis.markTopicCompleted;
   if (typeof originalMarkTopicCompleted === 'function') {
     window.markTopicCompleted = globalThis.markTopicCompleted = function markTopicCompletedSupabase() {
+      const topicKey = `${arguments[0]}-${arguments[1]}-${arguments[2]}`;
+      const wasAlreadyCompleted = readStudentJson('edusync_completed_topics', []).includes(topicKey);
       const result = originalMarkTopicCompleted.apply(this, arguments);
-      updateStudentDashboardProgress('topic_completed', {
-        subject: window.APP?.currentSubject,
-        subjectId: arguments[0],
-        unitId: arguments[1],
-        topicIndex: arguments[2],
-      });
+      if (!wasAlreadyCompleted) {
+        updateStudentDashboardProgress('topic_completed', {
+          subject: window.APP?.currentSubject,
+          subjectId: arguments[0],
+          unitId: arguments[1],
+          topicIndex: arguments[2],
+        });
+      }
       setTimeout(() => { refreshLearningSummary(); touchStreak(); loadDashboardSupabaseData(); }, 0);
       return result;
     };
@@ -12681,7 +12786,10 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     if (document.getElementById('page-dashboard')?.style.display === 'none') return;
     const supabase = sb();
     const id = await userId();
-    if (!supabase || !id) return;
+    if (!supabase || !id) {
+      updateStudentDashboardMetrics?.();
+      return;
+    }
     if (!window.__aiiensStudentProgressChannel) {
       window.__aiiensStudentProgressChannel = supabase.channel(`student-dashboard-progress-${id}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'student_dashboard_progress', filter: `user_id=eq.${id}` }, () => {
@@ -12696,6 +12804,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       progress = await fetchProgressRecord(supabase, id);
     } catch (error) {
       console.warn('[DASHBOARD] Progress load failed:', error?.message || error);
+      updateStudentDashboardMetrics?.();
       return;
     }
     if (!progress) {
@@ -12722,29 +12831,29 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
 
     const tracker = document.querySelector('#page-dashboard .progress-tracker');
     if (tracker) {
+      const completion = Math.max(0, Math.min(100, Number(progress.weekly_completion ?? progress.syllabus_percentage) || 0));
       tracker.innerHTML = `
         <div class="section-heading">Learning Progress</div>
         <div class="weekly-summary compact-weekly-summary">
+          <div><strong>${esc(completion)}%</strong><span>Weekly Completion</span></div>
           <div><strong>${esc(progress.completed_units || 0)}</strong><span>Units Completed</span></div>
           <div><strong>${esc(progress.active_subjects || 0)}</strong><span>Active Subjects</span></div>
           <div><strong>${esc(progress.learning_sessions || 0)}</strong><span>Learning Sessions</span></div>
-          <div><strong>${esc(progress.notes_read || 0)}</strong><span>Notes Read</span></div>
-          <div><strong>${esc(progress.pyqs_completed || 0)}</strong><span>PYQs Completed</span></div>
         </div>
-        <div class="weekly-mini-progress" role="progressbar" aria-label="Overall learning completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(progress.syllabus_percentage || 0)}"><span style="width:${Math.max(0, Math.min(100, Number(progress.syllabus_percentage) || 0))}%"></span></div>`;
+        <div class="weekly-mini-progress" role="progressbar" aria-label="Overall learning completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(completion)}"><span style="width:${completion}%"></span></div>`;
     }
 
     const recentSubjects = progressRecentSubjects(progress);
     const listEl = document.getElementById('recently-opened-list') || document.querySelector('#page-dashboard .dash-row-3 .card');
     if (listEl) {
-      listEl.innerHTML = `<div class="section-heading">Recently Opened</div>` + (recentSubjects.length ? recentSubjects.map(item => `
+      listEl.innerHTML = recentSubjects.length ? recentSubjects.map(item => `
         <div class="recent-item">
           <div class="recent-info">
             <div class="recent-title">${esc(item.name)}</div>
             <div class="recent-sub">${esc(formatRecentTime(item.opened || progress.updated_at || new Date().toISOString()))}</div>
           </div>
           <button class="btn btn-primary btn-sm" onclick="openSubjectFromRecent('${js(String(item.id || item.name).includes('-') ? 'custom_' + (item.id || item.name) : (item.id || item.name))}')">Continue Learning</button>
-        </div>`).join('') : '<div class="empty-state-card">No subjects opened yet.</div>');
+        </div>`).join('') : '<div class="empty-state-card">No subjects opened yet.</div>';
     }
     renderSupabaseAchievements({ progress, recentSubjects });
   }

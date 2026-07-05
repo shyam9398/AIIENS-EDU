@@ -2913,12 +2913,230 @@ window.v10Esc = window.v10Esc || function(str) {
     </div>`;
   };
 
+  window.v10SASyllabusCardHTML = function v10SASyllabusCardHTML(subj, syllabus) {
+    const isReadOnly = !!subj?.isReadOnly;
+    const driveUrl = syllabus?.drive_url || syllabus?.url || '';
+    const hasSyllabus = !!driveUrl;
+    const dotMenu = isReadOnly ? '' : `
+      <div class="v10-dot-wrap" onclick="event.stopPropagation()">
+        <button class="v10-dot-btn" onclick="window.v10SASyllabusMenu(this,'${esc(subj.id)}')" title="Options">&#8942;</button>
+      </div>`;
+    const clickAction = hasSyllabus
+      ? 'window.openSyllabusPreview(this.dataset.syllabusUrl)'
+      : isReadOnly
+        ? "window.showToast?.('Syllabus is not available yet.','amber')"
+        : `window.v10SAOpenSyllabusForm('${esc(subj.id)}')`;
+    return `<div class="v10-unit-card" id="v10-syllabus-card-${esc(subj.id)}" data-subject-id="${esc(subj.id)}" data-syllabus-url="${esc(driveUrl)}" onclick="${clickAction}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;">
+        <div class="v10-unit-num">PDF</div>
+        ${dotMenu}
+      </div>
+      <div class="v10-unit-name">Syllabus</div>
+      <div class="v10-unit-meta" style="margin-bottom:6px;">${hasSyllabus ? 'Google Drive / PDF URL saved' : 'Add Google Drive Link / PDF URL'}</div>
+      <div class="v10-unit-meta">${esc(subj.name || 'Subject')}</div>
+      <div class="v10-unit-badges"><span class="badge ${hasSyllabus ? 'badge-primary' : 'badge-amber'}">${hasSyllabus ? 'Preview Ready' : 'Pending'}</span></div>
+      <div class="v10-unit-arrow">${hasSyllabus ? 'Click to preview syllabus ->' : 'Click to add syllabus ->'}</div>
+    </div>`;
+  };
+
   window.v10RefreshUnitCard = function v10RefreshUnitCard(subjId, unit, subject) {
     const card = document.getElementById(`v10-unit-card-${unit.id}`);
     if (!card) return window.v10SAUnitsPage?.(subject || window._v10SASubj);
     const cards = Array.from(document.querySelectorAll('.v10-unit-card'));
     const index = Math.max(0, cards.indexOf(card));
     card.outerHTML = window.v10UnitCardHTML(subject || window._v10SASubj || { id: subjId, name: '' }, unit, index);
+  };
+
+  window.v10SASyllabusMenu = function v10SASyllabusMenu(btn, subjId) {
+    if (window._v10SASubj?.isReadOnly) {
+      showToast('Permission denied: Subject is read-only', 'red');
+      return;
+    }
+    document.querySelectorAll('.v10-popup').forEach(p => p.remove());
+    const popup = document.createElement('div');
+    popup.className = 'v10-popup';
+    popup.innerHTML = `
+      <button class="v10-popup-item" onclick="window.v10SAOpenSyllabusForm('${esc(subjId)}')">Edit</button>
+      <button class="v10-popup-item red" onclick="window.v10SADeleteSyllabus('${esc(subjId)}')">Delete</button>`;
+    btn.closest('.v10-dot-wrap')?.appendChild(popup);
+  };
+
+  async function v10WaitForSupabaseClient(timeoutMs = 5000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const client = window.__AIMEASY_SUPABASE__;
+      if (client?.from) return client;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    return window.__AIMEASY_SUPABASE__?.from ? window.__AIMEASY_SUPABASE__ : null;
+  }
+
+  async function v10CurrentAuthUserId(supabase) {
+    try {
+      const { data: sessionData } = supabase.auth?.getSession
+        ? await supabase.auth.getSession()
+        : { data: { session: null } };
+      if (looksLikeUuid(sessionData?.session?.user?.id)) return sessionData.session.user.id;
+    } catch (e) {
+      console.warn('Syllabus auth session lookup failed', e);
+    }
+
+    try {
+      const { data: userData } = supabase.auth?.getUser
+        ? await supabase.auth.getUser()
+        : { data: { user: null } };
+      if (looksLikeUuid(userData?.user?.id)) return userData.user.id;
+    } catch (e) {
+      console.warn('Syllabus auth user lookup failed', e);
+    }
+
+    const appUserId = window.APP?.user?.id || window.APP?.subAdminData?.id;
+    return looksLikeUuid(appUserId) ? appUserId : null;
+  }
+
+  async function v10ResolveSyllabusSubjectId(supabase, subjId, subj) {
+    if (looksLikeUuid(subjId)) return subjId;
+    if (looksLikeUuid(subj?.id)) return subj.id;
+    if (looksLikeUuid(subj?.dbSubjectId)) return subj.dbSubjectId;
+    if (looksLikeUuid(subj?.rawId)) return subj.rawId;
+
+    const subjectName = String(subj?.name || document.getElementById('v10-syllabus-subject-name')?.value || subjId || '').trim();
+    if (!subjectName) return null;
+
+    let query = supabase.from('subjects').select('id').eq('name', subjectName).limit(1);
+    if (subj?.branch) query = query.eq('branch', subj.branch);
+    if (subj?.reg || subj?.regulation_code) query = query.eq('regulation_code', subj.reg || subj.regulation_code);
+    if (subj?.sem || subj?.semester) query = query.eq('semester', subj.sem || subj.semester);
+    if (subj?.uni || subj?.university_name) query = query.eq('university_name', subj.uni || subj.university_name);
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn('Syllabus subject UUID lookup failed', error);
+      return null;
+    }
+    const resolvedId = Array.isArray(data) ? data[0]?.id : data?.id;
+    return looksLikeUuid(resolvedId) ? resolvedId : null;
+  }
+
+  async function v10FetchSyllabusDirect(subjId) {
+    const supabase = await v10WaitForSupabaseClient();
+    if (!supabase || !subjId) return { data: null, error: !supabase ? new Error('Supabase client unavailable') : null };
+    if (!looksLikeUuid(subjId)) return { data: null, error: new Error('Subject ID must be a UUID') };
+    return supabase.from('subject_syllabus').select('*').eq('subject_id', subjId).maybeSingle();
+  }
+
+  window.v10SAOpenSyllabusForm = async function v10SAOpenSyllabusForm(subjId) {
+    if (window._v10SASubj?.isReadOnly) {
+      showToast('Permission denied: Subject is read-only', 'red');
+      return;
+    }
+    document.querySelectorAll('.v10-popup').forEach(p => p.remove());
+    const subj = window._v10SASubj || {};
+    const { data: syllabus } = await v10FetchSyllabusDirect(subjId);
+    document.getElementById('v10-sa-syllabus-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay open';
+    modal.id = 'v10-sa-syllabus-modal';
+    modal.onclick = event => { if (event.target === modal) modal.remove(); };
+    modal.innerHTML = `<div class="modal" style="max-width:560px;">
+      <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:1rem;">Syllabus</h2>
+      <div class="input-group">
+        <label>Subject Name</label>
+        <input class="input" id="v10-syllabus-subject-name" value="${esc(subj.name || syllabus?.subject_name || '')}" readonly>
+      </div>
+      <div class="input-group">
+        <label>Google Drive Link / PDF URL</label>
+        <input class="input" id="v10-syllabus-url" value="${esc(syllabus?.drive_url || syllabus?.url || '')}" placeholder="https://drive.google.com/... or https://...pdf">
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:1rem;">
+        <button class="btn btn-ghost" onclick="document.getElementById('v10-sa-syllabus-modal')?.remove()">Cancel</button>
+        <button class="btn btn-primary" id="v10-syllabus-save-btn" onclick="window.v10SASaveSyllabus('${esc(subjId)}')">Save</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+  };
+
+  window.v10SASaveSyllabus = async function v10SASaveSyllabus(subjId) {
+    const supabase = await v10WaitForSupabaseClient();
+    const subj = window._v10SASubj || {};
+    const url = document.getElementById('v10-syllabus-url')?.value?.trim();
+    if (!url) {
+      showToast('Enter a Google Drive link or PDF URL.', 'red');
+      return;
+    }
+    const button = document.getElementById('v10-syllabus-save-btn');
+    if (button) button.disabled = true;
+    if (!supabase) {
+      if (button) button.disabled = false;
+      showToast('Supabase is still starting. Please try again in a moment.', 'amber');
+      return;
+    }
+    const now = new Date().toISOString();
+    const subject_id = await v10ResolveSyllabusSubjectId(supabase, subjId, subj);
+    const subject_name = subj.name || document.getElementById('v10-syllabus-subject-name')?.value || '';
+    const drive_url = url;
+    const created_by = await v10CurrentAuthUserId(supabase);
+
+    console.log({
+      subject_id,
+      subject_name,
+      drive_url,
+      created_by
+    });
+
+    if (!subject_id) {
+      if (button) button.disabled = false;
+      showToast('Syllabus save failed: subject UUID could not be found.', 'red');
+      return;
+    }
+    if (!created_by) {
+      if (button) button.disabled = false;
+      showToast('Syllabus save failed: authenticated user UUID could not be found.', 'red');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('subject_syllabus')
+      .upsert({
+        subject_id,
+        subject_name,
+        drive_url,
+        created_by,
+        created_at: now,
+        updated_at: now,
+      }, { onConflict: 'subject_id' })
+      .select()
+      .single();
+    if (error) {
+      if (button) button.disabled = false;
+      showToast('Syllabus save failed: ' + error.message, 'red');
+      return;
+    }
+    document.getElementById('v10-sa-syllabus-modal')?.remove();
+    showToast('Syllabus saved successfully.', 'green');
+    await window.v10SAUnitsPage?.(subj);
+  };
+
+  window.v10SADeleteSyllabus = async function v10SADeleteSyllabus(subjId) {
+    const supabase = await v10WaitForSupabaseClient();
+    if (!supabase) {
+      showToast('Supabase is still starting. Please try again in a moment.', 'amber');
+      return;
+    }
+    document.querySelectorAll('.v10-popup').forEach(p => p.remove());
+    if (!confirm('Delete this syllabus link?')) return;
+    const subjectId = await v10ResolveSyllabusSubjectId(supabase, subjId, window._v10SASubj || {});
+    if (!subjectId) {
+      showToast('Syllabus delete failed: subject UUID could not be found.', 'red');
+      return;
+    }
+    const { error } = await supabase.from('subject_syllabus').delete().eq('subject_id', subjectId);
+    if (error) {
+      showToast('Syllabus delete failed: ' + error.message, 'red');
+      return;
+    }
+    showToast('Syllabus deleted.', 'green');
+    await window.v10SAUnitsPage?.(window._v10SASubj);
   };
 
   window.v10SAUnitsPage = async function v10SAUnitsPageSupabaseOnly(subj) {
@@ -2933,7 +3151,9 @@ window.v10Esc = window.v10Esc || function(str) {
       return;
     }
     const units = (dbUnits || []).sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+    const { data: syllabus } = await v10FetchSyllabusDirect(subj.id);
     const cards = units.map((unit, index) => window.v10UnitCardHTML(subj, unit, index)).join('');
+    const syllabusCard = window.v10SASyllabusCardHTML(subj, syllabus);
     content.innerHTML = `<div style="padding:2rem;max-width:1100px;margin:0 auto;width:100%;">
       <button class="back-btn" onclick="v10SASubjects()">Back to Subjects</button>
       <div style="margin:1rem 0 .5rem;">
@@ -2946,6 +3166,15 @@ window.v10Esc = window.v10Esc || function(str) {
       </div>
       ${units.length ? `<div class="v10-unit-grid">${cards}</div>` : `<div style="text-align:center;padding:3rem;color:var(--text3);"><div style="font-size:3rem;margin-bottom:1rem;">📚</div><div style="font-weight:600;">No units yet</div><div style="font-size:.82rem;">Click "+ Add Unit" to create units for this subject</div></div>`}
     </div>`;
+    let syllabusGrid = content.querySelector('.v10-unit-grid');
+    if (!syllabusGrid) {
+      syllabusGrid = document.createElement('div');
+      syllabusGrid.className = 'v10-unit-grid';
+      const pageWrap = content.firstElementChild;
+      const emptyState = pageWrap?.lastElementChild || null;
+      pageWrap?.insertBefore(syllabusGrid, emptyState);
+    }
+    syllabusGrid.insertAdjacentHTML('beforeend', syllabusCard);
   };
   try { v10SAUnitsPage = window.v10SAUnitsPage; } catch (e) {}
   try { v10SAEditUnit = window.v10SAEditUnit; } catch (e) {}

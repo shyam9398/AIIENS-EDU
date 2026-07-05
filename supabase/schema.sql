@@ -271,6 +271,17 @@ create table if not exists public.units (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.subject_syllabus (
+  id uuid primary key default gen_random_uuid(),
+  subject_id uuid not null references public.subjects(id) on delete cascade,
+  subject_name text not null default '',
+  drive_url text not null,
+  created_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (subject_id)
+);
+
 create table if not exists public.content_items (
   id uuid primary key default gen_random_uuid(),
   subject_id uuid not null references public.subjects(id) on delete cascade,
@@ -390,6 +401,7 @@ delete from public.topic_videos where video_url = '';
 alter table public.topic_videos alter column video_url set not null;
 
 create index if not exists idx_units_subject_id on public.units(subject_id);
+create index if not exists idx_subject_syllabus_subject on public.subject_syllabus(subject_id);
 create index if not exists idx_content_items_unit_type on public.content_items(unit_id, content_type);
 create index if not exists idx_topics_unit_order on public.topics(unit_id, display_order);
 create index if not exists idx_topics_subject_unit on public.topics(subject_id, unit_id);
@@ -401,6 +413,7 @@ create index if not exists idx_student_url_suggestions_topic on public.student_u
 
 alter table public.subjects      enable row level security;
 alter table public.units         enable row level security;
+alter table public.subject_syllabus enable row level security;
 alter table public.content_items enable row level security;
 alter table public.topics        enable row level security;
 alter table public.topic_videos  enable row level security;
@@ -435,6 +448,21 @@ create policy "units_auth_select"
   on public.units for select to authenticated using (true);
 create policy "units_auth_write"
   on public.units for all to authenticated using (true) with check (true);
+
+-- subject syllabi
+drop policy if exists "subject_syllabus_anon_select" on public.subject_syllabus;
+drop policy if exists "subject_syllabus_auth_select" on public.subject_syllabus;
+drop policy if exists "subject_syllabus_anon_write" on public.subject_syllabus;
+drop policy if exists "subject_syllabus_auth_write" on public.subject_syllabus;
+
+create policy "subject_syllabus_anon_select"
+  on public.subject_syllabus for select to anon using (true);
+create policy "subject_syllabus_auth_select"
+  on public.subject_syllabus for select to authenticated using (true);
+create policy "subject_syllabus_anon_write"
+  on public.subject_syllabus for all to anon using (true) with check (true);
+create policy "subject_syllabus_auth_write"
+  on public.subject_syllabus for all to authenticated using (true) with check (true);
 
 -- topics
 drop policy if exists "topics all"               on public.topics;
@@ -557,6 +585,52 @@ create table if not exists public.student_learning_summaries (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.student_dashboard_progress (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  cgpa numeric(4,2) not null default 0,
+  sgpa numeric(4,2) not null default 0,
+  syllabus_percentage integer not null default 0,
+  weekly_completion integer not null default 0,
+  completed_topics integer not null default 0,
+  completed_videos integer not null default 0,
+  completed_units integer not null default 0,
+  completed_subjects integer not null default 0,
+  active_subjects integer not null default 0,
+  learning_sessions integer not null default 0,
+  notes_read integer not null default 0,
+  pyqs_completed integer not null default 0,
+  current_streak integer not null default 0,
+  longest_streak integer not null default 0,
+  last_activity_date date,
+  first_subject_opened boolean not null default false,
+  first_unit_completed boolean not null default false,
+  five_units_completed boolean not null default false,
+  ten_units_completed boolean not null default false,
+  seven_day_streak boolean not null default false,
+  thirty_day_streak boolean not null default false,
+  hundred_notes_read boolean not null default false,
+  subject_milestone boolean not null default false,
+  recent_subject_1 text,
+  recent_subject_1_id text,
+  recent_subject_1_opened timestamptz,
+  recent_subject_2 text,
+  recent_subject_2_id text,
+  recent_subject_2_opened timestamptz,
+  recent_subject_3 text,
+  recent_subject_3_id text,
+  recent_subject_3_opened timestamptz,
+  recent_subject_4 text,
+  recent_subject_4_id text,
+  recent_subject_4_opened timestamptz,
+  recent_subject_5 text,
+  recent_subject_5_id text,
+  recent_subject_5_opened timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id)
+);
+
 create table if not exists public.student_streaks (
   user_id uuid primary key references auth.users(id) on delete cascade,
   current_streak integer not null default 0,
@@ -616,6 +690,7 @@ create table if not exists public.live_workshop_registrations (
 
 create index if not exists idx_student_recent_subjects_user on public.student_recent_subjects(user_id, last_opened_at desc);
 create index if not exists idx_student_cgpa_results_user on public.student_cgpa_results(user_id, calculated_at desc);
+create index if not exists idx_student_dashboard_progress_user on public.student_dashboard_progress(user_id, updated_at desc);
 create index if not exists idx_live_workshops_published on public.live_workshops(status, workshop_date, workshop_time);
 create index if not exists idx_live_workshop_banners_active on public.live_workshop_banners(is_active, created_at desc);
 
@@ -634,6 +709,7 @@ grant execute on function public.get_live_workshop_participant_count() to anon, 
 alter table public.student_recent_subjects enable row level security;
 alter table public.student_cgpa_results enable row level security;
 alter table public.student_learning_summaries enable row level security;
+alter table public.student_dashboard_progress enable row level security;
 alter table public.student_streaks enable row level security;
 alter table public.live_workshop_profiles enable row level security;
 alter table public.live_workshops enable row level security;
@@ -654,6 +730,11 @@ drop policy if exists "student summary own read" on public.student_learning_summ
 drop policy if exists "student summary own write" on public.student_learning_summaries;
 create policy "student summary own read" on public.student_learning_summaries for select to authenticated using (user_id = auth.uid());
 create policy "student summary own write" on public.student_learning_summaries for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists "student dashboard progress own read" on public.student_dashboard_progress;
+drop policy if exists "student dashboard progress own write" on public.student_dashboard_progress;
+create policy "student dashboard progress own read" on public.student_dashboard_progress for select to authenticated using (user_id = auth.uid());
+create policy "student dashboard progress own write" on public.student_dashboard_progress for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 drop policy if exists "student streak own read" on public.student_streaks;
 drop policy if exists "student streak own write" on public.student_streaks;

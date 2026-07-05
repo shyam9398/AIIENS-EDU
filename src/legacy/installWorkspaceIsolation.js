@@ -28,6 +28,45 @@ function esc(value) {
     .replace(/"/g, '&quot;');
 }
 
+async function refreshSubAdminCreateBranchSelect() {
+  const branchSelect = document.getElementById('v10-sa-branch');
+  if (!branchSelect) return [];
+
+  const sa = window.APP?.subAdminData || {};
+  const ws = getSubAdminWorkspace() || {};
+  const activeUni = ws.university && ws.university !== '-' ? ws.university : sa.university;
+  const activeBranch = ws.branch && ws.branch !== '-' ? ws.branch : (branchSelect.value || sa.branch || '');
+
+  branchSelect.disabled = true;
+  branchSelect.innerHTML = '<option value="">Loading branches...</option>';
+
+  try {
+    const rows = await fetchActiveBranches({
+      universityName: activeUni || null,
+      includeGlobalBranches: true,
+    });
+    branchSelect.disabled = false;
+    branchSelect.innerHTML = branchOptionsHtml(rows, {
+      selectedValue: activeBranch || '',
+      emptyLabel: 'No branches available',
+    });
+    return rows;
+  } catch (error) {
+    console.warn('[SUBADMIN] Failed to load complete branch list:', error?.message || error);
+    branchSelect.disabled = true;
+    branchSelect.innerHTML = '<option value="">Unable to load branches</option>';
+    return [];
+  }
+}
+
+window.v10SAOpenCreateSubjectForm = async function v10SAOpenCreateSubjectForm() {
+  const form = document.getElementById('v10-sa-create-form');
+  if (!form) return;
+  form.style.display = 'block';
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  await refreshSubAdminCreateBranchSelect();
+};
+
 function activeSaSection() {
   return document.querySelector('[id^="sa-nav-"].active')?.id?.replace('sa-nav-', '') || '';
 }
@@ -185,7 +224,7 @@ async function v10SASubjectsWorkspace() {
   const activeUni = ws.university && ws.university !== '-' ? ws.university : sa.university;
   const activeBranch = ws.branch && ws.branch !== '-' ? ws.branch : sa.branch;
   const activeReg = ws.regulation && ws.regulation !== '-' ? ws.regulation : sa.regulation;
-  const branchRows = await fetchActiveBranches({ universityName: activeUni || null });
+  const branchRows = await fetchActiveBranches({ universityName: activeUni || null, includeGlobalBranches: true });
   const branchSelectHtml = branchOptionsHtml(branchRows, { selectedValue: activeBranch || '' });
   const uniSelectHtml = universityOptionsHtml(universities, {
     selectedValue: activeUni || '',
@@ -259,7 +298,7 @@ async function v10SASubjectsWorkspace() {
       </div>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost btn-sm" onclick="v10SASubjects()">🔄 Refresh</button>
-        <button class="btn btn-primary" onclick="document.getElementById('v10-sa-create-form').style.display='block'">+ Add Subject</button>
+        <button class="btn btn-primary" onclick="v10SAOpenCreateSubjectForm()">+ Add Subject</button>
       </div>
     </div>
     ${createForm}
@@ -271,7 +310,7 @@ async function v10SASubjectsWorkspace() {
         </div>`}
   </div>`;
 
-  window.aiiensBindBranchCascade?.('v10-sa-uni', 'v10-sa-branch');
+  window.aiiensBindBranchCascade?.('v10-sa-uni', 'v10-sa-branch', { includeGlobalBranches: true });
 }
 
 /** Sub Admin — View Content: current workspace only, edit only own */
