@@ -330,10 +330,27 @@ async function applyRoute(path) {
         window.navigateTo?.('subjects');
         await window.openSubject(decodeRoutePart(subjectId));
       } else if ((childPath === 'units' || childPath === 'unit-content') && subjectId && typeof window.openSubject === 'function') {
-        window.navigateTo?.('subjects');
-        await window.openSubject(decodeRoutePart(subjectId));
-        if (unitId && typeof window.openUnit === 'function') {
-          window.openUnit(Number(decodeRoutePart(unitId)), decodeRoutePart(subjectId));
+        const requestedSubject = decodeRoutePart(subjectId);
+        const requestedUnit = unitId ? decodeRoutePart(unitId) : '';
+        const activeUnitPage = document.getElementById('page-unit-content')?.style.display !== 'none';
+        const currentSubject = window.APP?.currentSubject?.id || window.APP?.currentSubject?.rawId || '';
+        const currentUnit = window.APP?.currentUnit || '';
+        const sameUnitRoute = childPath === 'unit-content' && activeUnitPage && String(currentSubject) === String(requestedSubject) && String(currentUnit) === String(requestedUnit);
+        if (sameUnitRoute) {
+          try {
+            const params = new URLSearchParams(window.location.search || '');
+            const saved = JSON.parse(localStorage.getItem('aiiens_student_learning_state') || '{}');
+            const tab = params.get('tab') || saved.tab || '';
+            if (tab && tab !== window.APP?.currentTab && typeof window.switchTab === 'function') window.switchTab(tab);
+          } catch {
+            /* keep current tab */
+          }
+        } else {
+          window.navigateTo?.('subjects');
+          await window.openSubject(requestedSubject);
+          if (unitId && typeof window.openUnit === 'function') {
+            window.openUnit(Number(requestedUnit), requestedSubject);
+          }
         }
       } else if (typeof window.navigateTo === 'function') {
         window.navigateTo(childPath);
@@ -405,7 +422,7 @@ function patchLegacyNavigators() {
         console.log('[SUPPRESS]', suppressRouteUpdate);
       const result = originalNavigateTo.call(this, pageName);
 
-      if (!suppressRouteUpdate && STUDENT_INNER_PAGES.has(pageName)) {
+      if (!suppressRouteUpdate && !window.__aimeasyOpeningSubject && STUDENT_INNER_PAGES.has(pageName)) {
         pushRoute(`/student/${pageName}`);
          console.log('[URL UPDATED]', `/student/${pageName}`);
       }
@@ -417,10 +434,25 @@ function patchLegacyNavigators() {
   const originalOpenSubject = window.openSubject;
   if (typeof originalOpenSubject === 'function') {
     window.openSubject = function routedOpenSubject(subjectId, ...args) {
-      const result = originalOpenSubject.call(this, subjectId, ...args);
+      const currentSubject = window.APP?.currentSubject?.id || window.APP?.currentSubject?.rawId || '';
+      const activeUnitsPage = document.getElementById('page-units')?.style.display !== 'none';
+      const activeUnitPage = document.getElementById('page-unit-content')?.style.display !== 'none';
+      if ((activeUnitsPage || activeUnitPage) && String(currentSubject || '') === String(subjectId || '')) {
+        if (!suppressRouteUpdate && subjectId && activeUnitsPage) pushRoute(`/student/subjects/${encodeRoutePart(subjectId)}`);
+        return undefined;
+      }
 
-      if (!suppressRouteUpdate && subjectId) {
-        pushRoute(`/student/subjects/${encodeRoutePart(subjectId)}`);
+      window.__aimeasyOpeningSubject = true;
+      let result;
+      try {
+        result = originalOpenSubject.call(this, subjectId, ...args);
+      } finally {
+        Promise.resolve(result).finally(() => {
+          window.__aimeasyOpeningSubject = false;
+          if (!suppressRouteUpdate && subjectId) {
+            pushRoute(`/student/subjects/${encodeRoutePart(subjectId)}`);
+          }
+        });
       }
 
       return result;
@@ -540,6 +572,7 @@ export function installBrowserNavigation() {
     if (
       window.__aimeasyRouterWritingHistory ||
       window.__aimeasyApplyingRoute ||
+      window.__aimeasyLearningStateWritingHistory ||
       suppressRouteUpdate ||
       isCentralAuthRouting()
     ) {
@@ -552,6 +585,7 @@ export function installBrowserNavigation() {
       if (
         window.__aimeasyRouterWritingHistory ||
         window.__aimeasyApplyingRoute ||
+        window.__aimeasyLearningStateWritingHistory ||
         suppressRouteUpdate ||
         isCentralAuthRouting()
       ) {

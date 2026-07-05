@@ -1564,7 +1564,7 @@ window.v10Esc = window.v10Esc || function(str) {
     const isReadOnly = window._v10SASubj?.isReadOnly;
 
     const formHtml = isReadOnly ? `<div class="v10-form-readonly" style="padding:1rem;background:var(--surface2);border-radius:var(--radius-sm);color:var(--text3);font-size:0.85rem;margin-bottom:1rem;text-align:center;">Read-only view of PYQs. You do not have permissions to modify this subject.</div>` : `
-    <div class="v10-form"><p class="hint">Optionally link to a roadmap topic, or type a custom topic below.</p><div class="input-group"><span class="v10-label">TOPIC (OPTIONAL)</span>${window.v10TopicSelect(subjectName, unitId, '', 'pyq')}</div><div class="input-group"><span class="v10-label">TOPIC TEXT</span><input class="input v10-topic-text-input" id="v10-pyq-topic-text-${unitId}" placeholder="Type or select a topic" /></div><div class="v10-2col"><div class="input-group"><span class="v10-label">YEAR</span><input class="input" id="v10-pyqyr-${unitId}" type="number" min="2000" max="2099"></div><div class="input-group"><span class="v10-label">MARKS</span><input class="input" id="v10-pyqmarks-${unitId}" type="number" min="1"></div></div><div class="input-group"><span class="v10-label">QUESTION</span><textarea class="input" id="v10-pyqtxt-${unitId}" rows="3" style="resize:vertical;"></textarea></div><button class="v10-submit" onclick="window.v10UploadPYQ('${s}','${unitId}')">Save PYQ</button></div>`;
+    <div class="v10-form"><p class="hint">Optionally link to a roadmap topic, or type a custom topic below.</p><div class="input-group"><span class="v10-label">TOPIC (OPTIONAL)</span>${window.v10TopicSelect(subjectName, unitId, '', 'pyq')}</div><div class="input-group"><span class="v10-label">TOPIC TEXT</span><input class="input v10-topic-text-input" id="v10-pyq-topic-text-${unitId}" placeholder="Type or select a topic" /></div><div class="v10-2col"><div class="input-group"><span class="v10-label">YEAR</span><input class="input" id="v10-pyqyr-${unitId}" type="number" min="2000" max="2099"></div><div class="input-group"><span class="v10-label">MARKS</span><input class="input" id="v10-pyqmarks-${unitId}" type="number" min="1"></div></div><div class="input-group"><span class="v10-label">QUESTION</span><textarea class="input" id="v10-pyqtxt-${unitId}" rows="3" style="resize:vertical;"></textarea></div><div class="v10-2col"><div class="input-group"><span class="v10-label">QUESTION URL</span><input class="input" id="v10-pyq-question-url-${unitId}" placeholder="https://drive.google.com/..." type="url"></div><div class="input-group"><span class="v10-label">ANSWER URL</span><input class="input" id="v10-pyq-answer-url-${unitId}" placeholder="https://drive.google.com/..." type="url"></div></div><button class="v10-submit" onclick="window.v10UploadPYQ('${s}','${unitId}')">Save PYQ</button></div>`;
 
     const itemsHtml = pyqs.length ? `<div class="v10-items"><div class="v10-items-head">PYQs (${pyqs.length})</div>${pyqs.map(p => v10ContentItemRow(
       p.question,
@@ -1582,7 +1582,7 @@ window.v10Esc = window.v10Esc || function(str) {
     const isReadOnly = window._v10SASubj?.isReadOnly;
 
     const formHtml = isReadOnly ? `<div class="v10-form-readonly" style="padding:1rem;background:var(--surface2);border-radius:var(--radius-sm);color:var(--text3);font-size:0.85rem;margin-bottom:1rem;text-align:center;">Read-only view of Important Questions. You do not have permissions to modify this subject.</div>` : `
-    <div class="v10-form"><p class="hint">Optionally link to a roadmap topic, or type a custom topic below.</p><div class="input-group"><span class="v10-label">TOPIC (OPTIONAL)</span>${window.v10TopicSelect(subjectName, unitId, '', 'iq')}</div><div class="input-group"><span class="v10-label">TOPIC TEXT</span><input class="input v10-topic-text-input" id="v10-iq-topic-text-${unitId}" placeholder="Type or select a topic" /></div><div class="input-group"><span class="v10-label">QUESTION</span><textarea class="input" id="v10-iqtxt-${unitId}" rows="3" style="resize:vertical;"></textarea></div><div class="input-group"><span class="v10-label">PRIORITY</span><select class="select" id="v10-iqprio-${unitId}"><option value="high">High</option><option value="med" selected>Medium</option><option value="low">Low</option></select></div><button class="v10-submit" onclick="window.v10UploadIQ('${s}','${unitId}')">Save Important Question</button></div>`;
+    <div class="v10-form"><p class="hint">Optionally link to a roadmap topic, or type a custom topic below.</p><div class="input-group"><span class="v10-label">TOPIC (OPTIONAL)</span>${window.v10TopicSelect(subjectName, unitId, '', 'iq')}</div><div class="input-group"><span class="v10-label">TOPIC TEXT</span><input class="input v10-topic-text-input" id="v10-iq-topic-text-${unitId}" placeholder="Type or select a topic" /></div><div class="input-group"><span class="v10-label">QUESTION</span><textarea class="input" id="v10-iqtxt-${unitId}" rows="3" style="resize:vertical;"></textarea></div><div class="v10-2col"><div class="input-group"><span class="v10-label">QUESTION URL</span><input class="input" id="v10-iq-question-url-${unitId}" placeholder="https://drive.google.com/..." type="url"></div><div class="input-group"><span class="v10-label">ANSWER URL</span><input class="input" id="v10-iq-answer-url-${unitId}" placeholder="https://drive.google.com/..." type="url"></div></div><div class="input-group"><span class="v10-label">PRIORITY</span><select class="select" id="v10-iqprio-${unitId}"><option value="high">High</option><option value="med" selected>Medium</option><option value="low">Low</option></select></div><button class="v10-submit" onclick="window.v10UploadIQ('${s}','${unitId}')">Save Important Question</button></div>`;
 
     const itemsHtml = iqs.length ? `<div class="v10-items"><div class="v10-items-head">Important Questions (${iqs.length})</div>${iqs.map(q => v10ContentItemRow(
       q.question,
@@ -2054,6 +2054,8 @@ window.v10Esc = window.v10Esc || function(str) {
     const question = document.getElementById('v10-pyqtxt-' + unitId)?.value.trim();
     const year = document.getElementById('v10-pyqyr-' + unitId)?.value;
     const marks = document.getElementById('v10-pyqmarks-' + unitId)?.value;
+    const questionUrl = document.getElementById('v10-pyq-question-url-' + unitId)?.value.trim() || '';
+    const answerUrl = document.getElementById('v10-pyq-answer-url-' + unitId)?.value.trim() || '';
     const { topicId, topicName } = v10ReadTopicInput(unitId, 'pyq');
     if (!topicName) { showToast('Enter topic text or select a topic', 'red'); return; }
     if (!question) { showToast('Enter question', 'red'); return; }
@@ -2067,12 +2069,16 @@ window.v10Esc = window.v10Esc || function(str) {
         unitId: unit.dbUnitId || unit.id,
         title: question.slice(0, 80),
         body: question,
-        metadata: { year, marks, topicId, topicText: topicName }
+        metadata: { year, marks, topicId, topicText: topicName, question_url: questionUrl, answer_url: answerUrl }
       });
 
       document.getElementById('v10-pyqtxt-' + unitId).value = '';
       document.getElementById('v10-pyqyr-' + unitId).value = '';
       document.getElementById('v10-pyqmarks-' + unitId).value = '';
+      const pyqQuestionUrlEl = document.getElementById('v10-pyq-question-url-' + unitId);
+      const pyqAnswerUrlEl = document.getElementById('v10-pyq-answer-url-' + unitId);
+      if (pyqQuestionUrlEl) pyqQuestionUrlEl.value = '';
+      if (pyqAnswerUrlEl) pyqAnswerUrlEl.value = '';
       
       await window.v10RefreshContentPane('pyq', subjectName, unitId);
       showToast('PYQ saved under topic.', 'green');
@@ -2090,6 +2096,8 @@ window.v10Esc = window.v10Esc || function(str) {
     return v10RunLockedSave(lockKey, button, 'Saving...', async () => {
     const question = document.getElementById('v10-iqtxt-' + unitId)?.value.trim();
     const priority = document.getElementById('v10-iqprio-' + unitId)?.value;
+    const questionUrl = document.getElementById('v10-iq-question-url-' + unitId)?.value.trim() || '';
+    const answerUrl = document.getElementById('v10-iq-answer-url-' + unitId)?.value.trim() || '';
     const { topicId, topicName } = v10ReadTopicInput(unitId, 'iq');
     if (!topicName) { showToast('Enter topic text or select a topic', 'red'); return; }
     if (!question) { showToast('Enter question', 'red'); return; }
@@ -2103,10 +2111,14 @@ window.v10Esc = window.v10Esc || function(str) {
         unitId: unit.dbUnitId || unit.id,
         title: question.slice(0, 80),
         body: question,
-        metadata: { priority, topicId, topicText: topicName }
+        metadata: { priority, topicId, topicText: topicName, question_url: questionUrl, answer_url: answerUrl }
       });
 
       document.getElementById('v10-iqtxt-' + unitId).value = '';
+      const iqQuestionUrlEl = document.getElementById('v10-iq-question-url-' + unitId);
+      const iqAnswerUrlEl = document.getElementById('v10-iq-answer-url-' + unitId);
+      if (iqQuestionUrlEl) iqQuestionUrlEl.value = '';
+      if (iqAnswerUrlEl) iqAnswerUrlEl.value = '';
       
       await window.v10RefreshContentPane('iq', subjectName, unitId);
       showToast('Important question saved under topic.', 'green');
@@ -2179,6 +2191,8 @@ window.v10Esc = window.v10Esc || function(str) {
     const countEl = document.getElementById('v11-pyqcnt');
     const questionEl = document.getElementById('v11-pyqtxt');
     const answerEl = document.getElementById('v11-pyqans');
+    const questionUrlEl = document.getElementById('v11-pyq-question-url');
+    const answerUrlEl = document.getElementById('v11-pyq-answer-url');
     const question = questionEl?.value.trim();
     const year = yearEl?.value.trim();
     if (!question || !year) { showToast('Enter question and year', 'red'); return; }
@@ -2188,13 +2202,26 @@ window.v10Esc = window.v10Esc || function(str) {
       subjId,
       unitId,
       subjName,
-      fields: { title: question.slice(0, 80), body: question, metadata: { year, count, answer: answerEl?.value.trim() || '' } },
+      fields: {
+        title: question.slice(0, 80),
+        body: question,
+        metadata: {
+          year,
+          count,
+          marks: count,
+          answer: answerEl?.value.trim() || '',
+          question_url: questionUrlEl?.value.trim() || '',
+          answer_url: answerUrlEl?.value.trim() || '',
+        }
+      },
       button: document.activeElement,
     });
     if (saved) {
       if (questionEl) questionEl.value = '';
       if (answerEl) answerEl.value = '';
       if (yearEl) yearEl.value = '';
+      if (questionUrlEl) questionUrlEl.value = '';
+      if (answerUrlEl) answerUrlEl.value = '';
     }
   };
 
@@ -2202,6 +2229,8 @@ window.v10Esc = window.v10Esc || function(str) {
     const questionEl = document.getElementById('v11-iqtxt');
     const priorityEl = document.getElementById('v11-iqprio');
     const tagsEl = document.getElementById('v11-iqtags');
+    const questionUrlEl = document.getElementById('v11-iq-question-url');
+    const answerUrlEl = document.getElementById('v11-iq-answer-url');
     const question = questionEl?.value.trim();
     if (!question) { showToast('Enter question', 'red'); return; }
     const saved = await v10SaveLinkedContentFromAdmin({
@@ -2209,12 +2238,23 @@ window.v10Esc = window.v10Esc || function(str) {
       subjId,
       unitId,
       subjName,
-      fields: { title: question.slice(0, 80), body: question, metadata: { priority: priorityEl?.value || 'med', tags: tagsEl?.value.trim() || '' } },
+      fields: {
+        title: question.slice(0, 80),
+        body: question,
+        metadata: {
+          priority: priorityEl?.value || 'med',
+          tags: tagsEl?.value.trim() || '',
+          question_url: questionUrlEl?.value.trim() || '',
+          answer_url: answerUrlEl?.value.trim() || '',
+        }
+      },
       button: document.activeElement,
     });
     if (saved) {
       if (questionEl) questionEl.value = '';
       if (tagsEl) tagsEl.value = '';
+      if (questionUrlEl) questionUrlEl.value = '';
+      if (answerUrlEl) answerUrlEl.value = '';
     }
   };
 
@@ -3026,9 +3066,13 @@ window.v10Esc = window.v10Esc || function(str) {
           <h4 style="margin-bottom:1rem;">📝 Add PYQ</h4>
           <div class="form-row">
             <div class="input-group"><label>Exam Year</label><input class="input" id="v11-pyqyr" placeholder="e.g. 2023" type="number" min="2000" max="2099"></div>
-            <div class="input-group"><label>Times Asked</label><input class="input" id="v11-pyqcnt" placeholder="e.g. 3" type="number" min="1" value="1"></div>
+            <div class="input-group"><label>Marks</label><input class="input" id="v11-pyqcnt" placeholder="e.g. 5" type="number" min="1" value="1"></div>
           </div>
           <div class="input-group"><label>Question</label><textarea class="input" id="v11-pyqtxt" placeholder="Type the question..." rows="3" style="resize:vertical;"></textarea></div>
+          <div class="form-row">
+            <div class="input-group"><label>Question URL</label><input class="input" id="v11-pyq-question-url" placeholder="https://drive.google.com/..." type="url"></div>
+            <div class="input-group"><label>Answer URL</label><input class="input" id="v11-pyq-answer-url" placeholder="https://drive.google.com/..." type="url"></div>
+          </div>
           <div class="input-group"><label>Answer (optional)</label><textarea class="input" id="v11-pyqans" placeholder="Answer/explanation..." rows="2" style="resize:vertical;"></textarea></div>
           <button class="btn btn-primary" onclick="window.v11AdminUploadPYQ('${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">📝 Add PYQ</button>
           <hr style="margin:1rem 0;">
@@ -3048,6 +3092,10 @@ window.v10Esc = window.v10Esc || function(str) {
         <div class="card">
           <h4 style="margin-bottom:1rem;">⭐ Add Important Question</h4>
           <div class="input-group"><label>Question</label><textarea class="input" id="v11-iqtxt" placeholder="Type the important question..." rows="3" style="resize:vertical;"></textarea></div>
+          <div class="form-row">
+            <div class="input-group"><label>Question URL</label><input class="input" id="v11-iq-question-url" placeholder="https://drive.google.com/..." type="url"></div>
+            <div class="input-group"><label>Answer URL</label><input class="input" id="v11-iq-answer-url" placeholder="https://drive.google.com/..." type="url"></div>
+          </div>
           <div class="form-row">
             <div class="input-group"><label>Priority</label>
               <select class="select" id="v11-iqprio">
@@ -3173,9 +3221,13 @@ window.v10Esc = window.v10Esc || function(str) {
           <h4 style="margin-bottom:1rem;">📝 Add PYQ</h4>
           <div class="form-row">
             <div class="input-group"><label>Exam Year</label><input class="input" id="v11-pyqyr" placeholder="e.g. 2023" type="number" min="2000" max="2099"></div>
-            <div class="input-group"><label>Times Asked</label><input class="input" id="v11-pyqcnt" placeholder="e.g. 3" type="number" min="1" value="1"></div>
+            <div class="input-group"><label>Marks</label><input class="input" id="v11-pyqcnt" placeholder="e.g. 5" type="number" min="1" value="1"></div>
           </div>
           <div class="input-group"><label>Question</label><textarea class="input" id="v11-pyqtxt" placeholder="Type the question..." rows="3" style="resize:vertical;"></textarea></div>
+          <div class="form-row">
+            <div class="input-group"><label>Question URL</label><input class="input" id="v11-pyq-question-url" placeholder="https://drive.google.com/..." type="url"></div>
+            <div class="input-group"><label>Answer URL</label><input class="input" id="v11-pyq-answer-url" placeholder="https://drive.google.com/..." type="url"></div>
+          </div>
           <div class="input-group"><label>Answer (optional)</label><textarea class="input" id="v11-pyqans" placeholder="Answer/explanation..." rows="2" style="resize:vertical;"></textarea></div>
           <button class="btn btn-primary" onclick="window.v11AdminUploadPYQ('${subjId}','${unitId}','${(subj.name || '').replace(/'/g, "\\'")}')">📝 Add PYQ</button>
           <hr style="margin:1rem 0;">

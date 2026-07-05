@@ -472,7 +472,10 @@ function navigateTo(page) {
     if (ni.querySelector('.nav-label')?.textContent.toLowerCase().includes(page.replace('backlog', 'backlog'))) ni.classList.add('active');
   });
   // Page-specific init
-  if (page === 'dashboard') updateStudentDashboardMetrics();
+  if (page === 'dashboard') {
+    if (window.aiiensLoadStudentDashboard) window.aiiensLoadStudentDashboard();
+    else updateStudentDashboardMetrics();
+  }
   if (page === 'subjects') { buildSemSwitcher(); renderSubjects(); }
   if (page === 'units' && APP.currentSubject) { renderUnits(APP.currentSubject); }
   if (page === 'unit-content' && APP.currentSubject && APP.currentUnit) { renderVideoList(APP.currentSubject.id || APP.currentSubject.rawId || APP.currentSubject, APP.currentUnit); }
@@ -1230,7 +1233,7 @@ async function renderTopicInlineNotes(topicTitle, subjectId, unitNum, topicIdx) 
       `</ul>`;
   }
   topicNotes.forEach(n => {
-    html += `<div class="note-row" style="margin-bottom:6px;" onclick="previewNoteInline('${(n.link || '').replace(/'/g, "\\'")}','${n.title.replace(/'/g, "\\'")}')">
+    html += `<div class="note-row" style="margin-bottom:6px;" onclick="window.aiiensProgressService?.track('notes_read',{ subject: APP.currentSubject, unitId: APP.currentUnit, title: '${v10EscapeJs(n.title)}' }); previewNoteInline('${(n.link || '').replace(/'/g, "\\'")}','${n.title.replace(/'/g, "\\'")}')">
       <div class="note-icon">${n.type === 'pdf' ? '📄' : n.type === 'doc' ? '📝' : '🔗'}</div>
       <div class="note-info"><div class="note-title">${n.title}</div><div class="note-desc">Tap to preview</div></div>
       <div class="note-actions"></div>
@@ -1392,7 +1395,7 @@ async function renderNotes(subjectId, unitNum) {
       </div>
       <div class="note-actions">
         ${n.link ? `
-          <button class="btn btn-ghost btn-sm" onclick="previewNoteInline('${n.link.replace(/'/g, "\\'")}','${n.title.replace(/'/g, "\\'")}')">👁️ Preview</button>
+          <button class="btn btn-ghost btn-sm" onclick="window.aiiensProgressService?.track('notes_read',{ subject: APP.currentSubject, unitId: APP.currentUnit, title: '${v10EscapeJs(n.title)}' }); previewNoteInline('${n.link.replace(/'/g, "\\'")}','${n.title.replace(/'/g, "\\'")}')">👁️ Preview</button>
         ` : `
           <button class="btn btn-ghost btn-sm" onclick="showToast('📄 No file linked','amber')">Preview</button>
         `}
@@ -1461,6 +1464,15 @@ function closeNotePreview() {
   document.getElementById('note-preview-body').innerHTML = '';
 }
 
+function previewStudentContentLink(link, title) {
+  const cleanLink = String(link || '').trim();
+  if (!cleanLink) {
+    showToast('No preview available for this link', 'amber');
+    return;
+  }
+  previewNoteInline(cleanLink, title || 'Preview');
+}
+
 document.addEventListener('click', function (e) {
   const npmEl = document.getElementById('note-preview-modal');
   if (npmEl && e.target === npmEl) closeNotePreview();
@@ -1498,6 +1510,8 @@ async function renderPYQ(filterYear, subjectId, unitNum) {
             year: String(meta.year || '2024'),
             count: parseInt(meta.count) || 1,
             ans: meta.answer || p.body || 'Answer not provided.',
+            questionUrl: meta.question_url || meta.questionUrl || p.question_url || p.questionUrl || '',
+            answerUrl: meta.answer_url || meta.answerUrl || p.answer_url || p.answerUrl || '',
             isAdmin: true
           };
         });
@@ -1519,14 +1533,22 @@ async function renderPYQ(filterYear, subjectId, unitNum) {
 
   listEl.innerHTML = data.length ? data.map((p, i) => `
     <div class="pyq-item" id="pyq-${i}">
-      <div class="pyq-header" onclick="togglePYQ(${i})">
-        <div class="pyq-q">Q${i + 1}. ${p.q}</div>
-        <div class="pyq-meta">
-          <span class="pyq-year">📅 ${p.year}</span>
-          <span class="pyq-count">× ${p.count} times</span>
+      <div class="pyq-header">
+        <div class="pyq-main" onclick="togglePYQ(${i})">
+          <div class="pyq-q">Q${i + 1}. ${v10Html(p.q)}</div>
+          <div class="question-card-row">
+            <div class="question-card-meta">
+              <span class="pyq-year">&#128197; Year: ${v10Html(p.year)}</span>
+              <span class="pyq-count">&#127991; Marks: ${v10Html(p.marks || p.count || '-')}</span>
+            </div>
+            ${(p.questionUrl || p.answerUrl) ? `<div class="question-card-actions" onclick="event.stopPropagation()">
+              ${p.questionUrl ? `<button class="btn btn-ghost btn-sm question-pdf-btn" type="button" onclick="previewStudentContentLink('${v10EscapeJs(p.questionUrl)}','${v10EscapeJs(`${p.q} - Question PDF`)}')">Question PDF</button>` : ''}
+              ${p.answerUrl ? `<button class="btn btn-ghost btn-sm question-pdf-btn" type="button" onclick="window.aiiensProgressService?.track('pyq_solved',{ subject: APP.currentSubject, unitId: APP.currentUnit, title: '${v10EscapeJs(p.q)}' }); previewStudentContentLink('${v10EscapeJs(p.answerUrl)}','${v10EscapeJs(`${p.q} - Answer PDF`)}')">Answer PDF</button>` : ''}
+            </div>` : ''}
+          </div>
         </div>
       </div>
-      <div class="pyq-answer">${p.ans}</div>
+      <div class="pyq-answer">${v10Html(p.ans)}</div>
     </div>`).join('') :
     `<div style="text-align:center;padding:3rem;color:var(--text3);">
       <div style="font-size:3rem;margin-bottom:1rem;">📝</div>
@@ -1536,7 +1558,9 @@ async function renderPYQ(filterYear, subjectId, unitNum) {
 }
 
 function togglePYQ(i) {
-  document.getElementById('pyq-' + i)?.classList.toggle('expanded');
+  const el = document.getElementById('pyq-' + i);
+  const expanded = el?.classList.toggle('expanded');
+  if (expanded) window.aiiensProgressService?.track('pyq_solved', { subject: APP.currentSubject, unitId: APP.currentUnit, questionIndex: i });
 }
 
 function filterPYQ(el, year) {
@@ -1572,6 +1596,8 @@ async function renderIQ(subjectId, unitNum) {
             q: q.title || q.body || 'Untitled Question',
             priority: meta.priority || 'med',
             tags: (meta.tags || '').split(',').map(t => t.trim()).filter(Boolean),
+            questionUrl: meta.question_url || meta.questionUrl || q.question_url || q.questionUrl || '',
+            answerUrl: meta.answer_url || meta.answerUrl || q.answer_url || q.answerUrl || '',
             isAdmin: true
           };
         });
@@ -1582,15 +1608,19 @@ async function renderIQ(subjectId, unitNum) {
   listEl.innerHTML = customIQs.length ? customIQs.map((q, i) => `
     <div class="iq-item">
       <div class="iq-header">
-        <div class="iq-q">Q${i + 1}. ${q.q}</div>
-        <div class="iq-actions">
-          <button class="btn-icon" onclick="showToast('🔖 Bookmarked!','amber')" title="Bookmark">🔖</button>
-          <button class="btn-icon" onclick="showToast('📋 Copied!','blue')" title="Copy">📋</button>
+        <div class="iq-main">
+          <div class="iq-q">Q${i + 1}. ${v10Html(q.q)}</div>
+          <div class="question-card-row">
+            <div class="question-card-meta">
+              <span class="priority-badge priority-${q.priority}">${q.priority === 'high' ? 'High Priority' : q.priority === 'med' ? 'Medium' : 'Low'}</span>
+              ${q.tags.map(t => `<span class="tag">${v10Html(t)}</span>`).join('')}
+            </div>
+            ${(q.questionUrl || q.answerUrl) ? `<div class="question-card-actions">
+              ${q.questionUrl ? `<button class="btn btn-ghost btn-sm question-pdf-btn" type="button" onclick="previewStudentContentLink('${v10EscapeJs(q.questionUrl)}','${v10EscapeJs(`${q.q} - Question PDF`)}')">Question PDF</button>` : ''}
+              ${q.answerUrl ? `<button class="btn btn-ghost btn-sm question-pdf-btn" type="button" onclick="previewStudentContentLink('${v10EscapeJs(q.answerUrl)}','${v10EscapeJs(`${q.q} - Answer PDF`)}')">Answer PDF</button>` : ''}
+            </div>` : ''}
+          </div>
         </div>
-      </div>
-      <div class="iq-footer">
-        <span class="priority-badge priority-${q.priority}">${q.priority === 'high' ? '🔴 High Priority' : q.priority === 'med' ? '🟡 Medium' : '🟢 Low'}</span>
-        ${q.tags.map(t => `<span class="tag">${t}</span>`).join('')}
       </div>
     </div>`).join('') :
     `<div style="text-align:center;padding:3rem;color:var(--text3);">
@@ -2377,6 +2407,20 @@ function skillUpTheme(value, index = 0) {
   return `skillup-theme-${Math.abs(hash) % 5}`;
 }
 
+function studentWorkshopCardCategory(row = {}) {
+  const text = `${row.category || ''} ${row.workshop_name || ''} ${row.description || ''}`.toLowerCase();
+  if (text.includes('ai') || text.includes('machine')) return 'ai';
+  if (text.includes('program') || text.includes('code') || text.includes('web')) return 'programming';
+  if (text.includes('career') || text.includes('resume')) return 'career';
+  if (text.includes('placement') || text.includes('interview')) return 'placement';
+  if (text.includes('data') || text.includes('analytics')) return 'data';
+  return 'workshop';
+}
+
+function studentWorkshopCardIcon(category) {
+  return ({ ai: 'AI', programming: '</>', career: 'UP', placement: 'JOB', data: 'DS', workshop: 'LIVE' })[category] || 'LIVE';
+}
+
 function enableSkillUpHorizontalScrolling(root = document) {
   root.querySelectorAll?.('.live-workshop-scroll-row, .live-skillup-grid').forEach((row) => {
     if (row.dataset.wheelScrollReady) return;
@@ -2393,15 +2437,26 @@ function studentSkillUpWorkshopCard(row, registered, index = 0) {
   const action = registered
     ? `<a class="btn btn-primary" href="${v10EscapeAttr(row.join_link || '#')}" target="_blank" rel="noreferrer">Join</a>`
     : `<button class="btn btn-primary" type="button" onclick="openLiveWorkshopRegisterModal?.('${v10EscapeJs(row.id)}')">Register</button>`;
+  const category = studentWorkshopCardCategory(row);
+  const image = row.banner_url || row.banner_image || row.image_url || '';
   return `<article class="live-workshop-card ${skillUpTheme(row.id, index)}">
-    ${row.banner_image ? `<img class="live-workshop-card-img" src="${v10EscapeAttr(row.banner_image)}" alt="${v10Html(row.workshop_name)} banner" loading="lazy">` : ''}
-    <h3>${v10Html(row.workshop_name)}</h3>
-    <div class="live-workshop-info-pills">
-      <span>${v10Html(row.speaker_name || 'Speaker TBA')}</span>
-      <span>${v10Html(row.workshop_date || '')}</span>
-      <span>${v10Html(row.workshop_time || '')}</span>
+    <div class="live-workshop-card-banner live-workshop-placeholder-${v10EscapeAttr(category)}">
+      ${image ? `<img class="live-workshop-card-img" src="${v10EscapeAttr(image)}" alt="${v10Html(row.workshop_name)} banner" loading="lazy" onerror="this.closest('.live-workshop-card-banner')?.classList.add('image-failed');this.remove();">` : ''}
+      <div class="live-workshop-placeholder-copy">
+        <span>${v10Html(studentWorkshopCardIcon(category))}</span>
+        <strong>${v10Html((category || 'workshop').replace(/^./, ch => ch.toUpperCase()))}</strong>
+      </div>
     </div>
-    <p class="live-workshop-description">${v10Html(row.description || '')}</p>
+    <div class="live-workshop-card-body">
+      <h3>${v10Html(row.workshop_name)}</h3>
+      <div class="live-workshop-speaker">${v10Html(row.speaker_name || 'Speaker TBA')}</div>
+      <p class="live-workshop-description">${v10Html(row.description || '')}</p>
+    </div>
+    <div class="live-workshop-info-pills">
+      <span>&#128197; ${v10Html(row.workshop_date || '')}</span>
+      <span>&#128338; ${v10Html(row.workshop_time || '')}</span>
+      <span>&#128100; ${v10Html(row.speaker_name || 'Speaker TBA')}</span>
+    </div>
     <div class="live-workshop-card-action">${action}</div>
   </article>`;
 }
@@ -11855,6 +11910,166 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     return user?.id || window.APP?.user?.id || window.APP?.user?.googleId || null;
   }
 
+  function clampNumber(value, fallback = 0) {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+  }
+
+  function normalizeProgressEvent(event) {
+    return String(event || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  }
+
+  function subjectFromProgressDetails(details = {}) {
+    const subject = details.subject || window.APP?.currentSubject || {};
+    const rawId = String(details.subjectId || subject.rawId || subject.id || '').replace(/^custom_/, '');
+    return {
+      id: rawId || String(subject.name || details.subjectName || '').trim(),
+      name: subject.name || details.subjectName || 'Subject',
+    };
+  }
+
+  function progressRecentSubjects(row = {}) {
+    return [1, 2, 3, 4, 5].map((slot) => ({
+      id: row[`recent_subject_${slot}_id`] || '',
+      name: row[`recent_subject_${slot}`] || '',
+      opened: row[`recent_subject_${slot}_opened`] || '',
+    })).filter(item => item.id || item.name);
+  }
+
+  function applyRecentSubjectPatch(patch, row, details) {
+    const subject = subjectFromProgressDetails(details);
+    if (!subject.id && !subject.name) return;
+    const opened = new Date().toISOString();
+    const recent = progressRecentSubjects(row)
+      .filter(item => String(item.id || item.name) !== String(subject.id || subject.name));
+    recent.unshift({ id: subject.id, name: subject.name, opened });
+    [1, 2, 3, 4, 5].forEach((slot) => {
+      const item = recent[slot - 1] || {};
+      patch[`recent_subject_${slot}`] = item.name || null;
+      patch[`recent_subject_${slot}_id`] = item.id || null;
+      patch[`recent_subject_${slot}_opened`] = item.opened || null;
+    });
+    patch.first_subject_opened = true;
+    patch.active_subjects = new Set(recent.slice(0, 5).map(item => item.id || item.name).filter(Boolean)).size;
+  }
+
+  function progressStreakPatch(row, patch, today) {
+    const last = row.last_activity_date ? String(row.last_activity_date).slice(0, 10) : '';
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayKey = todayKeyDb(yesterday);
+    let current = clampNumber(row.current_streak);
+    if (last === today) {
+      current = Math.max(current, 1);
+    } else if (last === yesterdayKey) {
+      current += 1;
+    } else {
+      current = 1;
+    }
+    patch.current_streak = current;
+    patch.longest_streak = Math.max(current, clampNumber(row.longest_streak));
+  }
+
+  function buildProgressPatch(event, details, row = {}, id) {
+    const normalized = normalizeProgressEvent(event);
+    const today = todayKeyDb();
+    const now = new Date().toISOString();
+    const patch = {
+      user_id: id,
+      updated_at: now,
+      last_activity_date: today,
+      learning_sessions: clampNumber(row.learning_sessions) + 1,
+    };
+
+    progressStreakPatch(row, patch, today);
+
+    if (normalized === 'subject_opened') applyRecentSubjectPatch(patch, row, details);
+    if (normalized === 'unit_opened') patch.active_subjects = Math.max(clampNumber(row.active_subjects), 1);
+    if (normalized === 'topic_completed' || normalized === 'content_completed') {
+      patch.completed_topics = clampNumber(row.completed_topics) + 1;
+    }
+    if (normalized === 'unit_completed') {
+      patch.completed_units = clampNumber(row.completed_units) + 1;
+    }
+    if (normalized === 'video_watched' || normalized === 'video_opened') {
+      patch.completed_videos = clampNumber(row.completed_videos) + 1;
+    }
+    if (normalized === 'subject_completed') {
+      patch.completed_subjects = clampNumber(row.completed_subjects) + 1;
+    }
+    if (normalized === 'notes_read' || normalized === 'note_read') {
+      patch.notes_read = clampNumber(row.notes_read) + 1;
+    }
+    if (normalized === 'pyq_solved' || normalized === 'pyq_completed') {
+      patch.pyqs_completed = clampNumber(row.pyqs_completed) + 1;
+    }
+    if (normalized === 'sgpa_calculated' || normalized === 'gpa_calculated') {
+      const sgpa = clampNumber(details.sgpa, NaN);
+      if (Number.isFinite(sgpa)) patch.sgpa = sgpa;
+    }
+    if (normalized === 'cgpa_calculated' || normalized === 'gpa_calculated') {
+      const cgpa = clampNumber(details.cgpa, NaN);
+      if (Number.isFinite(cgpa)) patch.cgpa = cgpa;
+    }
+
+    const completedTopics = clampNumber(patch.completed_topics, clampNumber(row.completed_topics));
+    const completedUnits = clampNumber(patch.completed_units, clampNumber(row.completed_units));
+    const completedVideos = clampNumber(patch.completed_videos, clampNumber(row.completed_videos));
+    const notesRead = clampNumber(patch.notes_read, clampNumber(row.notes_read));
+    const completedSubjects = clampNumber(patch.completed_subjects, clampNumber(row.completed_subjects));
+    const activeSubjects = clampNumber(patch.active_subjects, clampNumber(row.active_subjects));
+    const denominator = Math.max(1, completedTopics + completedVideos + notesRead + activeSubjects * 10);
+    patch.syllabus_percentage = Math.max(clampNumber(row.syllabus_percentage), Math.min(100, Math.round(((completedTopics + completedVideos + notesRead) / denominator) * 100)));
+    patch.first_unit_completed = completedUnits >= 1 || Boolean(row.first_unit_completed);
+    patch.five_units_completed = completedUnits >= 5 || Boolean(row.five_units_completed);
+    patch.ten_units_completed = completedUnits >= 10 || Boolean(row.ten_units_completed);
+    patch.seven_day_streak = clampNumber(patch.current_streak, clampNumber(row.current_streak)) >= 7 || Boolean(row.seven_day_streak);
+    patch.thirty_day_streak = clampNumber(patch.current_streak, clampNumber(row.current_streak)) >= 30 || Boolean(row.thirty_day_streak);
+    patch.hundred_notes_read = notesRead >= 100 || Boolean(row.hundred_notes_read);
+    patch.subject_milestone = completedSubjects > 0 || Boolean(row.subject_milestone);
+    return patch;
+  }
+
+  async function fetchProgressRecord(supabase, id) {
+    const { data, error } = await supabase
+      .from('student_dashboard_progress')
+      .select('*')
+      .eq('user_id', id)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    return data?.[0] || null;
+  }
+
+  async function updateStudentDashboardProgress(event, details = {}) {
+    const supabase = sb();
+    const id = await userId();
+    if (!supabase || !id) return null;
+    try {
+      const existing = await fetchProgressRecord(supabase, id);
+      const patch = buildProgressPatch(event, details, existing || {}, id);
+      const request = existing?.id
+        ? supabase.from('student_dashboard_progress').update(patch).eq('id', existing.id).select('*').maybeSingle()
+        : existing
+          ? supabase.from('student_dashboard_progress').update(patch).eq('user_id', id).select('*').maybeSingle()
+          : supabase.from('student_dashboard_progress').insert(patch).select('*').maybeSingle();
+      const { data, error } = await request;
+      if (error) throw error;
+      window.dispatchEvent(new CustomEvent('aiiens:student-dashboard-changed'));
+      if (document.getElementById('page-dashboard')?.style.display !== 'none') {
+        setTimeout(loadDashboardSupabaseData, 0);
+      }
+      return data || patch;
+    } catch (error) {
+      console.warn('[DASHBOARD] Progress service update failed:', error?.message || error);
+      return null;
+    }
+  }
+
+  window.aiiensProgressService = {
+    track: updateStudentDashboardProgress,
+  };
+
   function hasLiveWorkshopPortalAuth() {
     try {
       return sessionStorage.getItem('aimeasy_login_portal') === 'live_workshop'
@@ -12100,31 +12315,12 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   };
 
   async function saveRecentSubjectToDb(subject) {
-    const supabase = sb();
-    const id = await userId();
-    if (!supabase || !id || !subject) return;
-    const rawId = String(subject.rawId || subject.id || subject.name || '').replace(/^custom_/, '');
-    if (!rawId) return;
-    const row = {
-      user_id: id,
-      subject_id: rawId,
-      subject_name: subject.name || 'Subject',
-      subject_code: subject.code || null,
-      subject_icon: subject.icon || null,
-      branch: subject.branch || window.APP?.user?.branch || window.APP?.user?.branch_name || null,
-      regulation: subject.reg || subject.regulation || window.APP?.user?.regulation || window.APP?.user?.regulation_code || null,
-      semester: subject.sem || subject.semester || window.APP?.user?.semester || null,
-      last_opened_at: new Date().toISOString(),
-    };
-    const { error } = await supabase.from('student_recent_subjects').upsert(row, { onConflict: 'user_id,subject_id' });
-    if (error) console.warn('[DASHBOARD] Recent subject save failed:', error.message || error);
-    else window.dispatchEvent(new CustomEvent('aiiens:student-dashboard-changed'));
+    return updateStudentDashboardProgress('subject_opened', { subject });
   }
   window.aiiensTrackRecentSubject = saveRecentSubjectToDb;
 
   const originalAddRecent = window.addToRecentlyOpened || globalThis.addToRecentlyOpened;
   window.addToRecentlyOpened = globalThis.addToRecentlyOpened = function addRecentSupabase(name, code, icon, id) {
-    saveRecentSubjectToDb({ id, rawId: id, name, code, icon });
     return originalAddRecent?.apply(this, arguments);
   };
 
@@ -12132,8 +12328,16 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   if (typeof originalOpenSubject === 'function') {
     window.openSubject = globalThis.openSubject = async function openSubjectSupabaseTracked(id) {
       const result = await originalOpenSubject.apply(this, arguments);
-      if (window.APP?.currentSubject) await saveRecentSubjectToDb(window.APP.currentSubject);
       await touchStreak();
+      return result;
+    };
+  }
+
+  const originalOpenUnit = window.openUnit || globalThis.openUnit;
+  if (typeof originalOpenUnit === 'function') {
+    window.openUnit = globalThis.openUnit = function openUnitProgressTracked(unitNum, subjectId) {
+      const result = originalOpenUnit.apply(this, arguments);
+      updateStudentDashboardProgress('unit_opened', { subject: window.APP?.currentSubject, subjectId, unitId: unitNum });
       return result;
     };
   }
@@ -12154,6 +12358,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       payload: { currentSemId: window.APP?.currentSemId || null, semesters: window.APP?.calcSemesters || [] },
     });
     if (error) console.warn('[DASHBOARD] CGPA save failed:', error.message || error);
+    await updateStudentDashboardProgress('gpa_calculated', { cgpa, sgpa });
     await loadDashboardSupabaseData();
   }
 
@@ -12278,7 +12483,46 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   if (typeof originalMarkTopicCompleted === 'function') {
     window.markTopicCompleted = globalThis.markTopicCompleted = function markTopicCompletedSupabase() {
       const result = originalMarkTopicCompleted.apply(this, arguments);
+      updateStudentDashboardProgress('topic_completed', {
+        subject: window.APP?.currentSubject,
+        subjectId: arguments[0],
+        unitId: arguments[1],
+        topicIndex: arguments[2],
+      });
       setTimeout(() => { refreshLearningSummary(); touchStreak(); loadDashboardSupabaseData(); }, 0);
+      return result;
+    };
+  }
+
+  const originalSelectVideoItem = window.selectVideoItem || globalThis.selectVideoItem;
+  if (typeof originalSelectVideoItem === 'function') {
+    window.selectVideoItem = globalThis.selectVideoItem = function selectVideoItemProgressTracked(idx) {
+      const result = originalSelectVideoItem.apply(this, arguments);
+      const item = window.APP?._videoItems?.[idx];
+      if (item?.url) {
+        updateStudentDashboardProgress('video_watched', {
+          subject: window.APP?.currentSubject,
+          unitId: window.APP?.currentUnit,
+          topicIndex: item.topicIndex,
+          videoId: item.id || item.topicId || item.url,
+        });
+      }
+      return result;
+    };
+  }
+
+  const originalNextVideo = window.nextVideo || globalThis.nextVideo;
+  if (typeof originalNextVideo === 'function') {
+    window.nextVideo = globalThis.nextVideo = function nextVideoProgressTracked() {
+      const total = window.APP?._videoItems?.length || 0;
+      const wasLast = total > 0 && window.APP?.currentVideoIndex >= total - 1;
+      const result = originalNextVideo.apply(this, arguments);
+      if (wasLast) {
+        updateStudentDashboardProgress('unit_completed', {
+          subject: window.APP?.currentSubject,
+          unitId: window.APP?.currentUnit,
+        });
+      }
       return result;
     };
   }
@@ -12440,91 +12684,85 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     if (!supabase || !id) return;
     if (!window.__aiiensStudentProgressChannel) {
       window.__aiiensStudentProgressChannel = supabase.channel(`student-dashboard-progress-${id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'student_topic_progress', filter: `user_id=eq.${id}` }, () => {
-          if (document.getElementById('page-dashboard')?.style.display !== 'none') loadDashboardSupabaseData();
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'student_recent_subjects', filter: `user_id=eq.${id}` }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'student_dashboard_progress', filter: `user_id=eq.${id}` }, () => {
           if (document.getElementById('page-dashboard')?.style.display !== 'none') loadDashboardSupabaseData();
         })
         .subscribe?.();
     }
-    let summary = null;
-    let recentSubjects = [];
-    let streak = null;
     subscribeLiveWorkshopUpdates();
     renderStudentDashboardWorkshopCarousel();
+    let progress = null;
     try {
-      const { data } = await supabase.from('student_cgpa_results').select('*').eq('user_id', id).order('calculated_at', { ascending: false }).limit(1);
-      const latest = data?.[0];
-      const cgpaEl = document.querySelector('#page-dashboard .metric-card.blue .metric-val');
-      const cgpaTrend = document.querySelector('#page-dashboard .metric-card.blue .metric-trend');
-      if (latest && cgpaEl) cgpaEl.textContent = Number(latest.cgpa).toFixed(2);
-      if (latest && cgpaTrend) cgpaTrend.textContent = `${Number(latest.percentage).toFixed(2)}% latest percentage`;
+      progress = await fetchProgressRecord(supabase, id);
     } catch (error) {
-      console.warn('[DASHBOARD] CGPA load failed:', error?.message || error);
+      console.warn('[DASHBOARD] Progress load failed:', error?.message || error);
+      return;
     }
-    try {
-      summary = await refreshLearningSummary();
-      const progressEl = document.querySelector('#page-dashboard .metric-card.teal .metric-val');
-      const progressTrend = document.querySelector('#page-dashboard .metric-card.teal .metric-trend');
-      if (summary && progressEl) progressEl.textContent = `${summary.learning_percentage}%`;
-      if (summary && progressTrend) progressTrend.textContent = `${summary.completed_topics} topics, ${summary.completed_videos} videos completed`;
-      const tracker = document.querySelector('#page-dashboard .progress-tracker');
-      if (summary && tracker) {
-        tracker.innerHTML = `
-          <div class="section-heading">Learning Progress</div>
-          <div class="weekly-summary compact-weekly-summary">
-            <div><strong>${esc(summary.weekly_completion || 0)}%</strong><span>Weekly Completion</span></div>
-            <div><strong>${esc(summary.units_completed || 0)}</strong><span>Units Completed</span></div>
-            <div><strong>${esc(summary.active_subjects || 0)}</strong><span>Active Subjects</span></div>
-            <div><strong>${esc(summary.learning_sessions || 0)}</strong><span>Learning Sessions</span></div>
+    if (!progress) {
+      progress = await updateStudentDashboardProgress('dashboard_opened', {});
+      if (!progress) progress = {};
+    }
+
+    const cgpaEl = document.querySelector('#page-dashboard .metric-card.blue .metric-val');
+    const cgpaTrend = document.querySelector('#page-dashboard .metric-card.blue .metric-trend');
+    if (cgpaEl) cgpaEl.textContent = clampNumber(progress.cgpa).toFixed(2);
+    if (cgpaTrend) cgpaTrend.textContent = `${clampNumber(progress.sgpa).toFixed(2)} latest SGPA`;
+
+    const progressEl = document.querySelector('#page-dashboard .metric-card.teal .metric-val');
+    const progressTrend = document.querySelector('#page-dashboard .metric-card.teal .metric-trend');
+    if (progressEl) progressEl.textContent = `${clampNumber(progress.syllabus_percentage)}%`;
+    if (progressTrend) progressTrend.textContent = `${clampNumber(progress.completed_topics)} topics, ${clampNumber(progress.completed_videos)} videos completed`;
+
+    renderStreak({
+      current_streak: clampNumber(progress.current_streak),
+      best_streak: clampNumber(progress.longest_streak),
+      last_active_date: progress.last_activity_date,
+      missed_yesterday: false,
+    });
+
+    const tracker = document.querySelector('#page-dashboard .progress-tracker');
+    if (tracker) {
+      tracker.innerHTML = `
+        <div class="section-heading">Learning Progress</div>
+        <div class="weekly-summary compact-weekly-summary">
+          <div><strong>${esc(progress.completed_units || 0)}</strong><span>Units Completed</span></div>
+          <div><strong>${esc(progress.active_subjects || 0)}</strong><span>Active Subjects</span></div>
+          <div><strong>${esc(progress.learning_sessions || 0)}</strong><span>Learning Sessions</span></div>
+          <div><strong>${esc(progress.notes_read || 0)}</strong><span>Notes Read</span></div>
+          <div><strong>${esc(progress.pyqs_completed || 0)}</strong><span>PYQs Completed</span></div>
+        </div>
+        <div class="weekly-mini-progress" role="progressbar" aria-label="Overall learning completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(progress.syllabus_percentage || 0)}"><span style="width:${Math.max(0, Math.min(100, Number(progress.syllabus_percentage) || 0))}%"></span></div>`;
+    }
+
+    const recentSubjects = progressRecentSubjects(progress);
+    const listEl = document.getElementById('recently-opened-list') || document.querySelector('#page-dashboard .dash-row-3 .card');
+    if (listEl) {
+      listEl.innerHTML = `<div class="section-heading">Recently Opened</div>` + (recentSubjects.length ? recentSubjects.map(item => `
+        <div class="recent-item">
+          <div class="recent-info">
+            <div class="recent-title">${esc(item.name)}</div>
+            <div class="recent-sub">${esc(formatRecentTime(item.opened || progress.updated_at || new Date().toISOString()))}</div>
           </div>
-          <div class="weekly-mini-progress" role="progressbar" aria-label="Overall learning completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${esc(summary.learning_percentage)}"><span style="width:${Math.max(0, Math.min(100, Number(summary.learning_percentage) || 0))}%"></span></div>`;
-      }
-    } catch (error) {
-      console.warn('[DASHBOARD] Learning summary load failed:', error?.message || error);
+          <button class="btn btn-primary btn-sm" onclick="openSubjectFromRecent('${js(String(item.id || item.name).includes('-') ? 'custom_' + (item.id || item.name) : (item.id || item.name))}')">Continue Learning</button>
+        </div>`).join('') : '<div class="empty-state-card">No subjects opened yet.</div>');
     }
-    try {
-      const { data } = await supabase.from('student_recent_subjects').select('*').eq('user_id', id).order('last_opened_at', { ascending: false }).limit(5);
-      recentSubjects = data || [];
-      const listEl = document.getElementById('recently-opened-list') || document.querySelector('#page-dashboard .dash-row-3 .card');
-      if (listEl) {
-        listEl.innerHTML = `<div class="section-heading">Recently Opened</div>` + (recentSubjects.length ? recentSubjects.map(item => `
-          <div class="recent-item">
-            <div class="recent-info">
-              <div class="recent-title">${esc(item.subject_name)}</div>
-              <div class="recent-sub">${esc([item.subject_code || 'Subject', item.branch].filter(Boolean).join(' · '))} · ${esc(formatRecentTime(item.last_opened_at))}</div>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="openSubjectFromRecent('${js(String(item.subject_id).includes('-') ? 'custom_' + item.subject_id : item.subject_id)}')">Continue Learning</button>
-          </div>`).join('') : '<div class="empty-state-card">No subjects opened yet.</div>');
-      }
-    } catch (error) {
-      console.warn('[DASHBOARD] Recent subjects load failed:', error?.message || error);
-    }
-    try {
-      const { data } = await supabase.from('student_streaks').select('*').eq('user_id', id).maybeSingle();
-      streak = data || null;
-      if (streak) renderStreak(streak);
-    } catch (error) {
-      console.warn('[DASHBOARD] Streak load failed:', error?.message || error);
-    }
-    renderSupabaseAchievements({ summary, recentSubjects, streak });
+    renderSupabaseAchievements({ progress, recentSubjects });
   }
 
-  function renderSupabaseAchievements({ summary, recentSubjects, streak }) {
+  function renderSupabaseAchievements({ progress, recentSubjects }) {
     const achievementsEl = document.getElementById('achievements-list');
     if (!achievementsEl) return;
-    const unitsCompleted = Number(summary?.units_completed || 0);
-    const videosCompleted = Number(summary?.completed_videos || 0);
-    const streakDays = Math.max(Number(streak?.current_streak || 0), Number(streak?.best_streak || 0));
+    const unitsCompleted = Number(progress?.completed_units || 0);
+    const streakDays = Math.max(Number(progress?.current_streak || 0), Number(progress?.longest_streak || 0));
     const items = [
-      { label: 'First Subject Opened', icon: '📖', earned: (recentSubjects || []).length >= 1 },
-      { label: 'First Unit Completed', icon: '✓', earned: unitsCompleted >= 1 },
-      { label: '5 Units Completed', icon: '⚡', earned: unitsCompleted >= 5 },
-      { label: '10 Units Completed', icon: '★', earned: unitsCompleted >= 10 },
-      { label: '7-Day Streak', icon: '🔥', earned: streakDays >= 7 },
-      { label: '30-Day Streak', icon: '♛', earned: streakDays >= 30 },
-      { label: '100 Videos Watched', icon: '▶', earned: videosCompleted >= 100 },
+      { label: 'First Subject Opened', icon: 'Book', earned: Boolean(progress?.first_subject_opened) || (recentSubjects || []).length >= 1 },
+      { label: 'First Unit Completed', icon: 'Done', earned: Boolean(progress?.first_unit_completed) || unitsCompleted >= 1 },
+      { label: '5 Units Completed', icon: '5x', earned: Boolean(progress?.five_units_completed) || unitsCompleted >= 5 },
+      { label: '10 Units Completed', icon: '10x', earned: Boolean(progress?.ten_units_completed) || unitsCompleted >= 10 },
+      { label: '7-Day Streak', icon: '7d', earned: Boolean(progress?.seven_day_streak) || streakDays >= 7 },
+      { label: '30-Day Streak', icon: '30d', earned: Boolean(progress?.thirty_day_streak) || streakDays >= 30 },
+      { label: '100 Notes Read', icon: '100', earned: Boolean(progress?.hundred_notes_read) || Number(progress?.notes_read || 0) >= 100 },
+      { label: 'Subject Milestone', icon: 'Milestone', earned: Boolean(progress?.subject_milestone) },
     ];
     achievementsEl.innerHTML = items.map(item => `
       <div class="achievement-card ${item.earned ? 'earned' : 'locked'}">
@@ -13013,6 +13251,24 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       </article>`;
   }
 
+  function workshopCategory(row = {}) {
+    const text = `${row.category || ''} ${row.workshop_name || ''} ${row.description || ''}`.toLowerCase();
+    if (text.includes('ai') || text.includes('machine')) return 'ai';
+    if (text.includes('program') || text.includes('code') || text.includes('web')) return 'programming';
+    if (text.includes('career') || text.includes('resume')) return 'career';
+    if (text.includes('placement') || text.includes('interview')) return 'placement';
+    if (text.includes('data') || text.includes('analytics')) return 'data';
+    return 'workshop';
+  }
+
+  function workshopCategoryIcon(category) {
+    return ({ ai: 'AI', programming: '</>', career: 'UP', placement: 'JOB', data: 'DS', workshop: 'LIVE' })[category] || 'LIVE';
+  }
+
+  function workshopBannerUrl(row = {}) {
+    return row.banner_url || row.banner_image || row.image_url || '';
+  }
+
   async function renderPublishedWorkshops(root) {
     const supabase = sb();
     const renderToken = ++liveWorkshopRenderToken;
@@ -13115,16 +13371,27 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const action = state === 'registered'
       ? `<a class="btn btn-primary" href="${esc(row.join_link)}" target="_blank" rel="noreferrer">Join</a>`
       : `<button class="btn btn-primary" type="button" onclick="openLiveWorkshopRegisterModal('${js(row.id)}')">Register</button>`;
+    const category = workshopCategory(row);
+    const image = workshopBannerUrl(row);
     return `
       <article class="live-workshop-card ${skillUpTheme(row.id)}">
-        ${row.banner_image ? `<img class="live-workshop-card-img" src="${esc(row.banner_image)}" alt="${esc(row.workshop_name)} banner" loading="lazy">` : ''}
-        <h3>${esc(row.workshop_name)}</h3>
-        <div class="live-workshop-info-pills">
-          <span>${esc(row.speaker_name || 'Speaker TBA')}</span>
-          <span>${esc(row.workshop_date)}</span>
-          <span>${esc(row.workshop_time)}</span>
+        <div class="live-workshop-card-banner live-workshop-placeholder-${esc(category)}">
+          ${image ? `<img class="live-workshop-card-img" src="${esc(image)}" alt="${esc(row.workshop_name)} banner" loading="lazy" onerror="this.closest('.live-workshop-card-banner')?.classList.add('image-failed');this.remove();">` : ''}
+          <div class="live-workshop-placeholder-copy">
+            <span>${esc(workshopCategoryIcon(category))}</span>
+            <strong>${esc((category || 'workshop').replace(/^./, ch => ch.toUpperCase()))}</strong>
+          </div>
         </div>
-        <p class="live-workshop-description">${esc(row.description || '')}</p>
+        <div class="live-workshop-card-body">
+          <h3>${esc(row.workshop_name)}</h3>
+          <div class="live-workshop-speaker">${esc(row.speaker_name || 'Speaker TBA')}</div>
+          <p class="live-workshop-description">${esc(row.description || '')}</p>
+        </div>
+        <div class="live-workshop-info-pills">
+          <span>&#128197; ${esc(row.workshop_date)}</span>
+          <span>&#128338; ${esc(row.workshop_time)}</span>
+          <span>&#128100; ${esc(row.speaker_name || 'Speaker TBA')}</span>
+        </div>
         <div class="live-workshop-card-action">${action}</div>
       </article>`;
   }

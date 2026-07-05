@@ -6,6 +6,7 @@ import {
 } from './legacy/installBrowserNavigation.js';
 import { installCriticalFixes } from './legacy/installCriticalFixes.js';
 import { installSupabaseAdminSync } from './legacy/installSupabaseAdminSync.js';
+import { installSingleSourceFlowPatch } from './legacy/installSingleSourceFlowPatch.js';
 import { installAdminSubjectCrud } from './legacy/installAdminSubjectCrud.js';
 import { installWorkspaceIsolation } from './legacy/installWorkspaceIsolation.js';
 import { installDynamicBranches } from './legacy/installDynamicBranches.js';
@@ -132,6 +133,7 @@ function AuthenticatedLegacyApp() {
       installAdminSubjectCrud();
       installWorkspaceIsolation();
       installDynamicBranches();
+      installSingleSourceFlowPatch();
       await startBrowserNavigation();
       if (latestSession?.user) {
         routedSessionRef.current = `${latestSession.user.id}:${window.location.hash || ''}`;
