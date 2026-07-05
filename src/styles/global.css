@@ -4858,6 +4858,42 @@ body,
 .live-skillup-card {
   cursor: default;
   scroll-snap-align: start;
+  min-height: 0;
+}
+
+.live-skillup-card .subject-card-header {
+  padding: 0.72rem 0.82rem;
+}
+
+.live-skillup-card .subject-icon {
+  margin-bottom: 4px;
+}
+
+.live-skillup-card .subject-name {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.88rem;
+  line-height: 1.18;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.live-skillup-card .subject-code {
+  font-size: 0.68rem;
+}
+
+.live-skillup-card .subject-card-body {
+  padding: 0.65rem 0.82rem;
+}
+
+.live-skillup-card .subject-meta {
+  gap: 5px;
+  margin-bottom: 7px;
+}
+
+.live-skillup-card .badge {
+  padding: 0.18rem 0.42rem;
+  font-size: 0.66rem;
 }
 
 .live-courses-highlight { padding: 1rem; border: 1px solid color-mix(in srgb, var(--teal) 28%, var(--border)); border-radius: var(--radius-lg); background: linear-gradient(135deg, color-mix(in srgb, var(--teal) 8%, var(--surface)), var(--surface)); }
@@ -5003,8 +5039,8 @@ body,
 
 .live-workshop-scroll-row .live-workshop-card {
   width: min(320px, 100%);
-  min-height: 360px;
-  max-height: 390px;
+  min-height: 292px;
+  max-height: 320px;
   padding: 0;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 16px;
@@ -5025,7 +5061,7 @@ body,
   position: relative;
   display: grid;
   place-items: center;
-  height: 150px;
+  height: 96px;
   overflow: hidden;
   isolation: isolate;
   background: linear-gradient(135deg, var(--primary), var(--teal));
@@ -5061,7 +5097,7 @@ body,
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 0.4rem;
+  gap: 0.26rem;
   place-items: center;
   color: #fff;
 }
@@ -5069,18 +5105,18 @@ body,
 .live-workshop-placeholder-copy span {
   display: grid;
   place-items: center;
-  min-width: 58px;
-  height: 58px;
+  min-width: 44px;
+  height: 44px;
   padding: 0 0.55rem;
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(255,255,255,0.14);
   border: 1px solid rgba(255,255,255,0.24);
-  font-size: 1rem;
+  font-size: 0.82rem;
   font-weight: 900;
 }
 
 .live-workshop-placeholder-copy strong {
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   letter-spacing: 0;
 }
 
@@ -5093,18 +5129,18 @@ body,
 
 .live-workshop-card-body {
   display: grid;
-  gap: 0.35rem;
-  padding: 0.86rem 0.95rem 0;
+  gap: 0.24rem;
+  padding: 0.58rem 0.78rem 0;
 }
 
 .live-workshop-scroll-row .live-workshop-card h3 {
   display: -webkit-box;
   overflow: hidden;
-  min-height: 2.55em;
+  min-height: 2.32em;
   margin: 0;
   color: #f8fafc;
-  font-size: 20px;
-  line-height: 1.26;
+  font-size: 16px;
+  line-height: 1.16;
   font-weight: 800;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -5113,7 +5149,7 @@ body,
 .live-workshop-speaker {
   overflow: hidden;
   color: #dbeafe;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5122,30 +5158,30 @@ body,
 .live-workshop-description {
   display: -webkit-box;
   overflow: hidden;
-  min-height: 4.2em;
+  min-height: 2.5em;
   color: #cbd5e1;
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.25;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 
 .live-workshop-info-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.42rem;
-  margin: 0.68rem 0.95rem 0;
+  gap: 0.3rem;
+  margin: 0.48rem 0.78rem 0;
 }
 
 .live-workshop-info-pills span {
   max-width: 100%;
-  padding: 0.26rem 0.5rem;
+  padding: 0.2rem 0.42rem;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 999px;
   background: rgba(255,255,255,0.08);
   color: #dbeafe;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 750;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5153,16 +5189,16 @@ body,
 
 .live-workshop-card-action {
   margin-top: auto;
-  padding: 0.82rem 0.95rem 0.95rem;
+  padding: 0.55rem 0.78rem 0.72rem;
 }
 
 .live-workshop-card-action .btn,
 .live-workshop-scroll-row .live-workshop-card .btn {
   width: 100%;
-  min-height: 40px;
+  min-height: 34px;
   justify-content: center;
   border-radius: 999px;
-  font-size: 0.86rem;
+  font-size: 0.78rem;
   font-weight: 800;
 }
 
