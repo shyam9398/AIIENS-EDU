@@ -4746,6 +4746,15 @@ body,
 .live-workshop-screen .live-workshop-main { width: 100%; max-width: none; margin: 0; }
 .live-workshop-topbar-actions { display: flex; align-items: center; gap: 0.45rem; }
 .live-workshop-topbar-actions .btn.active { color: var(--teal); background: var(--teal-light); }
+.live-workshop-topbar-actions .live-workshop-logout-btn {
+  color: var(--red);
+  border-color: var(--red-light);
+}
+.live-workshop-topbar-actions .live-workshop-logout-btn:hover {
+  color: #fff;
+  background: var(--red);
+  border-color: var(--red);
+}
 .live-workshop-brand { display: flex; align-items: center; gap: 0.5rem; margin-left: 0.35rem; }
 .live-workshop-brand span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: #fff; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--teal)); }
 

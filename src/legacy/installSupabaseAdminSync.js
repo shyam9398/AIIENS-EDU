@@ -579,18 +579,10 @@ function patchVideoApproval() {
       return;
     }
 
-    const fullSelect = 'id, topic_name, url, description, status, created_at, student_id, student_name, subject_id, unit_id, topic_id, subject_name, unit_name, branch, university, regulation, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)';
     let result = await supabase
       .from('student_url_suggestions')
-      .select(fullSelect)
+      .select('id, topic_name, url, description, status, created_at, student_id, subject_id, unit_id, topic_id, subject_name, unit_name, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)')
       .order('created_at', { ascending: false });
-
-    if (result.error && /branch|university|regulation|subject_name|unit_name|topic_name|student_name/i.test(result.error.message || '')) {
-      result = await supabase
-        .from('student_url_suggestions')
-        .select('id, topic_name, url, description, status, created_at, student_id, subject_id, unit_id, topic_id, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)')
-        .order('created_at', { ascending: false });
-    }
 
     if (result.error) {
       console.warn('[SUGGESTIONS] Approval load failed:', result.error.message || result.error);
@@ -889,16 +881,12 @@ function patchVideoSuggestionSubmit() {
     const authUser = supabase.auth?.getUser ? (await supabase.auth.getUser())?.data?.user : null;
     const payload = {
       student_id: authUser?.id || user.id || user.googleId || null,
-      student_name: user.name || user.full_name || 'Student',
       subject_id: subjectId,
       unit_id: unitId,
       topic_id: topicId,
       subject_name: subject.name || subject.title || '',
       unit_name: roadmap?.data?.unitName || `Unit ${unitNum}`,
       topic_name: topicName,
-      branch: subject.branch || user.branch || user.branch_name || '',
-      university: subject.university_name || subject.uni || user.university_name || user.university || '',
-      regulation: subject.regulation_code || subject.reg || user.regulation_code || user.regulation || '',
       url,
       description: document.getElementById('suggest-desc-input')?.value.trim() || '',
       status: 'pending',

@@ -1,6 +1,6 @@
 create table if not exists public.student_dashboard_progress (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
+  student_id uuid not null references auth.users(id) on delete cascade,
   cgpa numeric(4,2) not null default 0,
   sgpa numeric(4,2) not null default 0,
   syllabus_percentage integer not null default 0,
@@ -41,11 +41,11 @@ create table if not exists public.student_dashboard_progress (
   recent_subject_5_opened timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (user_id)
+  unique (student_id)
 );
 
-create index if not exists idx_student_dashboard_progress_user
-  on public.student_dashboard_progress(user_id, updated_at desc);
+create index if not exists idx_student_dashboard_progress_student
+  on public.student_dashboard_progress(student_id, updated_at desc);
 
 alter table public.student_dashboard_progress enable row level security;
 
@@ -54,9 +54,9 @@ drop policy if exists "student dashboard progress own write" on public.student_d
 
 create policy "student dashboard progress own read"
   on public.student_dashboard_progress for select to authenticated
-  using (user_id = auth.uid());
+  using (student_id = auth.uid());
 
 create policy "student dashboard progress own write"
   on public.student_dashboard_progress for all to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
+  using (student_id = auth.uid())
+  with check (student_id = auth.uid());

@@ -3545,16 +3545,12 @@ window.v10Esc = window.v10Esc || function(str) {
     const authUser = supabase.auth?.getUser ? (await supabase.auth.getUser())?.data?.user : null;
     const { error } = await supabase.from('student_url_suggestions').insert({
       student_id: authUser?.id || window.APP?.user?.id || window.APP?.user?.googleId || null,
-      student_name: window.APP?.user?.name || 'Student',
       subject_id: subjectId,
       unit_id: unitId,
       topic_id: topicId,
       subject_name: subject.name || subject.title || '',
       unit_name: roadmap?.data?.unitName || `Unit ${unitNum}`,
       topic_name: topicName,
-      branch: subject.branch || window.APP?.user?.branch || '',
-      university: subject.university_name || subject.uni || window.APP?.user?.university || '',
-      regulation: subject.regulation_code || subject.reg || window.APP?.user?.regulation || '',
       url,
       description,
       status: 'pending',
@@ -3853,16 +3849,12 @@ window.v10Esc = window.v10Esc || function(str) {
     const student = window.APP?.user || {};
     const suggestionPayload = {
       student_id: authUser?.id || student.id || student.googleId || null,
-      student_name: student.name || student.full_name || authUser?.user_metadata?.full_name || authUser?.email || 'Student',
       subject_id: subjectId,
       unit_id: unitId,
       topic_id: topicId,
       subject_name: subject.name || '',
       unit_name: roadmap?.data?.unitName || `Unit ${unitNum}`,
       topic_name: topicName,
-      branch: subject.branch || student.branch || student.branch_name || '',
-      university: subject.university_name || subject.uni || student.university_name || student.university || '',
-      regulation: subject.regulation_code || subject.reg || student.regulation_code || student.regulation || '',
       url,
       description,
       status: 'pending',
@@ -3910,17 +3902,10 @@ window.v10Esc = window.v10Esc || function(str) {
     const supabase = window.__AIMEASY_SUPABASE__;
     let requests = [];
     if (supabase) {
-      const fullSelect = 'id, topic_name, url, description, status, created_at, student_id, student_name, subject_id, unit_id, topic_id, subject_name, unit_name, branch, university, regulation, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)';
       let result = await supabase
         .from('student_url_suggestions')
-        .select(fullSelect)
+        .select('id, topic_name, url, description, status, created_at, student_id, subject_id, unit_id, topic_id, subject_name, unit_name, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)')
         .order('created_at', { ascending: false });
-      if (result.error && /branch|university|regulation|subject_name|unit_name|topic_name/i.test(result.error.message || '')) {
-        result = await supabase
-          .from('student_url_suggestions')
-          .select('id, topic_name, url, description, status, created_at, student_id, student_name, subject_id, unit_id, topic_id, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)')
-          .order('created_at', { ascending: false });
-      }
       if (result.error) {
         console.warn('[SUGGESTIONS] Approval load failed:', result.error.message || result.error);
       } else {

@@ -10,6 +10,37 @@ const PATCH_FLAG = '__aimeasyStorageBridgeInstalled';
 let isHydrating = false;
 const HYDRATION_TIMEOUT_MS = 1500;
 
+const EXISTING_STUDENT_DASHBOARD_COLUMNS = new Set([
+  'id', 'student_id', 'cgpa', 'sgpa', 'syllabus_percentage', 'weekly_completion',
+  'completed_topics', 'completed_videos', 'completed_units', 'completed_subjects',
+  'active_subjects', 'learning_sessions', 'notes_read', 'pyqs_completed',
+  'current_streak', 'longest_streak', 'last_activity_date', 'first_subject_opened',
+  'first_unit_completed', 'five_units_completed', 'ten_units_completed',
+  'seven_day_streak', 'thirty_day_streak', 'hundred_notes_read',
+  'subject_milestone', 'recent_subject_1', 'recent_subject_1_id',
+  'recent_subject_1_opened', 'recent_subject_2', 'recent_subject_2_id',
+  'recent_subject_2_opened', 'recent_subject_3', 'recent_subject_3_id',
+  'recent_subject_3_opened', 'recent_subject_4', 'recent_subject_4_id',
+  'recent_subject_4_opened', 'recent_subject_5', 'recent_subject_5_id',
+  'recent_subject_5_opened', 'created_at', 'updated_at',
+]);
+
+const reportedSchemaGaps = new Set();
+
+function reportSchemaGap(scope, message) {
+  const key = `${scope}:${message}`;
+  if (reportedSchemaGaps.has(key)) return;
+  reportedSchemaGaps.add(key);
+  console.warn(`[LEGACY STORAGE BRIDGE] ${scope}: ${message}`);
+}
+
+function verifyDashboardColumns(columns = []) {
+  const missing = columns.filter(column => !EXISTING_STUDENT_DASHBOARD_COLUMNS.has(column));
+  if (missing.length) {
+    throw new Error(`student_dashboard_progress is missing column(s): ${missing.join(', ')}`);
+  }
+}
+
 // Initialize memory stores on window
 if (!window.__aiiensMemoryStore) window.__aiiensMemoryStore = {};
 if (!window.__aiiensSessionMemoryStore) window.__aiiensSessionMemoryStore = {};
@@ -131,11 +162,9 @@ export async function hydrateLegacyState() {
           window.__aiiensMemoryStore['aiiens_custom_subjects'] = JSON.stringify(mappedSubjects);
         }
 
-        // Fetch completed topics / reviews
-        const { data: progressRows } = await supabase
-          .from('student_topic_progress')
-          .select('*')
-          .eq('user_id', userId);
+        // student_progress is not defined in supabase/schema.sql; do not query fallback tables.
+        reportSchemaGap('Progress hydration skipped', 'student_progress is not present in supabase/schema.sql.');
+        const progressRows = [];
 
         const completedTopics = [];
         const markedReviews = [];
@@ -191,16 +220,7 @@ export async function hydrateLegacyState() {
 
         window.__aiiensMemoryStore['aiiens_completed_units'] = JSON.stringify(completedUnits);
 
-        // Fetch CGPA payload
-        const { data: cgpaRows } = await supabase
-          .from('student_cgpa_results')
-          .select('*')
-          .eq('user_id', userId)
-          .order('calculated_at', { ascending: false });
-
-        if (cgpaRows && cgpaRows.length > 0) {
-          window.__aiiensMemoryStore['aiiens_cgpa_data'] = JSON.stringify(cgpaRows[0].payload);
-        }
+        reportSchemaGap('CGPA hydration skipped', 'student_cgpa is not present in supabase/schema.sql; calculator payload cannot be hydrated.');
       } else if (profile.role === 'admin') {
         // Hydrate sub-admins list
         const { data: subadminProfiles } = await supabase
@@ -260,13 +280,27 @@ async function syncAcademicKeyToSupabase(key, value) {
         }
       }
       
-      await supabase.from('student_cgpa_results').insert({
-        user_id: userId,
+      const patch = {
+        student_id: userId,
         cgpa: cgpaVal,
-        percentage: percentageVal,
-        payload: parsed,
-        calculated_at: new Date().toISOString()
-      });
+        sgpa: cgpaVal,
+        updated_at: new Date().toISOString()
+      };
+      verifyDashboardColumns(Object.keys(patch));
+      const existing = await supabase
+        .from('student_dashboard_progress')
+        .select('id')
+        .eq('student_id', userId)
+        .limit(1);
+      if (existing.error) throw existing.error;
+      const request = existing.data?.[0]?.id
+        ? supabase.from('student_dashboard_progress').update(patch).eq('id', existing.data[0].id)
+        : supabase.from('student_dashboard_progress').insert(patch);
+      const { error } = await request;
+      if (error) throw error;
+      if (parsed) {
+        reportSchemaGap('CGPA payload not saved', `student_dashboard_progress has no payload column; stored cgpa/sgpa only. Percentage ${percentageVal.toFixed(2)} was computed but no matching column exists.`);
+      }
     }
   } catch (error) {
     console.warn('[STORAGE BRIDGE] Sync to database failed:', error.message || error);

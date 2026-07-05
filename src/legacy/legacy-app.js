@@ -1711,38 +1711,15 @@ function getNextCalcSemesterKey() {
   return JNTUK_SEMESTERS.find(sem => !existing.has(sem)) || null;
 }
 
-function loadCalcState() {
-  try {
-    const saved = localStorage.getItem('edusync_cgpa_data');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed && Array.isArray(parsed.calcSemesters) && parsed.calcSemesters.length) {
-        APP.calcSemesters = parsed.calcSemesters;
-        APP.currentSemId = parsed.currentSemId || parsed.calcSemesters[0].id;
-        console.log('CGPA loaded', parsed);
-        return true;
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to load CGPA calculator state:', e);
-  }
+function legacyLoadCalcStateDisabled() {
   return false;
 }
 
-function saveCalcState() {
-  try {
-    const data = {
-      calcSemesters: APP.calcSemesters,
-      currentSemId: APP.currentSemId
-    };
-    localStorage.setItem('edusync_cgpa_data', JSON.stringify(data));
-    console.log('Saving CGPA', data);
-  } catch (e) {
-    console.warn('Failed to save CGPA calculator state:', e);
-  }
+function legacySaveCalcStateDisabled() {
+  console.warn('[STUDENT SUPABASE] Legacy CGPA browser persistence is disabled.');
 }
 
-async function initCalc() {
+async function legacyInitCalcDisabled() {
   if (window.__aiiensHydrationPromise) {
     await window.__aiiensHydrationPromise;
   }
@@ -1798,7 +1775,7 @@ async function initCalc() {
   }
 }
 
-function addSemester() {
+function legacyAddSemesterDisabled() {
   const num = APP.calcSemesters.length + 1;
   const semId = 'sem-' + num;
   saveCurrentSemRows();
@@ -1812,7 +1789,7 @@ function addSemester() {
   showToast('Semester ' + num + ' added!', 'green');
 }
 
-function saveCurrentSemRows() {
+function legacySaveCurrentSemRowsDisabled() {
   const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
   if (!sem) return;
   const rows = [];
@@ -1824,7 +1801,7 @@ function saveCurrentSemRows() {
   saveCalcState();
 }
 
-function switchSem(semId) {
+function legacySwitchSemDisabled(semId) {
   saveCurrentSemRows();
   APP.currentSemId = semId;
   const sem = APP.calcSemesters.find(s => s.id === semId);
@@ -1845,7 +1822,7 @@ function switchSem(semId) {
   saveCalcState();
 }
 
-function renderSemTabs() {
+function legacyRenderSemTabsDisabled() {
   const container = document.getElementById('sem-tabs');
   if (!container) return;
   container.innerHTML = APP.calcSemesters.map(function (s) {
@@ -1855,13 +1832,13 @@ function renderSemTabs() {
   }).join('');
 }
 
-function renderCalcSemTitle() {
+function legacyRenderCalcSemTitleDisabled() {
   const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
   const el = document.getElementById('calc-sem-title');
   if (el && sem) el.textContent = sem.label + ' Subjects';
 }
 
-function addCalcRow(name, credits, defaultGrade) {
+function legacyAddCalcRowDisabled(name, credits, defaultGrade) {
   const id = Date.now() + Math.random();
   APP.calcRows.push(id);
   const tbody = document.getElementById('calc-tbody');
@@ -1900,13 +1877,13 @@ function addCalcRow(name, credits, defaultGrade) {
   saveCurrentSemRows();
 }
 
-function removeCalcRow(id) {
+function legacyRemoveCalcRowDisabled(id) {
   document.getElementById('row-' + id)?.remove();
   APP.calcRows = APP.calcRows.filter(r => r !== id);
   saveCurrentSemRows();
 }
 
-function clearCalc() {
+function legacyClearCalcDisabled() {
   document.getElementById('calc-tbody').innerHTML = '';
   APP.calcRows = [];
   document.getElementById('sgpa-result').textContent = '–';
@@ -1919,7 +1896,7 @@ function clearCalc() {
   showToast('Semester cleared', 'blue');
 }
 
-async function renderCalc() {
+async function legacyRenderCalcDisabled() {
   if (!APP.calcSemesters.length) {
     await initCalc();
   } else {
@@ -1936,7 +1913,7 @@ async function renderCalc() {
   }
 }
 
-function calculateGPA() {
+function legacyCalculateGPADisabled() {
   const rows = document.querySelectorAll('#calc-tbody tr');
   let totalPoints = 0, totalCredits = 0;
   const failed = [], gradeCount = {};
@@ -2016,22 +1993,133 @@ function calculateGPA() {
 // ═══════════════════════════════════════════════════
 //  SKILLS UP PAGE
 // ═══════════════════════════════════════════════════
-function loadCalcState() {
+async function studentSupabaseUserId() {
+  const supabase = window.__AIMEASY_SUPABASE__;
+  let id = APP.user?.id || APP.user?.googleId || null;
   try {
-    const saved = localStorage.getItem('edusync_cgpa_data');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed && Array.isArray(parsed.calcSemesters) && parsed.calcSemesters.length) {
-        APP.calcSemesters = parsed.calcSemesters;
-        APP.currentSemId = parsed.currentSemId || parsed.calcSemesters[0].id;
-        migrateCalcState();
-        return true;
-      }
+    const { data } = await supabase?.auth?.getUser?.();
+    id = data?.user?.id || id;
+  } catch {}
+  return id;
+}
+
+function studentStorageError(scope, error, toast = 'Unable to save student data. Please try again.') {
+  console.error(`[STUDENT SUPABASE] ${scope}:`, error);
+  window.showToast?.(`${toast}${error?.message ? ': ' + error.message : ''}`, 'red');
+}
+
+const AIIENS_EXISTING_SUPABASE_SCHEMA = {
+  student_dashboard_progress: new Set([
+    'id', 'student_id', 'cgpa', 'sgpa', 'syllabus_percentage', 'weekly_completion',
+    'completed_topics', 'completed_videos', 'completed_units', 'completed_subjects',
+    'active_subjects', 'learning_sessions', 'notes_read', 'pyqs_completed',
+    'current_streak', 'longest_streak', 'last_activity_date', 'first_subject_opened',
+    'first_unit_completed', 'five_units_completed', 'ten_units_completed',
+    'seven_day_streak', 'thirty_day_streak', 'hundred_notes_read',
+    'subject_milestone', 'recent_subject_1', 'recent_subject_1_id',
+    'recent_subject_1_opened', 'recent_subject_2', 'recent_subject_2_id',
+    'recent_subject_2_opened', 'recent_subject_3', 'recent_subject_3_id',
+    'recent_subject_3_opened', 'recent_subject_4', 'recent_subject_4_id',
+    'recent_subject_4_opened', 'recent_subject_5', 'recent_subject_5_id',
+    'recent_subject_5_opened', 'created_at', 'updated_at',
+  ]),
+  student_url_suggestions: new Set([
+    'id', 'student_id', 'subject_id', 'unit_id', 'topic_id', 'subject_name',
+    'unit_name', 'topic_name', 'title', 'url', 'description', 'status',
+    'created_at', 'approved_by', 'approved_at',
+  ]),
+  subject_syllabus: new Set(['id', 'subject_id', 'subject_name', 'drive_url', 'created_by', 'created_at', 'updated_at']),
+  content_items: new Set(['id', 'subject_id', 'unit_id', 'content_type', 'title', 'body', 'url', 'metadata', 'created_by', 'created_at', 'updated_at']),
+  subjects: new Set(['id', 'name', 'code', 'branch', 'regulation_code', 'semester', 'university_name', 'created_by', 'created_at']),
+  units: new Set(['id', 'subject_id', 'title', 'sort_order', 'created_at']),
+  topics: new Set(['id', 'subject_id', 'unit_id', 'topic_name', 'display_order', 'created_at']),
+  topic_videos: new Set(['id', 'topic_id', 'sub_topic_name', 'video_url', 'description', 'display_order', 'created_at']),
+};
+
+const AIIENS_REPORTED_SCHEMA_GAPS = new Set();
+
+function reportSupabaseSchemaGap(scope, message) {
+  const key = `${scope}:${message}`;
+  if (AIIENS_REPORTED_SCHEMA_GAPS.has(key)) return;
+  AIIENS_REPORTED_SCHEMA_GAPS.add(key);
+  console.warn(`[STUDENT SUPABASE] ${scope}: ${message}`);
+}
+
+function verifyStudentSupabaseAccess(tableName, columns = [], scope = tableName) {
+  const tableColumns = AIIENS_EXISTING_SUPABASE_SCHEMA[tableName];
+  if (!tableColumns) {
+    throw new Error(`Table "${tableName}" is not present in supabase/schema.sql. Required fields were not invented.`);
+  }
+  const missing = columns.filter(column => !tableColumns.has(column));
+  if (missing.length) {
+    throw new Error(`Table "${tableName}" is missing column(s): ${missing.join(', ')}.`);
+  }
+  return true;
+}
+
+async function studentTableRequest(tableName, columns, run, scope = tableName) {
+  const supabase = window.__AIMEASY_SUPABASE__;
+  if (!supabase) throw new Error('Supabase not configured');
+  verifyStudentSupabaseAccess(tableName, columns, scope);
+  return run(supabase.from(tableName), tableName);
+}
+
+function normalizeCgpaPayload(row = {}) {
+  const payload = row.payload || row.data || {};
+  const semesters = Array.isArray(payload.semesters)
+    ? payload.semesters
+    : Array.isArray(row.semesters)
+      ? row.semesters
+      : [];
+  return {
+    currentSemId: payload.currentSemId || semesters[0]?.id || '',
+    calcSemesters: semesters,
+  };
+}
+
+async function loadCalcState() {
+  const supabase = window.__AIMEASY_SUPABASE__;
+  const id = await studentSupabaseUserId();
+  if (!supabase || !id) return false;
+  try {
+    verifyStudentSupabaseAccess('student_cgpa', [], 'CGPA load');
+    const { data, error } = await studentTableRequest('student_cgpa', [], (table) =>
+      table.select('*').limit(1)
+    , 'CGPA load');
+    if (error) throw error;
+    const row = data?.[0] || null;
+    const parsed = normalizeCgpaPayload(row || {});
+    if (parsed.calcSemesters.length) {
+      APP.calcSemesters = parsed.calcSemesters;
+      APP.currentSemId = parsed.currentSemId || parsed.calcSemesters[0].id;
+      migrateCalcState();
+      return true;
     }
-  } catch (e) {
-    console.warn('Failed to load CGPA calculator state:', e);
+  } catch (error) {
+    reportSupabaseSchemaGap('CGPA load skipped', error?.message || String(error));
   }
   return false;
+}
+
+async function saveCalcState() {
+  const id = await studentSupabaseUserId();
+  if (!id) return;
+  const semesters = APP.calcSemesters || [];
+  const calcdSems = semesters.filter(s => s.sgpa !== null && s.sgpa !== undefined && Number(s.credits || 0) > 0);
+  const latest = semesters.find(s => s.id === APP.currentSemId) || calcdSems[calcdSems.length - 1] || semesters[0] || {};
+  const cgpa = calcdSems.length ? Number(calculateWeightedCgpa(calcdSems).toFixed(2)) : Number(latest.sgpa || 0);
+  const sgpa = Number(latest.sgpa || 0);
+  const payload = { currentSemId: APP.currentSemId || null, semesters };
+  try {
+    verifyStudentSupabaseAccess('student_cgpa', [], 'CGPA save');
+    reportSupabaseSchemaGap('CGPA save skipped', `student_cgpa is not defined in supabase/schema.sql; calculator payload was not saved (${payload.semesters.length} semester(s)).`);
+    const { error } = { error: null };
+    if (error) throw error;
+    window.aiiensProgressService?.track?.('gpa_calculated', { cgpa, sgpa });
+  } catch (error) {
+    reportSupabaseSchemaGap('CGPA save skipped', error?.message || String(error));
+    window.aiiensProgressService?.track?.('gpa_calculated', { cgpa, sgpa });
+  }
 }
 
 function saveCurrentSemRows() {
@@ -2134,7 +2222,7 @@ async function loadSubjectsForCurrentSemester() {
 
 async function initCalc() {
   if (window.__aiiensHydrationPromise) await window.__aiiensHydrationPromise;
-  loadCalcState();
+  await loadCalcState();
   migrateCalcState();
   if (!APP.calcSemesters.length) {
     const first = makeCalcSemester(JNTUK_SEMESTERS[0]);
@@ -9178,11 +9266,22 @@ function getSubjectProgress(subj) {
 }
 
 function readStudentJson(key, fallback = []) {
+  if (key === 'edusync_completed_topics') return [...(APP.__studentCompletedTopics || new Set())];
+  if (key === 'edusync_completed_units') return APP.__studentCompletedUnits || [];
+  if (key === 'edusync_study_activity' || key === 'edusync_recently_opened') return fallback;
   try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; }
 }
 
 function writeStudentJson(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  if (key === 'edusync_completed_topics') {
+    APP.__studentCompletedTopics = new Set(value || []);
+    return;
+  }
+  if (key === 'edusync_completed_units') {
+    APP.__studentCompletedUnits = value || [];
+    return;
+  }
+  console.warn(`[STUDENT SUPABASE] Ignored browser persistence for ${key}; Supabase is the source of truth.`);
 }
 
 function todayKey(date = new Date()) {
@@ -9248,31 +9347,11 @@ function totalLearningItems(subjects) {
 
 function recordStudyActivity(type, details = {}) {
   const now = new Date();
-  const events = readStudentJson('edusync_study_activity', []);
-  events.unshift({ type, ...details, at: now.toISOString(), day: todayKey(now) });
-  writeStudentJson('edusync_study_activity', events.slice(0, 600));
-  updateStudyStreak(now);
+  window.aiiensProgressService?.track?.(type, { ...details, at: now.toISOString(), day: todayKey(now) });
 }
 
 function updateStudyStreak(now = new Date()) {
-  const events = readStudentJson('edusync_study_activity', []);
-  const days = [...new Set(events.map(event => event.day).filter(Boolean))].sort().reverse();
-  const today = todayKey(now);
-  const yesterdayDate = new Date(now);
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  const yesterday = todayKey(yesterdayDate);
-  let current = 0;
-  if (days.includes(today) || days.includes(yesterday)) {
-    const cursor = new Date(days.includes(today) ? now : yesterdayDate);
-    while (days.includes(todayKey(cursor))) {
-      current++;
-      cursor.setDate(cursor.getDate() - 1);
-    }
-  }
-  const best = Math.max(current, parseInt(localStorage.getItem('edusync_best_streak') || '0'));
-  localStorage.setItem('edusync_streak', String(current));
-  localStorage.setItem('edusync_best_streak', String(best));
-  localStorage.setItem('edusync_last_active_date', events[0]?.day || '');
+  window.aiiensProgressService?.track?.('learning_activity', { at: now.toISOString(), day: todayKey(now) });
 }
 
 function markUnitCompletedIfReady(subjectId, unitId) {
@@ -9294,14 +9373,13 @@ function markUnitCompletedIfReady(subjectId, unitId) {
 
 function markTopicCompleted(subjectId, unitId, topicIndex) {
   if (topicIndex === undefined || topicIndex === null) return;
-  const completed = readStudentJson('edusync_completed_topics', []);
   const key = `${subjectId}-${unitId}-${topicIndex}`;
-  if (!completed.includes(key)) {
-    completed.push(key);
-    writeStudentJson('edusync_completed_topics', completed);
-    recordStudyActivity('content_completed', { subjectId, unitId, topicIndex });
-    markUnitCompletedIfReady(subjectId, unitId);
-  }
+  APP.__studentCompletedTopics = APP.__studentCompletedTopics || new Set();
+  if (APP.__studentCompletedTopics.has(key)) return;
+  APP.__studentCompletedTopics.add(key);
+  syncTopicProgressToDb({ subjectId, unitId, topicIndex, topicId: APP._videoItems?.[APP.currentVideoIndex]?.id || APP._videoItems?.[APP.currentVideoIndex]?.topicId || null, status: 'completed' });
+  recordStudyActivity('content_completed', { subjectId, unitId, topicIndex });
+  markUnitCompletedIfReady(subjectId, unitId);
 }
 
 function weeklyDashboardStats(subjects) {
@@ -9366,6 +9444,11 @@ function openSyllabusPreview(url) {
     showToast?.('Syllabus link is not available yet.', 'amber');
     return;
   }
+  window.aiiensProgressService?.track?.('syllabus_opened', {
+    subject: APP.currentSubject,
+    subjectId: APP.currentSubject?.id || APP.currentSubject?.rawId,
+    unitId: APP.currentUnit,
+  });
   if (typeof previewNoteInline === 'function') {
     previewNoteInline(preview, 'Syllabus');
     return;
@@ -9689,24 +9772,17 @@ function studentUnitStateKey(subjectId = APP.currentSubject?.id, unitId = APP.cu
 }
 
 function readStudentUnitState(subjectId, unitId) {
-  try {
-    return JSON.parse(localStorage.getItem(studentUnitStateKey(subjectId, unitId)) || '{}');
-  } catch {
-    return {};
-  }
+  return {};
 }
 
 function writeStudentUnitState(patch = {}) {
   const subjectId = APP.currentSubject?.id || APP.currentSubject?.rawId || 'subject';
   const unitId = APP.currentUnit || 'unit';
-  const current = readStudentUnitState(subjectId, unitId);
-  localStorage.setItem(studentUnitStateKey(subjectId, unitId), JSON.stringify({
-    ...current,
+  window.aiiensProgressService?.track?.('unit_state_updated', {
     subjectId,
     unitId,
-    updatedAt: new Date().toISOString(),
     ...patch,
-  }));
+  });
 }
 
 function reviewStorageKey() {
@@ -9715,16 +9791,11 @@ function reviewStorageKey() {
 }
 
 function hydrateMarkedReviews() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(reviewStorageKey()) || '[]');
-    APP.markedReviews = new Set(saved);
-  } catch {
-    APP.markedReviews = APP.markedReviews || new Set();
-  }
+  APP.markedReviews = APP.markedReviews || new Set();
 }
 
 function persistMarkedReviews() {
-  localStorage.setItem(reviewStorageKey(), JSON.stringify([...APP.markedReviews]));
+  // Render-only cache. Review persistence is handled by syncTopicProgressToDb.
 }
 
 async function syncTopicProgressToDb({ subjectId, unitId, topicIndex, topicId, status }) {
@@ -9736,9 +9807,7 @@ async function syncTopicProgressToDb({ subjectId, unitId, topicIndex, topicId, s
   } catch {}
   if (!supabase || !userId || !subjectId || !unitId || topicIndex === undefined || topicIndex === null) return;
   try {
-    const { error } = await supabase
-      .from('student_topic_progress')
-      .upsert({
+    const row = {
         user_id: userId,
         subject_key: String(subjectId),
         unit_key: String(unitId),
@@ -9746,11 +9815,45 @@ async function syncTopicProgressToDb({ subjectId, unitId, topicIndex, topicId, s
         topic_id: topicId || null,
         status,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,subject_key,unit_key,topic_index' });
-    if (error) console.warn('[STUDENT] Progress DB sync failed:', error.message || error);
-    else window.dispatchEvent(new CustomEvent('aiiens:student-progress-changed'));
+      };
+    const request = await studentTableRequest(
+      'student_progress',
+      ['user_id', 'subject_key', 'unit_key', 'topic_index', 'topic_id', 'status', 'updated_at'],
+      (table) => table.upsert(row, { onConflict: 'user_id,subject_key,unit_key,topic_index' }),
+      'Progress sync'
+    );
+    if (request.error) throw request.error;
+    if (status === 'completed') APP.__studentCompletedTopics?.add?.(`${subjectId}-${unitId}-${topicIndex}`);
+    window.dispatchEvent(new CustomEvent('aiiens:student-progress-changed'));
   } catch (error) {
-    console.warn('[STUDENT] Progress DB sync failed:', error?.message || error);
+    reportSupabaseSchemaGap('Progress sync skipped', error?.message || String(error));
+  }
+}
+
+async function hydrateStudentProgressFromDb(subjectId, unitId) {
+  const supabase = window.__AIMEASY_SUPABASE__;
+  const userId = await studentSupabaseUserId();
+  APP.__studentCompletedTopics = APP.__studentCompletedTopics || new Set();
+  APP.markedReviews = APP.markedReviews || new Set();
+  if (!supabase || !userId || !subjectId || !unitId) return;
+  try {
+    const { data, error } = await studentTableRequest(
+      'student_progress',
+      ['user_id', 'subject_key', 'unit_key', 'topic_index', 'status'],
+      (table) => table.select('*')
+        .eq('user_id', userId)
+        .eq('subject_key', String(subjectId))
+        .eq('unit_key', String(unitId)),
+      'Progress load'
+    );
+    if (error) throw error;
+    (data || []).forEach((row) => {
+      const key = topicReviewKey(subjectId, unitId, row.topic_index);
+      if (row.status === 'completed') APP.__studentCompletedTopics.add(key);
+      if (row.status === 'review') APP.markedReviews.add(key);
+    });
+  } catch (error) {
+    reportSupabaseSchemaGap('Progress load skipped', error?.message || String(error));
   }
 }
 
@@ -9763,6 +9866,12 @@ switchTab = function switchTabPersistStudentState(tab) {
   const result = aimeasySwitchTabWithUnitState?.call(this, tab);
   if (document.getElementById('page-unit-content')?.style.display !== 'none') {
     writeStudentUnitState({ tab });
+    const map = { notes: 'notes_read', pyq: 'pyq_opened', pyqs: 'pyq_opened', iq: 'important_questions_opened', syllabus: 'syllabus_opened' };
+    if (map[tab]) window.aiiensProgressService?.track?.(map[tab], {
+      subject: APP.currentSubject,
+      subjectId: APP.currentSubject?.id || APP.currentSubject?.rawId,
+      unitId: APP.currentUnit,
+    });
   }
   return result;
 };
@@ -9890,6 +9999,8 @@ renderVideoList = async function renderVideoListDbSubtopics(subjectId, unitNum) 
   }).join('');
 
   list.innerHTML = groupedHtml;
+  await hydrateStudentProgressFromDb(APP.currentSubject?.id || subjectId, unitNum);
+  syncRoadmapNodeStates();
   if (APP._videoItems.length) {
     const restoredIndex = Math.min(APP.currentVideoIndex, APP._videoItems.length - 1);
     const restoredTab = unitState.tab || APP.currentTab;
@@ -11101,7 +11212,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     if (supabase) {
       const { data, error } = await supabase
         .from('student_url_suggestions')
-        .select('id, topic_name, url, description, status, created_at, student_id, student_name, subject_id, unit_id, topic_id, subjects(name), units(title, sort_order), topics(topic_name)')
+        .select('id, topic_name, url, description, status, created_at, student_id, subject_id, unit_id, topic_id, subjects(name), units(title, sort_order), topics(topic_name)')
         .order('created_at', { ascending: false });
       if (error) {
         console.warn('[SUGGESTIONS] Approval load failed:', error.message || error);
@@ -12163,7 +12274,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const today = todayKeyDb();
     const now = new Date().toISOString();
     const patch = {
-      user_id: id,
+      student_id: id,
       updated_at: now,
       last_activity_date: today,
       learning_sessions: clampNumber(row.learning_sessions) + 1,
@@ -12191,6 +12302,9 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     if (normalized === 'pyq_solved' || normalized === 'pyq_completed') {
       patch.pyqs_completed = clampNumber(row.pyqs_completed) + 1;
     }
+    if (normalized === 'pyq_opened' || normalized === 'important_questions_opened' || normalized === 'syllabus_opened') {
+      patch.active_subjects = Math.max(clampNumber(row.active_subjects), 1);
+    }
     if (normalized === 'sgpa_calculated' || normalized === 'gpa_calculated') {
       const sgpa = clampNumber(details.sgpa, NaN);
       if (Number.isFinite(sgpa)) patch.sgpa = sgpa;
@@ -12208,8 +12322,8 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       patch.active_subjects = clampNumber(details.activeSubjects, clampNumber(row.active_subjects));
       patch.learning_sessions = Math.max(clampNumber(details.learningSessions, 0), clampNumber(row.learning_sessions));
     }
-    if (normalized === 'dashboard_opened' || normalized === 'legacy_dashboard_sync') {
-      applyLegacyDashboardSnapshot(patch, row);
+    if (normalized === 'dashboard_opened') {
+      patch.learning_sessions = clampNumber(row.learning_sessions);
     }
 
     const completedTopics = clampNumber(patch.completed_topics, clampNumber(row.completed_topics));
@@ -12240,7 +12354,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const { data, error } = await supabase
       .from('student_dashboard_progress')
       .select('*')
-      .eq('user_id', id)
+      .eq('student_id', id)
       .order('updated_at', { ascending: false })
       .limit(1);
     if (error) throw error;
@@ -12254,10 +12368,11 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     try {
       const existing = await fetchProgressRecord(supabase, id);
       const patch = buildProgressPatch(event, details, existing || {}, id);
+      verifyStudentSupabaseAccess('student_dashboard_progress', Object.keys(patch), 'Dashboard progress update');
       const request = existing?.id
         ? supabase.from('student_dashboard_progress').update(patch).eq('id', existing.id).select('*').maybeSingle()
         : existing
-          ? supabase.from('student_dashboard_progress').update(patch).eq('user_id', id).select('*').maybeSingle()
+          ? supabase.from('student_dashboard_progress').update(patch).eq('student_id', id).select('*').maybeSingle()
           : supabase.from('student_dashboard_progress').insert(patch).select('*').maybeSingle();
       const { data, error } = await request;
       if (error) throw error;
@@ -12267,13 +12382,67 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       }
       return data || patch;
     } catch (error) {
-      console.warn('[DASHBOARD] Progress service update failed:', error?.message || error);
+      console.error('[DASHBOARD] Progress service update failed:', error);
+      window.showToast?.('Could not save dashboard progress' + (error?.message ? ': ' + error.message : ''), 'red');
       return null;
     }
   }
 
   window.aiiensProgressService = {
     track: updateStudentDashboardProgress,
+  };
+
+  async function refreshStudentBookmarks() {
+    const supabase = sb();
+    const id = await userId();
+    if (!supabase || !id) return [];
+    try {
+      verifyStudentSupabaseAccess('student_bookmarks', [], 'Bookmark load');
+      const { data, error } = await supabase
+        .from('student_bookmarks')
+        .select('*')
+        .limit(50);
+      if (error) throw error;
+      window.dispatchEvent(new CustomEvent('aiiens:student-bookmarks-changed', { detail: data || [] }));
+      return data || [];
+    } catch (error) {
+      reportSupabaseSchemaGap('Bookmark load skipped', error?.message || String(error));
+      return [];
+    }
+  }
+
+  async function setStudentBookmark(subject, bookmarked = true) {
+    const supabase = sb();
+    const id = await userId();
+    const subjectId = String(subject?.id || subject?.rawId || subject?.subjectId || '').replace(/^custom_/, '');
+    if (!supabase || !id || !subjectId) return false;
+    try {
+      verifyStudentSupabaseAccess('student_bookmarks', [], 'Bookmark save');
+      const table = supabase.from('student_bookmarks');
+      const { error } = bookmarked
+        ? await table.upsert({
+            user_id: id,
+            subject_id: subjectId,
+            subject_name: subject?.name || subject?.subjectName || 'Subject',
+            subject_code: subject?.code || '',
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id,subject_id' })
+        : await table.delete().eq('user_id', id).eq('subject_id', subjectId);
+      if (error) throw error;
+      await refreshStudentBookmarks();
+      window.showToast?.(bookmarked ? 'Bookmark saved' : 'Bookmark removed', bookmarked ? 'green' : 'amber');
+      return true;
+    } catch (error) {
+      reportSupabaseSchemaGap('Bookmark save skipped', error?.message || String(error));
+      return false;
+    }
+  }
+
+  window.aiiensStudentBookmarks = {
+    load: refreshStudentBookmarks,
+    save: (subject) => setStudentBookmark(subject, true),
+    remove: (subject) => setStudentBookmark(subject, false),
+    set: setStudentBookmark,
   };
 
   function hasLiveWorkshopPortalAuth() {
@@ -12527,14 +12696,12 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
 
   const originalAddRecent = window.addToRecentlyOpened || globalThis.addToRecentlyOpened;
   window.addToRecentlyOpened = globalThis.addToRecentlyOpened = function addRecentSupabase(name, code, icon, id) {
-    const canUseDb = Boolean(window.__AIMEASY_SUPABASE__?.auth && (window.APP?.user?.id || window.APP?.user?.googleId));
-    const result = canUseDb ? undefined : originalAddRecent?.apply(this, arguments);
     updateStudentDashboardProgress('subject_opened', {
       subject: { id, rawId: String(id || '').replace(/^custom_/, ''), name, code, icon },
       subjectId: id,
       subjectName: name,
     });
-    return result;
+    return undefined;
   };
 
   const originalOpenSubject = window.openSubject || globalThis.openSubject;
@@ -12556,21 +12723,10 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   }
 
   async function saveCgpaFromCalculator() {
-    const supabase = sb();
-    const id = await userId();
-    if (!supabase || !id) return;
     const cgpa = Number(document.getElementById('cgpa-result')?.textContent || document.getElementById('sgpa-result')?.textContent || 0);
     const sgpa = Number(document.getElementById('sgpa-result')?.textContent || 0);
     if (!Number.isFinite(cgpa) || cgpa <= 0) return;
-    const { error } = await supabase.from('student_cgpa_results').insert({
-      user_id: id,
-      semester_key: window.APP?.currentSemId || null,
-      sgpa: Number.isFinite(sgpa) ? sgpa : null,
-      cgpa,
-      percentage: Number(pctFromCgpa(cgpa).toFixed(2)),
-      payload: { currentSemId: window.APP?.currentSemId || null, semesters: window.APP?.calcSemesters || [] },
-    });
-    if (error) console.warn('[DASHBOARD] CGPA save failed:', error.message || error);
+    await saveCalcState();
     await updateStudentDashboardProgress('gpa_calculated', { cgpa, sgpa });
     await loadDashboardSupabaseData();
   }
@@ -12593,11 +12749,15 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     let totalTopics = 0;
     let unitsCompleted = 0;
     try {
-      const { data, error } = await supabase
-        .from('student_topic_progress')
-        .select('id, subject_key, unit_key, topic_index, topic_id, updated_at')
-        .eq('user_id', id)
-        .eq('status', 'completed');
+      const { data, error } = await studentTableRequest(
+        'student_progress',
+        ['id', 'subject_key', 'unit_key', 'topic_index', 'topic_id', 'updated_at', 'user_id', 'status'],
+        (table) => table
+          .select('id, subject_key, unit_key, topic_index, topic_id, updated_at')
+          .eq('user_id', id)
+          .eq('status', 'completed'),
+        'Progress count'
+      );
       if (error) throw error;
       completedRows = data || [];
       completedTopics = completedRows.length;
@@ -12650,9 +12810,6 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       active_subjects: activeSubjects,
       learning_sessions: learningSessions,
     };
-    const { units_completed, ...summaryRow } = row;
-    const { error } = await supabase.from('student_learning_summaries').upsert(summaryRow, { onConflict: 'user_id' });
-    if (error) console.warn('[DASHBOARD] Learning summary save failed:', error.message || error);
     await updateStudentDashboardProgress('learning_summary_refreshed', {
       completedTopics,
       completedVideos: completedTopics,
@@ -12761,21 +12918,37 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayKey = todayKeyDb(yesterday);
-    const { data } = await supabase.from('student_streaks').select('*').eq('user_id', id).maybeSingle();
+    const data = await fetchProgressRecord(supabase, id);
     let current = Number(data?.current_streak || 0);
     let missed = false;
-    if (data?.last_active_date === today) {
+    const lastActiveDate = data?.last_activity_date ? String(data.last_activity_date).slice(0, 10) : '';
+    if (lastActiveDate === today) {
       missed = false;
-    } else if (data?.last_active_date === yesterdayKey) {
+    } else if (lastActiveDate === yesterdayKey) {
       current += 1;
     } else {
-      missed = Boolean(data?.last_active_date);
+      missed = Boolean(lastActiveDate);
       current = 1;
     }
-    const best = Math.max(current, Number(data?.best_streak || 0));
-    const row = { user_id: id, current_streak: current, best_streak: best, last_active_date: today, missed_yesterday: missed, updated_at: new Date().toISOString() };
-    const { error } = await supabase.from('student_streaks').upsert(row, { onConflict: 'user_id' });
-    if (error) console.warn('[DASHBOARD] Streak save failed:', error.message || error);
+    const best = Math.max(current, Number(data?.longest_streak || 0));
+    const patch = {
+      student_id: id,
+      current_streak: current,
+      longest_streak: best,
+      last_activity_date: today,
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      verifyStudentSupabaseAccess('student_dashboard_progress', Object.keys(patch), 'Streak save');
+      const request = data?.id
+        ? supabase.from('student_dashboard_progress').update(patch).eq('id', data.id)
+        : supabase.from('student_dashboard_progress').insert(patch);
+      const { error } = await request;
+      if (error) throw error;
+    } catch (error) {
+      console.warn('[DASHBOARD] Streak save failed:', error.message || error);
+    }
+    const row = { current_streak: current, best_streak: best, last_active_date: today, missed_yesterday: missed };
     renderStreak(row);
     return row;
   }
@@ -12908,13 +13081,13 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const supabase = sb();
     const id = await userId();
     if (!supabase || !id) {
-      window.__aiiensDashboardLocalFallback = true;
-      try { updateStudentDashboardMetrics?.(); } finally { window.__aiiensDashboardLocalFallback = false; }
+      console.error('[DASHBOARD] Supabase user is required for student dashboard.');
+      window.showToast?.('Please log in to load your dashboard progress.', 'red');
       return;
     }
     if (!window.__aiiensStudentProgressChannel) {
       window.__aiiensStudentProgressChannel = supabase.channel(`student-dashboard-progress-${id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'student_dashboard_progress', filter: `user_id=eq.${id}` }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'student_dashboard_progress', filter: `student_id=eq.${id}` }, () => {
           if (document.getElementById('page-dashboard')?.style.display !== 'none') loadDashboardSupabaseData();
         })
         .subscribe?.();
@@ -12925,9 +13098,8 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     try {
       progress = await fetchProgressRecord(supabase, id);
     } catch (error) {
-      console.warn('[DASHBOARD] Progress load failed:', error?.message || error);
-      window.__aiiensDashboardLocalFallback = true;
-      try { updateStudentDashboardMetrics?.(); } finally { window.__aiiensDashboardLocalFallback = false; }
+      console.error('[DASHBOARD] Progress load failed:', error);
+      window.showToast?.('Could not load dashboard progress' + (error?.message ? ': ' + error.message : ''), 'red');
       return;
     }
     if (!progress) {
@@ -13092,7 +13264,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
               <div class="live-workshop-topbar-actions">
                 <button class="btn btn-ghost active" id="live-topnav-dashboard" onclick="switchLiveWorkshopPage('dashboard')">Workshops</button>
                 <button class="btn btn-ghost" id="live-topnav-skillup" onclick="switchLiveWorkshopPage('skillup')">Courses</button>
-                <button class="btn btn-ghost" onclick="logoutLiveWorkshop()">Logout</button>
+                <button class="btn btn-ghost live-workshop-logout-btn" onclick="logoutLiveWorkshop()">Logout</button>
               </div>
             </header>
             <div class="page-content live-workshop-content-wrap">
