@@ -10586,6 +10586,10 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
 
   const previousUpdateStudentDashboardMetrics = updateStudentDashboardMetrics;
   updateStudentDashboardMetrics = function updateStudentDashboardMetricsProduction() {
+    if (!window.__aiiensDashboardLocalFallback && typeof window.aiiensLoadStudentDashboard === 'function' && window.__AIMEASY_SUPABASE__?.auth) {
+      window.aiiensLoadStudentDashboard();
+      return;
+    }
     previousUpdateStudentDashboardMetrics?.();
     const card = document.querySelector('#page-dashboard .streak-card');
     if (card) {
@@ -12017,6 +12021,109 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     })).filter(item => item.id || item.name);
   }
 
+  function readLegacyJson(key, fallback = []) {
+    try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; }
+  }
+
+  function currentStudentLegacyKey() {
+    const user = window.APP?.user || readLegacyJson('edusync_session_user', {});
+    return String(user.id || user.googleId || user.email || user.phone || user.name || 'anonymous').replace(/[^a-z0-9_.@-]+/gi, '_');
+  }
+
+  function latestLegacyCgpa() {
+    const sems = (window.APP?.calcSemesters || readLegacyJson('edusync_cgpa_data', []) || [])
+      .filter(item => Number.isFinite(Number(item?.sgpa)));
+    if (!sems.length) return { cgpa: 0, sgpa: 0 };
+    const cgpa = sems.reduce((sum, item) => sum + Number(item.sgpa), 0) / sems.length;
+    const sgpa = Number(sems[sems.length - 1]?.sgpa || 0);
+    return { cgpa, sgpa };
+  }
+
+  function legacyRecentSubjects() {
+    const scoped = readLegacyJson(`edusync_recently_opened:${currentStudentLegacyKey()}`, []);
+    const global = readLegacyJson('edusync_recently_opened', []);
+    const seen = new Set();
+    return [...scoped, ...global].filter((item) => {
+      const key = String(item?.id || item?.name || '').trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 5).map(item => ({
+      id: String(item.id || item.rawId || item.name || ''),
+      name: String(item.name || item.code || 'Subject'),
+      opened: item.opened || item.openedAt || new Date().toISOString(),
+    }));
+  }
+
+  function legacyDashboardSnapshot() {
+    const { cgpa, sgpa } = latestLegacyCgpa();
+    const events = readLegacyJson('edusync_study_activity', []);
+    const completedTopics = readLegacyJson('edusync_completed_topics', []).length;
+    const completedUnits = readLegacyJson('edusync_completed_units', []).length;
+    const currentStreak = clampNumber(localStorage.getItem('edusync_streak'));
+    const longestStreak = Math.max(currentStreak, clampNumber(localStorage.getItem('edusync_best_streak')));
+    const recent = legacyRecentSubjects();
+    const notesRead = events.filter(event => ['note_read', 'notes_read'].includes(normalizeProgressEvent(event?.type))).length;
+    const activeSubjects = new Set([
+      ...recent.map(item => item.id || item.name),
+      ...events.map(event => event.subjectId || event.subjectName).filter(Boolean),
+    ]).size;
+    const denominator = Math.max(1, completedTopics + notesRead + activeSubjects * 10);
+    const syllabusPercentage = Math.min(100, Math.round(((completedTopics + notesRead) / denominator) * 100));
+    return {
+      cgpa,
+      sgpa,
+      syllabusPercentage,
+      weeklyCompletion: syllabusPercentage,
+      completedTopics,
+      completedVideos: events.filter(event => ['video_watched', 'video_opened'].includes(normalizeProgressEvent(event?.type))).length,
+      completedUnits,
+      activeSubjects,
+      learningSessions: events.length,
+      notesRead,
+      currentStreak,
+      longestStreak,
+      lastActivityDate: localStorage.getItem('edusync_last_active_date') || events[0]?.day || null,
+      recent,
+    };
+  }
+
+  function applyLegacyDashboardSnapshot(patch, row = {}) {
+    const snapshot = legacyDashboardSnapshot();
+    if (snapshot.cgpa > 0 && !clampNumber(row.cgpa)) patch.cgpa = Number(snapshot.cgpa.toFixed(2));
+    if (snapshot.sgpa > 0 && !clampNumber(row.sgpa)) patch.sgpa = Number(snapshot.sgpa.toFixed(2));
+    patch.syllabus_percentage = Math.max(clampNumber(patch.syllabus_percentage, clampNumber(row.syllabus_percentage)), snapshot.syllabusPercentage);
+    patch.weekly_completion = Math.max(clampNumber(patch.weekly_completion, clampNumber(row.weekly_completion)), snapshot.weeklyCompletion);
+    patch.completed_topics = Math.max(clampNumber(patch.completed_topics, clampNumber(row.completed_topics)), snapshot.completedTopics);
+    patch.completed_videos = Math.max(clampNumber(patch.completed_videos, clampNumber(row.completed_videos)), snapshot.completedVideos);
+    patch.completed_units = Math.max(clampNumber(patch.completed_units, clampNumber(row.completed_units)), snapshot.completedUnits);
+    patch.active_subjects = Math.max(clampNumber(patch.active_subjects, clampNumber(row.active_subjects)), snapshot.activeSubjects);
+    patch.learning_sessions = Math.max(clampNumber(patch.learning_sessions, clampNumber(row.learning_sessions)), snapshot.learningSessions);
+    patch.notes_read = Math.max(clampNumber(patch.notes_read, clampNumber(row.notes_read)), snapshot.notesRead);
+    patch.current_streak = Math.max(clampNumber(patch.current_streak, clampNumber(row.current_streak)), snapshot.currentStreak);
+    patch.longest_streak = Math.max(clampNumber(patch.longest_streak, clampNumber(row.longest_streak)), snapshot.longestStreak);
+    if (snapshot.lastActivityDate && !row.last_activity_date) patch.last_activity_date = snapshot.lastActivityDate;
+
+    const existingRecent = progressRecentSubjects(row);
+    if (!existingRecent.length && snapshot.recent.length) {
+      [1, 2, 3, 4, 5].forEach((slot) => {
+        const item = snapshot.recent[slot - 1] || {};
+        patch[`recent_subject_${slot}`] = item.name || null;
+        patch[`recent_subject_${slot}_id`] = item.id || null;
+        patch[`recent_subject_${slot}_opened`] = item.opened || null;
+      });
+    }
+
+    patch.first_subject_opened = Boolean(row.first_subject_opened) || snapshot.recent.length > 0;
+    patch.first_unit_completed = Boolean(row.first_unit_completed) || snapshot.completedUnits >= 1;
+    patch.five_units_completed = Boolean(row.five_units_completed) || snapshot.completedUnits >= 5;
+    patch.ten_units_completed = Boolean(row.ten_units_completed) || snapshot.completedUnits >= 10;
+    patch.seven_day_streak = Boolean(row.seven_day_streak) || snapshot.currentStreak >= 7;
+    patch.thirty_day_streak = Boolean(row.thirty_day_streak) || snapshot.currentStreak >= 30;
+    patch.hundred_notes_read = Boolean(row.hundred_notes_read) || snapshot.notesRead >= 100;
+    patch.subject_milestone = Boolean(row.subject_milestone) || clampNumber(patch.syllabus_percentage, row.syllabus_percentage) >= 100;
+  }
+
   function applyRecentSubjectPatch(patch, row, details) {
     const subject = subjectFromProgressDetails(details);
     if (!subject.id && !subject.name) return;
@@ -12101,6 +12208,9 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       patch.active_subjects = clampNumber(details.activeSubjects, clampNumber(row.active_subjects));
       patch.learning_sessions = Math.max(clampNumber(details.learningSessions, 0), clampNumber(row.learning_sessions));
     }
+    if (normalized === 'dashboard_opened' || normalized === 'legacy_dashboard_sync') {
+      applyLegacyDashboardSnapshot(patch, row);
+    }
 
     const completedTopics = clampNumber(patch.completed_topics, clampNumber(row.completed_topics));
     const completedUnits = clampNumber(patch.completed_units, clampNumber(row.completed_units));
@@ -12110,7 +12220,11 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const activeSubjects = clampNumber(patch.active_subjects, clampNumber(row.active_subjects));
     const denominator = Math.max(1, completedTopics + completedVideos + notesRead + activeSubjects * 10);
     if (normalized !== 'learning_summary_refreshed') {
-      patch.syllabus_percentage = Math.max(clampNumber(row.syllabus_percentage), Math.min(100, Math.round(((completedTopics + completedVideos + notesRead) / denominator) * 100)));
+      patch.syllabus_percentage = Math.max(
+        clampNumber(row.syllabus_percentage),
+        clampNumber(patch.syllabus_percentage),
+        Math.min(100, Math.round(((completedTopics + completedVideos + notesRead) / denominator) * 100))
+      );
     }
     patch.first_unit_completed = completedUnits >= 1 || Boolean(row.first_unit_completed);
     patch.five_units_completed = completedUnits >= 5 || Boolean(row.five_units_completed);
@@ -12118,7 +12232,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     patch.seven_day_streak = clampNumber(patch.current_streak, clampNumber(row.current_streak)) >= 7 || Boolean(row.seven_day_streak);
     patch.thirty_day_streak = clampNumber(patch.current_streak, clampNumber(row.current_streak)) >= 30 || Boolean(row.thirty_day_streak);
     patch.hundred_notes_read = notesRead >= 100 || Boolean(row.hundred_notes_read);
-    patch.subject_milestone = completedSubjects > 0 || Boolean(row.subject_milestone);
+    patch.subject_milestone = completedSubjects > 0 || Boolean(patch.subject_milestone) || Boolean(row.subject_milestone);
     return patch;
   }
 
@@ -12413,7 +12527,14 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
 
   const originalAddRecent = window.addToRecentlyOpened || globalThis.addToRecentlyOpened;
   window.addToRecentlyOpened = globalThis.addToRecentlyOpened = function addRecentSupabase(name, code, icon, id) {
-    return originalAddRecent?.apply(this, arguments);
+    const canUseDb = Boolean(window.__AIMEASY_SUPABASE__?.auth && (window.APP?.user?.id || window.APP?.user?.googleId));
+    const result = canUseDb ? undefined : originalAddRecent?.apply(this, arguments);
+    updateStudentDashboardProgress('subject_opened', {
+      subject: { id, rawId: String(id || '').replace(/^custom_/, ''), name, code, icon },
+      subjectId: id,
+      subjectName: name,
+    });
+    return result;
   };
 
   const originalOpenSubject = window.openSubject || globalThis.openSubject;
@@ -12787,7 +12908,8 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const supabase = sb();
     const id = await userId();
     if (!supabase || !id) {
-      updateStudentDashboardMetrics?.();
+      window.__aiiensDashboardLocalFallback = true;
+      try { updateStudentDashboardMetrics?.(); } finally { window.__aiiensDashboardLocalFallback = false; }
       return;
     }
     if (!window.__aiiensStudentProgressChannel) {
@@ -12804,7 +12926,8 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       progress = await fetchProgressRecord(supabase, id);
     } catch (error) {
       console.warn('[DASHBOARD] Progress load failed:', error?.message || error);
-      updateStudentDashboardMetrics?.();
+      window.__aiiensDashboardLocalFallback = true;
+      try { updateStudentDashboardMetrics?.(); } finally { window.__aiiensDashboardLocalFallback = false; }
       return;
     }
     if (!progress) {
