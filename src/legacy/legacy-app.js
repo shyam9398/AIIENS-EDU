@@ -1657,7 +1657,7 @@ function normalizeCalcSemLabel(label) {
   if (JNTUK_SEMESTERS.includes(value)) return value;
   const oldMatch = value.match(/^\d+$/);
   if (oldMatch) return JNTUK_SEMESTERS[Math.max(0, Math.min(JNTUK_SEMESTERS.length - 1, Number(value) - 1))];
-  return value || JNTUK_SEMESTERS[0];
+  return value;
 }
 
 function makeCalcSemester(semKey) {
@@ -1709,7 +1709,6 @@ function migrateCalcState() {
     const current = APP.calcSemesters.find(s => s.id === APP.currentSemId);
     if (!current && APP.calcSemesters.length) APP.currentSemId = APP.calcSemesters[0].id;
   }
-  ensurePrecedingCalcSemesters();
 }
 
 function getNextCalcSemesterKey() {
@@ -2502,9 +2501,10 @@ async function initCalc() {
   if (!userId && !loaded) return;
   migrateCalcState();
   if (!APP.calcSemesters.length) {
-    const first = makeCalcSemester(JNTUK_SEMESTERS[0]);
-    APP.calcSemesters.push(first);
-    APP.currentSemId = first.id;
+    APP.currentSemId = '';
+    renderCalcEmptyState();
+    updateAddSemesterState();
+    return;
   }
   renderSemTabs();
   renderCalcSemTitle();
@@ -2538,6 +2538,27 @@ async function addSemester() {
   showToast('Semester ' + nextSem + ' added!', 'green');
 }
 
+async function removeCalcSemester(semId) {
+  const semester = APP.calcSemesters.find((item) => item.id === semId);
+  if (!semester) return;
+  APP.calcSemesters = APP.calcSemesters.filter((item) => item.id !== semId);
+  APP.currentSemId = APP.calcSemesters[0]?.id || '';
+  document.getElementById('calc-tbody').innerHTML = '';
+  APP.calcRows = [];
+  if (!APP.calcSemesters.length) {
+    renderCalcEmptyState();
+  } else {
+    const next = APP.calcSemesters.find((item) => item.id === APP.currentSemId);
+    renderSemTabs();
+    renderCalcSemTitle();
+    if (next?.rows?.length) renderCalcRowsForSemester(next);
+    else await loadSubjectsForCurrentSemester();
+    calculateGPA({ silent: true });
+  }
+  await Promise.all([saveCalcState(), syncBacklogFromCalcSemesters()]);
+  showToast(`Semester ${semester.label} removed.`, 'blue');
+}
+
 async function switchSem(semId) {
   saveCurrentSemRows();
   APP.currentSemId = semId;
@@ -2561,7 +2582,7 @@ function renderSemTabs() {
   container.innerHTML = APP.calcSemesters.map((sem) => {
     const cls = sem.id === APP.currentSemId ? 'btn-primary' : 'btn-ghost';
     const label = sem.label + (sem.sgpa !== null && sem.sgpa !== undefined ? ' - ' + Number(sem.sgpa).toFixed(2) : '');
-    return '<button class="btn ' + cls + ' btn-sm" onclick="switchSem(\'' + sem.id + '\')">' + calcHtml(label) + '</button>';
+    return '<span class="calc-semester-tab"><button class="btn ' + cls + ' btn-sm" onclick="switchSem(\'' + sem.id + '\')">' + calcHtml(label) + '</button><button class="calc-semester-remove" onclick="removeCalcSemester(\'' + sem.id + '\')" aria-label="Remove semester ' + calcHtml(sem.label) + '">&times;</button></span>';
   }).join('');
   updateAddSemesterState();
 }
@@ -2569,10 +2590,27 @@ function renderSemTabs() {
 function renderCalcSemTitle() {
   const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
   const el = document.getElementById('calc-sem-title');
-  if (el && sem) el.textContent = sem.label + ' Subjects';
+  if (el) el.textContent = sem ? sem.label + ' Subjects' : 'No semester selected';
+}
+
+function renderCalcEmptyState() {
+  const tabs = document.getElementById('sem-tabs');
+  const tbody = document.getElementById('calc-tbody');
+  if (tabs) tabs.innerHTML = '';
+  renderCalcSemTitle();
+  if (tbody) tbody.innerHTML = '<tr class="calc-empty-row"><td colspan="5"><div class="calc-empty-state">No semesters added yet</div></td></tr>';
+  document.getElementById('sgpa-result').textContent = '–';
+  document.getElementById('cgpa-result').textContent = '–';
+  document.getElementById('sgpa-grade').textContent = 'Add a semester to begin';
+  document.getElementById('backlog-warn').style.display = 'none';
+  document.getElementById('all-sems-summary').style.display = 'none';
 }
 
 function addCalcRow(rowOrName, credits, defaultGrade) {
+  if (!APP.currentSemId) {
+    showToast('Add a semester first.', 'blue');
+    return;
+  }
   const rowData = typeof rowOrName === 'object'
     ? normalizeCalcRow(rowOrName)
     : normalizeCalcRow({ name: rowOrName, credits, grade: defaultGrade, isCustom: true });
@@ -2636,7 +2674,10 @@ async function clearCalc() {
 }
 
 async function renderCalc() {
-  if (!APP.calcSemesters.length) await initCalc();
+  if (!APP.calcSemesters.length) {
+    await initCalc();
+    if (!APP.calcSemesters.length) renderCalcEmptyState();
+  }
   else {
     migrateCalcState();
     renderSemTabs();
@@ -12519,7 +12560,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
   }
 
   function latestLegacyCgpa() {
-    const sems = (window.APP?.calcSemesters || readLegacyJson('edusync_cgpa_data', []) || [])
+    const sems = (window.APP?.calcSemesters || [])
       .filter(item => Number.isFinite(Number(item?.sgpa)));
     if (!sems.length) return { cgpa: 0, sgpa: 0 };
     const cgpa = sems.reduce((sum, item) => sum + Number(item.sgpa), 0) / sems.length;
@@ -12876,11 +12917,11 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     try {
       await sb()?.auth?.signOut?.();
     } catch (error) {
-      console.warn('[LIVE WORKSHOP] Supabase sign out failed:', error?.message || error);
+      console.warn('[LIVE Webinars & Courses] Supabase sign out failed:', error?.message || error);
     }
     window.location.hash = '#/landing';
     window.showScreen?.('screen-landing');
-    window.showToast?.('Logged out from Live Workshop', 'green');
+    window.showToast?.('Logged out from Live Webinars & Courses', 'green');
   };
 
   function syncAppProfilePatch(patch) {
@@ -13373,19 +13414,19 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         .eq('is_active', true)
         .order('created_at', { ascending: false });
       if (error) {
-        console.warn('[DASHBOARD] Live workshop banners load failed:', error.message || error);
+        console.warn('[DASHBOARD] Live Webinars & Courses banners load failed:', error.message || error);
         return [];
       }
       return normalizeWorkshopBanners(data || []);
     } catch (error) {
-      console.warn('[DASHBOARD] Live workshop banners load crashed:', error?.message || error);
+      console.warn('[DASHBOARD] Live Webinars & Courses banners load crashed:', error?.message || error);
       return [];
     }
   }
 
   function studentWorkshopBannerSlide(banner, index) {
     const image = banner?.banner_image || banner?.image_url || banner?.banner_url || '';
-    const title = banner?.banner_title || banner?.title || 'Live Workshop';
+    const title = banner?.banner_title || banner?.title || 'Live Webinars & Courses';
     const subtitle = banner?.banner_subtitle || banner?.subtitle || 'Join expert-led live sessions';
     return `
       <button class="student-workshop-carousel-slide ${index === 0 ? 'active' : ''}" type="button" data-student-banner-index="${index}" onclick="handleStudentWorkshopBannerClick()" ${image ? `style="background-image:url('${esc(image)}')"` : ''}>
@@ -13438,7 +13479,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const banners = await loadActiveWorkshopBanners();
     if (renderToken !== studentWorkshopRenderToken) return;
     if (!banners.length) {
-      track.innerHTML = '<div class="student-workshop-carousel-empty">Live workshop banners will appear here.</div>';
+      track.innerHTML = '<div class="student-workshop-carousel-empty">Live Webinars & Courses banners will appear here.</div>';
       root.querySelectorAll('.student-carousel-arrow').forEach((button) => button.remove());
       return;
     }
@@ -13584,7 +13625,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       roleCards.insertAdjacentHTML('beforeend', `
         <div class="role-card live-workshops" id="role-live-workshops" onclick="openLiveWorkshops()">
           <div class="role-icon">Live</div>
-          <div class="role-label">Live Workshops</div>
+          <div class="role-label">Live Webinars & Courses</div>
           <div class="role-desc">Join expert-led live sessions</div>
         </div>`);
     }
@@ -13612,7 +13653,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
               <button class="sidebar-close-btn" onclick="closeLiveWorkshopSidebar()" aria-label="Close menu">×</button>
             </div>
             <nav class="sidebar-nav">
-              <div class="nav-section-label">Live Workshop</div>
+              <div class="nav-section-label">Live Webinars & Courses</div>
               <div class="nav-item active" id="live-nav-dashboard" onclick="switchLiveWorkshopPage('dashboard');closeLiveWorkshopSidebar()">
                 <span class="nav-icon">🏠</span><span class="nav-label">Dashboard</span>
               </div>
@@ -13635,11 +13676,11 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
                 <div class="live-workshop-brand" aria-label="AIIENS EDU"><span>A</span><strong>AIIENS EDU</strong></div>
                 <div>
                   <div class="page-title" id="live-workshop-title">Dashboard</div>
-                  <div class="breadcrumb">Live Workshops / <span id="live-workshop-breadcrumb">Dashboard</span></div>
+                  <div class="breadcrumb">Live Webinars & Courses / <span id="live-workshop-breadcrumb">Dashboard</span></div>
                 </div>
               </div>
               <div class="live-workshop-topbar-actions">
-                <button class="btn btn-ghost active" id="live-topnav-dashboard" onclick="switchLiveWorkshopPage('dashboard')">Workshops</button>
+                <button class="btn btn-ghost active" id="live-topnav-dashboard" onclick="switchLiveWorkshopPage('dashboard')">Webinars & Courses</button>
                 <button class="btn btn-ghost" id="live-topnav-skillup" onclick="switchLiveWorkshopPage('skillup')">Courses</button>
                 <button class="btn btn-ghost live-workshop-logout-btn" onclick="logoutLiveWorkshop()">Logout</button>
               </div>
@@ -13656,7 +13697,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     if (adminNav && !document.getElementById('admin-nav-liveworkshops')) {
       adminNav.insertAdjacentHTML('beforeend', `
         <div class="admin-nav-item" id="admin-nav-liveworkshops" onclick="switchAdminSection('liveworkshops')">
-          <span>Live</span> Live Workshops
+          <span>Live</span> Live Webinars & Courses
         </div>`);
     }
   }
@@ -13718,7 +13759,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (error) console.warn('[LIVE WORKSHOP] Registration load failed:', error.message || error);
+    if (error) console.warn('[LIVE Webinars & Courses] Registration load failed:', error.message || error);
     return data || null;
   }
 
@@ -13756,7 +13797,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       root.innerHTML = `
         <section class="live-workshop-form">
           <h2>Continue with Google</h2>
-          <p class="live-section-copy">Select your Google account to continue to the Live Workshop dashboard.</p>
+          <p class="live-section-copy">Select your Google account to continue to the Live Webinars & Courses dashboard.</p>
           <button class="btn btn-primary" type="button" onclick="openLiveWorkshops()">Continue with Google</button>
         </section>`;
       return;
@@ -13808,8 +13849,8 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       .limit(1)
       .maybeSingle();
     if (existing.error) {
-      console.warn('[LIVE WORKSHOP] Existing registration check failed:', existing.error.message || existing.error);
-      window.showToast?.('Could not verify workshop registration. Please try again.', 'red');
+      console.warn('[LIVE Webinars & Courses] Existing registration check failed:', existing.error.message || existing.error);
+      window.showToast?.('Could not verify Webinars & Courses registration. Please try again.', 'red');
       return;
     }
     const request = existing.data?.id
@@ -13817,21 +13858,21 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       : supabase.from('live_workshop_registrations').insert(row);
     const { error } = await request;
     if (error) {
-      window.showToast?.('Could not save workshop profile: ' + error.message, 'red');
+      window.showToast?.('Could not save Webinars & Courses profile: ' + error.message, 'red');
       return;
     }
     try {
       sessionStorage.setItem('aiiens_live_workshop_auth', '1');
       sessionStorage.setItem('aimeasy_login_portal', 'live_workshop');
     } catch {}
-    window.showToast?.('Workshop profile saved', 'green');
+    window.showToast?.('Webinars & Courses profile saved', 'green');
     window.updateLandingStats?.();
     await renderLiveWorkshopDashboard();
   };
 
   function liveWorkshopBannerSlide(banner, index) {
     const image = banner?.banner_image || banner?.image_url || banner?.banner_url || '';
-    const title = banner?.banner_title || banner?.title || 'Live Workshops';
+    const title = banner?.banner_title || banner?.title || 'Live Webinars & Courses';
     const subtitle = banner?.banner_subtitle || banner?.subtitle || 'Upcoming expert sessions';
     return `
       <article class="live-workshop-carousel-slide ${index === 0 ? 'active' : ''}" data-live-banner-index="${index}" ${image ? `style="background-image:url('${esc(image)}')"` : ''}>
@@ -14111,12 +14152,12 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       banners = [{
         id: 'fallback-live-workshop-banner',
         banner_image: fallback?.banner_image || '',
-        banner_title: 'Live Workshops',
+        banner_title: 'Live Webinars & Courses',
         banner_subtitle: 'Upcoming expert sessions',
       }];
     }
     root.innerHTML = `
-      <section class="live-workshop-carousel" aria-label="Live workshop banners">
+      <section class="live-workshop-carousel" aria-label="Live Webinars & Courses banners">
         <div class="live-workshop-carousel-track" id="live-workshop-carousel-track">
           ${banners.map((banner, index) => liveWorkshopBannerSlide(banner, index)).join('')}
         </div>
@@ -14126,13 +14167,13 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         ` : ''}
       </section>
       <section class="live-workshop-section">
-        <div class="section-heading">Registered Workshops</div>
+        <div class="section-heading">Registered Webinars & Courses</div>
         <div class="live-workshop-scroll-row">
           ${registeredWorkshops.length ? registeredWorkshops.map((row) => workshopCard(row, 'registered')).join('') : '<div class="empty-state-card">registered workshops fast.</div>'}
         </div>
       </section>
       <section class="live-workshop-section">
-        <div class="section-heading">Upcoming Workshops</div>
+        <div class="section-heading">Upcoming Webinars & Courses</div>
         <div class="live-workshop-scroll-row">
           ${upcomingWorkshops.length ? upcomingWorkshops.map((row) => workshopCard(row, 'upcoming')).join('') : '<div class="empty-state-card">upcoming workshops available soon.</div>'}
         </div>
@@ -14259,7 +14300,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       return;
     }
     window.closeLiveWorkshopRegisterModal();
-    window.showToast?.('Workshop registered', 'green');
+    window.showToast?.('Webinars & Courses registered', 'green');
     window.updateLandingStats?.();
     await renderLiveWorkshopDashboard();
     if (document.getElementById('page-skills')?.style.display !== 'none') {
@@ -14273,11 +14314,11 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const content = document.getElementById('admin-content');
     if (!content) return;
     content.innerHTML = `
-      <div class="admin-section-head"><div><h2>Live Workshops</h2><p>Create, publish, edit, and delete live workshop sessions.</p></div></div>
+      <div class="admin-section-head"><div><h2>Live Webinars & Courses</h2><p>Create, publish, edit, and delete webinars and courses.</p></div></div>
       <div class="card live-admin-form">
         <div class="admin-section-head" style="margin-bottom:1rem;"><div><h2 style="font-size:1.1rem;">➕ Add Banner</h2><p>Upload multiple dashboard carousel banners using image URLs.</p></div></div>
         <input class="input" id="admin-lwb-id" type="hidden">
-        <div class="form-row"><div class="input-group"><label>Image</label><input class="input" id="admin-lwb-image" type="url" placeholder="https://..."></div><div class="input-group"><label>Title</label><input class="input" id="admin-lwb-title" placeholder="Live Workshops"></div></div>
+        <div class="form-row"><div class="input-group"><label>Image</label><input class="input" id="admin-lwb-image" type="url" placeholder="https://..."></div><div class="input-group"><label>Title</label><input class="input" id="admin-lwb-title" placeholder="Live Webinars & Courses"></div></div>
         <div class="form-row"><div class="input-group"><label>Subtitle</label><input class="input" id="admin-lwb-subtitle" placeholder="Upcoming expert sessions"></div><div class="input-group"><label>Status</label><select class="select" id="admin-lwb-status"><option value="true">Active</option><option value="false">Inactive</option></select></div></div>
         <button class="btn btn-primary" onclick="saveAdminLiveBanner()">Save Banner</button>
       </div>
@@ -14457,7 +14498,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       document.querySelectorAll('[id^="admin-nav-"]').forEach(el => el.classList.remove('active'));
       document.getElementById('admin-nav-liveworkshops')?.classList.add('active');
       const title = document.getElementById('admin-topbar-title');
-      if (title) title.textContent = 'Live Workshops';
+      if (title) title.textContent = 'Live Webinars & Courses';
       return renderAdminLiveWorkshops();
     }
     return originalSwitchAdmin?.apply(this, arguments);

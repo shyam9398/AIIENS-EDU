@@ -55,15 +55,6 @@ export async function loadRemoteState() {
     });
 
     console.log('Profile data received', remoteState);
-    if (remoteState['aiiens_cgpa_data']) {
-      try {
-        const parsed = JSON.parse(remoteState['aiiens_cgpa_data']);
-        console.log('CGPA loaded', parsed);
-      } catch (e) {
-        console.warn('Failed to parse CGPA in log:', e);
-      }
-    }
-
     // Perform the database key migration in the background
     if (keysToMigrate.length > 0) {
       console.log('[MIGRATION] Migrating legacy keys in database:', keysToMigrate.map(k => `${k.from} -> ${k.to}`));
@@ -98,10 +89,6 @@ export async function saveRemoteKey(key, value) {
     // Ensure the key is in the aiiens_ namespace if it is edusync_
     const targetKey = key.replace(/^edusync_/, 'aiiens_');
     const scopedKey = `${targetKey}:${userId}`;
-    if (targetKey === 'aiiens_cgpa_data') {
-      console.log('Saving CGPA', value);
-    }
-    
     const { error } = await supabase
       .from(TABLE_NAME)
       .upsert({ key: scopedKey, value, updated_at: new Date().toISOString() });

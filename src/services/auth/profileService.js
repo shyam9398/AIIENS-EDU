@@ -7,6 +7,7 @@ const PORTAL_ROLE = {
   creator: ROLE.CONTENT_CREATOR,
   teacher: ROLE.CONTENT_CREATOR,
   content_creator: ROLE.CONTENT_CREATOR,
+  live_workshop: ROLE.LIVE_WORKSHOP,
   subadmin: ROLE.SUBADMIN,
   admin: ROLE.ADMIN,
 };
@@ -24,7 +25,9 @@ function rememberProfile(row) {
   if (!authId) return;
   const result = Promise.resolve({ profile: row, error: null });
   profileRequestCache.set(profileCacheKey(authId, 'legacy'), result);
-  profileRequestCache.set(profileCacheKey(authId, row.role), result);
+  profileRoles(row).forEach((role) => {
+    profileRequestCache.set(profileCacheKey(authId, role), result);
+  });
 }
 
 function forgetProfile(authUserId) {
@@ -67,6 +70,7 @@ export function portalMismatchMessage(portal, dbRole) {
     content_creator: 'Content Creator Portal',
     subadmin: 'Sub Admin Portal',
     admin: 'Admin Portal',
+    live_workshop: 'Live Workshop Portal',
   };
   const roleLabel = {
     student: 'Student Portal',
@@ -74,6 +78,7 @@ export function portalMismatchMessage(portal, dbRole) {
     content_creator: 'Content Creator Portal',
     subadmin: 'Sub Admin Portal',
     admin: 'Admin Portal',
+    live_workshop: 'Live Workshop Portal',
   };
   const expected = portalLabel[portal] || portal;
   const actual = roleLabel[dbRole] || dbRole;
@@ -112,14 +117,27 @@ export function isProfileFullyComplete(profile) {
   return !!profile?.onboarding_completed;
 }
 
-export function profileToLegacyUser(row) {
+export function profileRoles(profile) {
+  const rawRoles = Array.isArray(profile?.roles) ? profile.roles : [];
+  const normalized = rawRoles.map(normalizeRole).filter(Boolean);
+  return [...new Set(normalized)];
+}
+
+export function profileHasRole(profile, role) {
+  const expected = normalizeRole(role);
+  return Boolean(expected && profileRoles(profile).includes(expected));
+}
+
+export function profileToLegacyUser(row, activeRole) {
   if (!row) return null;
   const branch = row.branch_name || row.branch || '';
   return {
     id: row.id,
     googleId: row.id,
     email: row.email,
-    role: normalizeRole(row.role),
+    // Legacy browser code reads this current active role.
+    role: normalizeRole(activeRole) || normalizeRole(row.role) || profileRoles(row)[0] || null,
+    roles: profileRoles(row),
     name: row.full_name || row.name,
     full_name: row.full_name || row.name,
     phone: row.phone_number || row.phone,
@@ -154,7 +172,7 @@ export async function fetchProfileByAuthIdAndRole(authUserId, role) {
 
   const request = (async () => {
     let query = supabase.from('profiles').select('*').eq('id', authUserId);
-    if (normalizedRole) query = query.eq('role', normalizedRole);
+    if (normalizedRole) query = query.contains('roles', [normalizedRole]);
     const { data, error } = await query.maybeSingle();
     if (error) {
       console.warn('fetchProfileByAuthId error', error.message);
@@ -162,10 +180,10 @@ export async function fetchProfileByAuthIdAndRole(authUserId, role) {
       return { profile: null, error };
     }
     if (data) {
-      authLog(AUTH_STAGES.PROFILE_EXISTS, { id: authUserId, role: data.role });
+      authLog(AUTH_STAGES.PROFILE_EXISTS, { id: authUserId, roles: profileRoles(data) });
       console.log('[AUTH] Profile Loaded', {
         userId: authUserId,
-        role: data.role,
+        roles: profileRoles(data),
         onboarding_completed: Boolean(data.onboarding_completed),
       });
     } else authLog(AUTH_STAGES.PROFILE_NOT_FOUND, { id: authUserId, role: normalizedRole });
@@ -180,7 +198,7 @@ export async function fetchProfileByEmail(email, role) {
   if (!supabase || !email) return { profile: null, error: null };
   const normalizedRole = normalizeRole(role);
   let query = supabase.from('profiles').select('*').ilike('email', email);
-  if (normalizedRole) query = query.eq('role', normalizedRole);
+  if (normalizedRole) query = query.contains('roles', [normalizedRole]);
   const { data, error } = await query.maybeSingle();
   if (error) {
     console.warn('fetchProfileByEmail error', error.message);
@@ -195,14 +213,45 @@ export async function ensureProfileForAuthUser(authUser, selectedRole = ROLE.STU
   const role = normalizeRole(selectedRole) || ROLE.STUDENT;
 
   const found = await fetchProfileByAuthId(authUser.id);
-  if (found.profile || found.error) return found;
+  if (found.error) return found;
+  if (found.profile) {
+    const roles = profileHasRole(found.profile, role)
+      ? profileRoles(found.profile)
+      : [...profileRoles(found.profile), role];
+    forgetProfile(authUser.id);
+    const { data, error } = await supabase
+      .from('profiles')
+      // Every portal selection becomes the active role, while roles remains
+      // the complete, non-destructive membership list.
+      .update({ roles, role })
+      .eq('id', authUser.id)
+      .select()
+      .single();
+    if (error) return { profile: null, error };
+    rememberProfile(data);
+    return { profile: data, error: null, updated: true };
+  }
 
   const byEmail = await fetchProfileByEmail(authUser.email);
-  if (byEmail.profile || byEmail.error) return byEmail;
+  if (byEmail.error) return byEmail;
+  if (byEmail.profile) {
+    const roles = [...profileRoles(byEmail.profile), role];
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ email: authUser.email || byEmail.profile.email, roles, role })
+      .eq('id', byEmail.profile.id)
+      .select()
+      .single();
+    if (error) return { profile: null, error };
+    rememberProfile(data);
+    return { profile: data, error: null, updated: true };
+  }
 
   const row = {
     id: authUser.id,
     email: authUser.email || null,
+    // role is the active portal; roles retains every portal membership.
+    roles: [role],
     role,
     full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || null,
     onboarding_completed: false,
@@ -221,10 +270,10 @@ export async function ensureProfileForAuthUser(authUser, selectedRole = ROLE.STU
   }
 
   rememberProfile(data);
-  authLog(AUTH_STAGES.PROFILE_CREATED, { id: authUser.id, email: row.email, role: row.role });
+  authLog(AUTH_STAGES.PROFILE_CREATED, { id: authUser.id, email: row.email, roles: row.roles });
   console.log('[AUTH] Profile Created', {
     userId: authUser.id,
-    role: data.role,
+    roles: profileRoles(data),
     onboarding_completed: Boolean(data.onboarding_completed),
   });
   return { profile: data, error: null, created: true };
@@ -247,7 +296,7 @@ export async function upsertProfileFromLegacy(user, authUser) {
   if (!supabase || !authUser?.id) return { profile: null, error: new Error('No Supabase session') };
   const requestedRole = normalizeRole(user.role || getLoginPortal()) || ROLE.STUDENT;
   const existing = await fetchProfileByAuthId(authUser.id);
-  const role = normalizeRole(existing.profile?.role || requestedRole) || ROLE.STUDENT;
+  const role = requestedRole;
   const onboardingComplete =
     role === ROLE.CONTENT_CREATOR
       ? isCreatorProfileComplete(user)
@@ -276,18 +325,19 @@ export async function upsertProfileFromLegacy(user, authUser) {
     onboarding_completed: onboardingComplete,
     onboarding_completed_at: onboardingComplete ? new Date().toISOString() : null,
   };
+  row.roles = [...new Set([...profileRoles(existing.profile), role])];
   const { data, error } = await upsertRoleScopedProfile(row, authUser.id);
   if (data) rememberProfile(data);
   return { profile: data, error };
 }
 
-export function validatePortalRole(portal, dbRole) {
+export function validatePortalRole(portal, dbRoles) {
   const expected = PORTAL_ROLE[portal];
-  const actual = normalizeRole(dbRole);
-  if (!expected || !actual) return { ok: false, message: 'Invalid portal or role.' };
-  if (expected !== actual) {
-    authLog(AUTH_STAGES.ROLE_MISMATCH, { portal, dbRole });
-    return { ok: false, message: portalMismatchMessage(portal, actual) };
+  const actual = Array.isArray(dbRoles) ? dbRoles.map(normalizeRole).filter(Boolean) : [normalizeRole(dbRoles)].filter(Boolean);
+  if (!expected || !actual.length) return { ok: false, message: 'Invalid portal or role.' };
+  if (!actual.includes(expected)) {
+    authLog(AUTH_STAGES.ROLE_MISMATCH, { portal, roles: actual });
+    return { ok: false, message: portalMismatchMessage(portal, actual[0]) };
   }
   return { ok: true, message: '' };
 }

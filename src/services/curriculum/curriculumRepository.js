@@ -377,7 +377,7 @@ export async function fetchCurriculumStats(createdBy = null) {
   }
 
   const [students, subjects, units, roadmapTopics, roadmapVideos, contentVideos, notes, pyqs, iqs] = await Promise.all([
-    supabase.from('role_profiles').select('*', { count: 'exact', head: true }).eq('role', 'student'),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).contains('roles', ['student']),
     supabase.from('subjects').select('*', { count: 'exact', head: true }),
     supabase.from('units').select('*', { count: 'exact', head: true }),
     supabase.from('topics').select('*', { count: 'exact', head: true }),

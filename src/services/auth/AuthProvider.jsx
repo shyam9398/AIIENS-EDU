@@ -1,6 +1,6 @@
 import React from 'react';
 import { supabase } from '../supabase/client.js';
-import { fetchProfileByAuthId, ensureProfileForAuthUser, getLoginPortal } from './profileService.js';
+import { fetchProfileByAuthId, ensureProfileForAuthUser, getLoginPortal, profileHasRole, profileRoles } from './profileService.js';
 import { getSessionOnce, invalidateSessionCache, withAuthTimeout } from './authService.js';
 import { ROLE, normalizeRole } from './roleRedirectService.js';
 import { branchFromProfile, setCurrentBranch } from './branchContext.js';
@@ -80,7 +80,7 @@ export function AuthProvider({ children }) {
           return null;
         }
         row = createResult.profile;
-        console.log('[PROFILE_CREATED]', { userId: user.id, role: row?.role || portalRole });
+        console.log('[PROFILE_CREATED]', { userId: user.id, roles: profileRoles(row) || [portalRole] });
       }
       if (result.error) {
         console.error('[PROFILE_FETCH_FAILED]', { userId: user.id, error: result.error.message });
@@ -88,15 +88,15 @@ export function AuthProvider({ children }) {
         window.showToast?.('Unable to load your profile. Please refresh and try again.', 'red');
         return null;
       }
-      console.log('[PROFILE_FETCH_SUCCESS]', { userId: user.id, hasProfile: Boolean(row), role: row?.role || null });
+      console.log('[PROFILE_FETCH_SUCCESS]', { userId: user.id, hasProfile: Boolean(row), roles: profileRoles(row) });
       console.log("PROFILE RESPONSE", row);
       if (row) {
-        console.log("ROLE DETECTED", row.role);
+        console.log("ROLES DETECTED", profileRoles(row));
       }
       if (row && !row.onboarding_completed) {
-        console.log('[ONBOARDING_STARTED]', { userId: user.id, role: row?.role || null });
+        console.log('[ONBOARDING_STARTED]', { userId: user.id, roles: profileRoles(row) });
       }
-      if (row && row.role === 'subadmin') {
+      if (row && profileHasRole(row, 'subadmin')) {
         const username = row.email?.split('@')[0] || row.full_name;
         const { data: subAdminAcc } = await supabase.from('sub_admin_accounts').select('*').eq('username', username).maybeSingle();
         if (subAdminAcc) {
@@ -106,7 +106,7 @@ export function AuthProvider({ children }) {
           window.APP.role = 'subadmin';
           window.APP.session = true;
         }
-      } else if (row && row.role === 'admin') {
+      } else if (row && profileHasRole(row, 'admin')) {
         const username = row.email?.split('@')[0] || row.full_name;
         const { data: adminAcc } = await supabase.from('admin_accounts').select('*').eq('username', username).maybeSingle();
         if (adminAcc) {
@@ -119,7 +119,7 @@ export function AuthProvider({ children }) {
       }
       setProfile(row);
       setBranch(setCurrentBranch(branchFromProfile(row)));
-      console.log('[AUTH] Profile loaded', { userId: user.id, hasProfile: Boolean(row), role: row?.role || null });
+      console.log('[AUTH] Profile loaded', { userId: user.id, hasProfile: Boolean(row), roles: profileRoles(row) });
       return row;
     } catch (err) {
       console.error('[PROFILE_FETCH_FAILED]', { userId: user.id, error: err?.message || String(err) });

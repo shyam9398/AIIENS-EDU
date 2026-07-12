@@ -9,6 +9,8 @@ import {
   isProfilePersonalComplete,
   isStudentPersonalComplete,
   portalMismatchMessage,
+  profileHasRole,
+  profileRoles,
   profileToLegacyUser,
   validatePortalRole,
 } from './profileService.js';
@@ -118,18 +120,7 @@ export async function routeAfterAuth(authUser, { reason, selectedRole } = {}) {
 
   window.__aimeasyRoutingInProgress = true;
   const currentRoute = currentHashRoute();
-  if (isLiveWorkshopAuthRequest(selectedRole)) {
-    window.__aimeasyRoutingInProgress = false;
-    window.hideLoading?.();
-    replaceHashRoute('/live-workshops');
-    if (typeof window.openLiveWorkshops === 'function') {
-      window.setTimeout(() => window.openLiveWorkshops?.(), 0);
-    } else {
-      window.showScreen?.('screen-live-workshops');
-    }
-    console.log('[ROUTE] Live workshop auth allowed', { reason, requestedRoute: currentRoute });
-    return true;
-  }
+  const liveWorkshopRequested = isLiveWorkshopAuthRequest(selectedRole);
 
   const isProtectedOrOnboarding = /^\/(student|creator|subadmin|admin)(\/|$)/.test(currentRoute) || currentRoute === '/personal-details' || currentRoute === '/academic-details';
   const isBackgroundRestore = String(reason || '').includes('react-auth-session') || String(reason || '').includes('restore');
@@ -180,24 +171,26 @@ export async function routeAfterAuth(authUser, { reason, selectedRole } = {}) {
   }
   console.log(created ? '[AUTH] Profile Created' : '[AUTH] Profile Loaded', {
     userId: authUser?.id,
-    role: row.role,
+    roles: profileRoles(row),
     onboarding_completed: Boolean(row.onboarding_completed),
   });
 
   if (row.onboarding_completed) {
-    console.log('[ONBOARDING] Existing User', { userId: authUser?.id, role: row.role });
+    console.log('[ONBOARDING] Existing User', { userId: authUser?.id, roles: profileRoles(row) });
     console.log('[AUTH] Existing User', { userId: authUser?.id });
     console.log('[ONBOARDING] Skipped', { userId: authUser?.id });
   } else {
-    console.log('[ONBOARDING] New User', { userId: authUser?.id, role: row.role });
+    console.log('[ONBOARDING] New User', { userId: authUser?.id, roles: profileRoles(row) });
     console.log('[AUTH] New User', { userId: authUser?.id });
     console.log('[ONBOARDING] Required', { userId: authUser?.id });
   }
 
-  const dbRole = normalizeRole(row.role);
+  // ensureProfileForAuthUser has persisted this selected portal as the active
+  // profiles.role, while profiles.roles remains the complete membership list.
+  const dbRole = normalizeRole(row.role) || requestedRole || profileRoles(row)[0];
   console.log('[DEBUG_AUTH] User role detected', { role: dbRole });
   updateStatusText(`Initializing ${dbRole || 'user'} workspace...`);
-  const check = requestedRole ? validatePortalRole(requestedRole, dbRole) : { ok: true };
+  const check = requestedRole ? validatePortalRole(requestedRole, profileRoles(row)) : { ok: true };
   if (!check.ok) {
     window.hideLoading?.();
     window.showToast?.(portalMismatchMessage(requestedRole, dbRole), 'red');
@@ -207,7 +200,22 @@ export async function routeAfterAuth(authUser, { reason, selectedRole } = {}) {
     return false;
   }
 
-  const legacyUser = profileToLegacyUser(row);
+  if (liveWorkshopRequested) {
+    if (!profileHasRole(row, ROLE.LIVE_WORKSHOP)) {
+      window.hideLoading?.();
+      window.showToast?.(portalMismatchMessage(ROLE.LIVE_WORKSHOP, profileRoles(row)[0]), 'red');
+      window.__aimeasyRoutingInProgress = false;
+      return false;
+    }
+    window.__aimeasyRoutingInProgress = false;
+    window.hideLoading?.();
+    replaceHashRoute('/live-workshops');
+    if (typeof window.openLiveWorkshops === 'function') window.setTimeout(() => window.openLiveWorkshops?.(), 0);
+    else window.showScreen?.('screen-live-workshops');
+    return true;
+  }
+
+  const legacyUser = profileToLegacyUser(row, dbRole);
   if (!legacyUser.name) {
     legacyUser.name =
       authUser.user_metadata?.full_name ||

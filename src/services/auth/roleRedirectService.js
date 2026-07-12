@@ -3,6 +3,7 @@ export const ROLE = Object.freeze({
   SUBADMIN: 'subadmin',
   CONTENT_CREATOR: 'content_creator',
   STUDENT: 'student',
+  LIVE_WORKSHOP: 'live_workshop',
 });
 
 export const ROLE_DASHBOARD_PATH = Object.freeze({
@@ -24,6 +25,7 @@ const LEGACY_ROLE_ALIASES = Object.freeze({
   teacher: ROLE.CONTENT_CREATOR,
   content_creator: ROLE.CONTENT_CREATOR,
   student: ROLE.STUDENT,
+  live_workshop: ROLE.LIVE_WORKSHOP,
   subadmin: ROLE.SUBADMIN,
   admin: ROLE.ADMIN,
 });

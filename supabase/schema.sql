@@ -90,7 +90,8 @@ create policy "branches write" on public.branches for all to anon using (true) w
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
-  role text not null check (role in ('student', 'content_creator', 'subadmin', 'admin')),
+  role text not null check (role in ('student', 'content_creator', 'subadmin', 'admin', 'live_workshop')),
+  roles jsonb not null default '[]'::jsonb,
   full_name text,
   name text,
   phone text,
@@ -134,6 +135,24 @@ add column if not exists qualification text;
 
 alter table public.profiles
 add column if not exists experience text;
+
+alter table public.profiles
+add column if not exists roles jsonb not null default '[]'::jsonb;
+
+update public.profiles
+set roles = jsonb_build_array(role)
+where coalesce(jsonb_array_length(roles), 0) = 0
+  and role in ('student', 'content_creator', 'subadmin', 'admin');
+
+alter table public.profiles
+drop constraint if exists profiles_roles_check;
+
+alter table public.profiles
+add constraint profiles_roles_check
+check (jsonb_typeof(roles) = 'array'
+  and roles <@ '["student", "content_creator", "subadmin", "admin", "live_workshop"]'::jsonb);
+
+create index if not exists idx_profiles_roles on public.profiles using gin (roles);
 
 alter table public.profiles
 drop constraint if exists profiles_role_type_check;
@@ -215,7 +234,7 @@ drop constraint if exists profiles_role_check;
 
 alter table public.profiles
 add constraint profiles_role_check
-check (role in ('student', 'content_creator', 'subadmin', 'admin'));
+check (role in ('student', 'content_creator', 'subadmin', 'admin', 'live_workshop'));
 
 alter table public.profiles enable row level security;
 
@@ -231,12 +250,12 @@ using (id = auth.uid());
 
 create policy "profiles insert own"
 on public.profiles for insert to authenticated
-with check (id = auth.uid() and role in ('student', 'content_creator', 'subadmin', 'admin'));
+with check (id = auth.uid() and jsonb_typeof(roles) = 'array');
 
 create policy "profiles update own"
 on public.profiles for update to authenticated
 using (id = auth.uid())
-with check (id = auth.uid() and role in ('student', 'content_creator', 'subadmin', 'admin'));
+with check (id = auth.uid() and jsonb_typeof(roles) = 'array');
 
 create or replace function public.set_profiles_updated_at()
 returns trigger as $$
@@ -822,35 +841,6 @@ create policy "workshop registrations own write" on public.live_workshop_registr
 
 
 
--- Role-scoped profiles + separate curriculum workflow
-create table if not exists public.role_profiles (
-  id uuid not null references auth.users(id) on delete cascade,
-  email text,
-  role text not null check (role in ('student', 'content_creator', 'subadmin', 'admin')),
-  full_name text,
-  name text,
-  phone text,
-  phone_number text,
-  college text,
-  role_type text check (role_type is null or role_type in ('teacher', 'non_teacher')),
-  qualification text,
-  experience text,
-  university_id uuid references public.universities(id),
-  university_name text,
-  regulation_id uuid references public.regulations(id),
-  regulation_code text,
-  branch_id uuid references public.branches(id),
-  branch_name text,
-  year text,
-  semester text,
-  photo_url text,
-  onboarding_completed boolean not null default false,
-  onboarding_completed_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  primary key (id, role)
-);
-
 create table if not exists public.curriculums (
   id uuid primary key default gen_random_uuid(),
   subject_name text not null,
@@ -914,22 +904,18 @@ create table if not exists public.curriculum_content_items (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists idx_role_profiles_id_role on public.role_profiles(id, role);
 create index if not exists idx_curriculums_status on public.curriculums(status);
 create index if not exists idx_curriculum_units_curriculum on public.curriculum_units(curriculum_id, display_order);
 create index if not exists idx_curriculum_topics_unit on public.curriculum_topics(curriculum_unit_id, display_order);
 create index if not exists idx_curriculum_assignments_creator on public.curriculum_assignments(creator_profile_id, status);
 create index if not exists idx_curriculum_content_unit_type on public.curriculum_content_items(curriculum_unit_id, content_type);
 
-alter table public.role_profiles enable row level security;
 alter table public.curriculums enable row level security;
 alter table public.curriculum_units enable row level security;
 alter table public.curriculum_topics enable row level security;
 alter table public.curriculum_assignments enable row level security;
 alter table public.curriculum_content_items enable row level security;
 
-drop policy if exists "role profiles own read" on public.role_profiles;
-drop policy if exists "role profiles own write" on public.role_profiles;
 drop policy if exists "curriculums all read" on public.curriculums;
 drop policy if exists "curriculums all write" on public.curriculums;
 drop policy if exists "curriculum units all" on public.curriculum_units;
@@ -937,8 +923,6 @@ drop policy if exists "curriculum topics all" on public.curriculum_topics;
 drop policy if exists "curriculum assignments all" on public.curriculum_assignments;
 drop policy if exists "curriculum content all" on public.curriculum_content_items;
 
-create policy "role profiles own read" on public.role_profiles for select to authenticated using (id = auth.uid());
-create policy "role profiles own write" on public.role_profiles for all to authenticated using (id = auth.uid()) with check (id = auth.uid());
 create policy "curriculums all read" on public.curriculums for select to anon, authenticated using (true);
 create policy "curriculums all write" on public.curriculums for all to anon, authenticated using (true) with check (true);
 create policy "curriculum units all" on public.curriculum_units for all to anon, authenticated using (true) with check (true);

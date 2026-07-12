@@ -8,7 +8,7 @@ Implemented targeted fixes for CRUD page retention, role-scoped Google profiles,
 
 ## Modified Areas
 
-- Auth profile service now prefers `role_profiles` keyed by `(id, role)` so the same Google account can have separate Student and Content Creator profiles.
+- Auth profile service uses one `profiles` row per Google account, with role memberships in `profiles.roles`.
 - SubAdmin dashboard live renderer now updates only while the dashboard tab is active, preventing CRUD actions from replacing unit/content pages.
 - Curriculum is isolated from Create Subject data with separate tables and a separate SubAdmin UI.
 - Content Creator dashboard shows assigned, completed, and pending unit counts from workflow data.
@@ -18,11 +18,11 @@ Implemented targeted fixes for CRUD page retention, role-scoped Google profiles,
 
 New migration:
 
-- `supabase/migrations/20260601040000_role_profiles_and_curriculum_workflow.sql`
+- `supabase/migrations/20260712000000_profiles_roles_single_source.sql`
 
 New tables:
 
-- `role_profiles`
+- `profiles.roles`
 - `curriculums`
 - `curriculum_units`
 - `curriculum_topics`
@@ -70,4 +70,4 @@ Supported statuses:
 
 ## Regression Guard
 
-No changes were made to Google OAuth startup, onboarding screens, protected routes, or dashboard navigation internals. Role behavior is isolated in profile lookup/storage and falls back to the existing `profiles` table if the new table is unavailable.
+No changes were made to Google OAuth startup, onboarding screens, protected routes, or dashboard navigation internals. Role behavior is isolated in the single `profiles` table.

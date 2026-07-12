@@ -1,5 +1,6 @@
 import React from 'react';
 import { dashboardPathForRole, roleCanAccess } from './roleRedirectService.js';
+import { profileHasRole } from './profileService.js';
 import { useAuth } from './AuthProvider.jsx';
 
 export default function ProtectedRoute({
@@ -18,14 +19,14 @@ export default function ProtectedRoute({
       redirect('/landing');
       return;
     }
-    if (profile?.role && !roleCanAccess(profile.role, role)) {
-      redirect(dashboardPathForRole(profile.role));
+    if (profile && !profileHasRole(profile, role)) {
+      redirect(dashboardPathForRole(profile?.role || profile?.roles?.[0]));
     }
-  }, [initialized, loading, profile?.role, redirect, role, session?.user]);
+  }, [initialized, loading, profile, redirect, role, session?.user]);
 
   if (loading || !initialized) return fallback;
   if (!session?.user) return fallback;
-  if (profile?.role && !roleCanAccess(profile.role, role)) return fallback;
+  if (profile && !profileHasRole(profile, role)) return fallback;
 
   return children;
 }

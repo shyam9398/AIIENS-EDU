@@ -115,7 +115,6 @@ export async function fetchAdminDashboardStats() {
   const [
     rpcCounts,
     profiles,
-    roleProfiles,
     studentProfiles,
     creatorProfiles,
     subAdminProfiles,
@@ -135,10 +134,9 @@ export async function fetchAdminDashboardStats() {
   ] = await Promise.all([
     fetchDashboardCountsRpc(),
     safeCount('profiles'),
-    safeCount('role_profiles'),
-    safeCount('role_profiles', (query) => query.eq('role', 'student')),
-    safeCount('role_profiles', (query) => query.in('role', ['content_creator', 'creator', 'teacher', 'subadmin', 'sub_admin'])),
-    safeCount('role_profiles', (query) => query.in('role', ['subadmin', 'sub_admin'])),
+    safeCount('profiles', (query) => query.contains('roles', ['student'])),
+    safeCount('profiles', (query) => query.contains('roles', ['content_creator'])),
+    safeCount('profiles', (query) => query.contains('roles', ['subadmin'])),
     safeCount('subjects'),
     safeCount('branches'),
     safeDistinctCount('subjects', 'branch'),
@@ -157,7 +155,7 @@ export async function fetchAdminDashboardStats() {
   const students = Number(rpcCounts?.students || studentProfiles || 0);
   const creators = Number(rpcCounts?.creators || creatorProfiles || 0);
   const subAdmins = Number(rpcCounts?.sub_admins || rpcCounts?.subAdmins || subAdminProfiles || 0);
-  const users = Number(rpcCounts?.users || roleProfiles || profiles || students + creators + subAdmins || 0);
+  const users = Number(rpcCounts?.users || profiles || students + creators + subAdmins || 0);
 
   return {
     students,

@@ -466,7 +466,6 @@ window.v10Esc = window.v10Esc || function(str) {
       .limit(5);
     const [
       profileCount,
-      roleProfileCount,
       subjectCount,
       branchCount,
       branchNameCount,
@@ -480,7 +479,6 @@ window.v10Esc = window.v10Esc || function(str) {
       iqCount
     ] = await Promise.all([
       countTable('profiles'),
-      countTable('role_profiles'),
       countTable('subjects'),
       countTable('branches'),
       distinctSubjectCount('branch'),
@@ -495,7 +493,7 @@ window.v10Esc = window.v10Esc || function(str) {
     ]);
     const students = Number(counts.students || 0);
     const creators = Number(counts.creators || 0);
-    const users = Number(counts.users || roleProfileCount || profileCount || students + creators || 0);
+    const users = Number(counts.users || profileCount || students + creators || 0);
 
     return {
       students,
@@ -785,15 +783,15 @@ window.v10Esc = window.v10Esc || function(str) {
         window.APP.role = 'student';
       }
       window.__aimeasyPreserveRoleRoute = '';
-      const supabase = window.__AIMEASY_SUPABASE__;
-      if (supabase) {
-        try {
-          await supabase.auth.signOut();
-        } catch (e) {
-          console.warn('Supabase creator logout signout error:', e);
-        }
+      try {
+        await originalCreatorLogout?.();
+      } catch (e) {
+        console.warn('Supabase creator logout signout error:', e);
       }
-      originalCreatorLogout?.();
+      // Creator logout has its own explicit handoff, without altering the
+      // student logout/modal flow.
+      window.showScreen?.('screen-landing');
+      window.history?.replaceState?.({ aimeasyPath: '/landing', aimeasyIndex: 1 }, '', `${window.location.pathname}#/landing`);
     };
     window.creatorLogout.isPatched = true;
   }

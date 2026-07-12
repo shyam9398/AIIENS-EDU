@@ -19,7 +19,7 @@ Result:
 ## Focused Checks
 
 - CRUD page retention: SubAdmin dashboard renderer is guarded so content CRUD refreshes do not replace the current unit/content page.
-- Role separation: Student and Content Creator profiles are selected by `(id, role)` in `role_profiles`.
+- Role memberships for Student and Content Creator are stored together in `profiles.roles`.
 - Curriculum isolation: Curriculum reads/writes `curriculums`, `curriculum_units`, and `curriculum_topics`; it does not read from Create Subject `subjects/units/topics`.
 - Creator workflow: Creator content is stored separately in `curriculum_content_items`/local fallback and enables Send For Review only when required content exists.
 - Status workflow: Draft, In Progress, Sent To SubAdmin, Published, and Returned paths are represented in UI and service layer.

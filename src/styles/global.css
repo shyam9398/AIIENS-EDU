@@ -2173,6 +2173,24 @@ body.intro-playing .screen:not(#screen-intro) {
   font-size: 0.78rem;
   font-weight: 700;
 }
+.calc-semester-tab { display:inline-flex; align-items:center; gap:2px; }
+.calc-semester-remove { width:22px; height:22px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--text3); cursor:pointer; font-size:1.1rem; line-height:1; }
+.calc-semester-remove:hover { background:var(--red-light); color:var(--red); }
+.calc-empty-row td { padding:0 !important; }
+.calc-empty-state { min-height:230px; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:0.95rem; font-weight:600; text-align:center; }
+
+/* Student Explorer filters */
+.explorer-title { display:flex; align-items:center; gap:8px; font-size:1.3rem; margin-bottom:6px; }
+.explorer-title span { font-size:1.15em; }
+.explorer-category-pills { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:10px; margin-bottom:16px; }
+.explorer-category-pill { min-height:42px; padding:0.55rem 1rem; border:1px solid var(--border); border-radius:999px; background:var(--surface2); color:var(--text2); font:inherit; font-size:0.82rem; font-weight:700; cursor:pointer; transition:var(--transition); white-space:nowrap; }
+.explorer-category-pill:hover { border-color:var(--primary-mid); color:var(--primary); background:var(--primary-light); }
+.explorer-category-pill.active { border-color:var(--primary); background:var(--primary); color:#fff; box-shadow:0 5px 14px rgba(79,142,247,.22); }
+@media (max-width:640px) { .explorer-category-pills { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } .explorer-category-pill { min-height:40px; padding:0.5rem 0.7rem; font-size:.76rem; } }
+
+/* Creator logout remains a single horizontal sidebar item. */
+#cr-sidebar .admin-nav-item[onclick*="creatorLogout"] { display:flex; align-items:center; gap:10px; }
+#cr-sidebar .admin-nav-item[onclick*="creatorLogout"] .sidebar-item-icon { display:inline-flex; align-items:center; justify-content:center; width:18px; }
 .calc-table .calc-subject-cell,
 .calc-table .calc-credit-cell,
 .calc-table .calc-grade-cell,

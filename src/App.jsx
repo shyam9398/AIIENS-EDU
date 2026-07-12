@@ -30,7 +30,7 @@ globalThis.supabase = supabase;
 console.log('SUPABASE EXPOSED', typeof window.supabase);
 import { AuthProvider, useAuth } from './services/auth/AuthProvider.jsx';
 import { AcademicCatalogProvider } from './services/academic/AcademicCatalogProvider.jsx';
-import { profileToLegacyUser } from './services/auth/profileService.js';
+import { getLoginPortal, profileRoles, profileToLegacyUser } from './services/auth/profileService.js';
 import { normalizeRole } from './services/auth/roleRedirectService.js';
 
 function currentHashRoute() {
@@ -56,7 +56,8 @@ function hydrateLegacyAuth(session, profile) {
     if (window.APP.adminType) return null;
   }
 
-  const legacyUser = profile ? profileToLegacyUser(profile) : {
+  const activeRole = normalizeRole(window.APP.role || getLoginPortal() || profile?.role) || profileRoles(profile)[0] || 'student';
+  const legacyUser = profile ? profileToLegacyUser(profile, activeRole) : {
     id: session.user.id,
     googleId: session.user.id,
     email: session.user.email,
@@ -68,7 +69,7 @@ function hydrateLegacyAuth(session, profile) {
     role: normalizeRole(window.APP.role) || 'student',
   };
 
-  const role = normalizeRole(legacyUser.role || profile?.role || window.APP.role) || 'student';
+  const role = normalizeRole(legacyUser.role || window.APP.role) || 'student';
   window.APP.user = { ...legacyUser, role };
   window.APP.role = role;
   window.APP.session = true;
@@ -164,7 +165,7 @@ function AuthenticatedLegacyApp() {
     if (isComplete) {
       const activeScreen = document.querySelector('.screen.active')?.id;
       if (activeScreen === 'screen-setting-up-profile' || !activeScreen || activeScreen === 'screen-landing') {
-        const role = normalizeRole(profile.role);
+        const role = normalizeRole(profile.role) || profileRoles(profile)[0] || 'student';
         console.log("NAVIGATING TO", role);
         window.syncSessionFromSupabase?.({ reason: 'force-profile-ready-redirect' }).then((success) => {
           if (success) {

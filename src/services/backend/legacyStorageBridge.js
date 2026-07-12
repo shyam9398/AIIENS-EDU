@@ -4,6 +4,7 @@ import {
   removeRemoteKey,
   saveRemoteKey,
 } from './appState.js';
+import { profileHasRole } from '../auth/profileService.js';
 
 const PATCH_FLAG = '__aimeasyStorageBridgeInstalled';
 
@@ -134,7 +135,7 @@ export async function hydrateLegacyState() {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
 
     if (profile) {
-      if (profile.role === 'student') {
+      if (profileHasRole(profile, 'student')) {
         const university = profile.university_name || '';
         const branch = profile.branch_name || profile.branch || '';
         const regulation = profile.regulation_code || '';
@@ -221,12 +222,12 @@ export async function hydrateLegacyState() {
         window.__aiiensMemoryStore['aiiens_completed_units'] = JSON.stringify(completedUnits);
 
         reportSchemaGap('CGPA hydration skipped', 'student_cgpa is not present in supabase/schema.sql; calculator payload cannot be hydrated.');
-      } else if (profile.role === 'admin') {
+      } else if (profileHasRole(profile, 'admin')) {
         // Hydrate sub-admins list
         const { data: subadminProfiles } = await supabase
           .from('profiles')
           .select('*')
-          .eq('role', 'subadmin')
+          .contains('roles', ['subadmin'])
           .order('created_at', { ascending: false });
 
         const mappedSubadmins = (subadminProfiles || []).map(p => ({
@@ -261,47 +262,6 @@ async function syncAcademicKeyToSupabase(key, value) {
     const userId = session?.user?.id;
     if (!userId) return;
 
-    if (key === 'aiiens_cgpa_data') {
-      const parsed = JSON.parse(value);
-      let cgpaVal = 0;
-      let percentageVal = 0;
-      if (parsed && Array.isArray(parsed.calcSemesters)) {
-        let totalCgpa = 0;
-        let count = 0;
-        parsed.calcSemesters.forEach(s => {
-          if (s.cgpa) {
-            totalCgpa += Number(s.cgpa);
-            count++;
-          }
-        });
-        if (count > 0) {
-          cgpaVal = totalCgpa / count;
-          percentageVal = (cgpaVal - 0.75) * 10;
-        }
-      }
-      
-      const patch = {
-        student_id: userId,
-        cgpa: cgpaVal,
-        sgpa: cgpaVal,
-        updated_at: new Date().toISOString()
-      };
-      verifyDashboardColumns(Object.keys(patch));
-      const existing = await supabase
-        .from('student_dashboard_progress')
-        .select('id')
-        .eq('student_id', userId)
-        .limit(1);
-      if (existing.error) throw existing.error;
-      const request = existing.data?.[0]?.id
-        ? supabase.from('student_dashboard_progress').update(patch).eq('id', existing.data[0].id)
-        : supabase.from('student_dashboard_progress').insert(patch);
-      const { error } = await request;
-      if (error) throw error;
-      if (parsed) {
-        reportSchemaGap('CGPA payload not saved', `student_dashboard_progress has no payload column; stored cgpa/sgpa only. Percentage ${percentageVal.toFixed(2)} was computed but no matching column exists.`);
-      }
-    }
   } catch (error) {
     console.warn('[STORAGE BRIDGE] Sync to database failed:', error.message || error);
   }

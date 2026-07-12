@@ -13,6 +13,8 @@ import {
   isProfileAcademicComplete,
   isProfileFullyComplete,
   isProfilePersonalComplete,
+  profileHasRole,
+  profileRoles,
   profileToLegacyUser,
   setLoginPortal,
   upsertProfileFromLegacy,
@@ -196,16 +198,16 @@ export function installCriticalFixes() {
     const titleEl = document.getElementById('google-auth-title');
     const subEl = document.getElementById('google-auth-sub');
     const roleTagEl = document.getElementById('google-auth-role-tag');
-    if (titleEl) titleEl.textContent = isWorkshop ? 'Sign in for Live Workshop' : (isCreator ? 'Sign in as Teacher' : 'Sign in as Student');
+    if (titleEl) titleEl.textContent = isWorkshop ? 'Sign in for Live Webinars & Courses' : (isCreator ? 'Sign in as Teacher' : 'Sign in as Student');
     if (subEl) {
       subEl.textContent = isWorkshop
-        ? 'Choose your Google account to continue to Live Workshops.'
+        ? 'Choose your Google account to continue to Live Webinars & Courses.'
         : isCreator
         ? 'Choose your Google account to continue as a Teacher. Your content, courses, and teaching resources will be synced automatically.'
         : 'Choose your Google account to continue as a Student. Your progress will be synced automatically.';
     }
     if (roleTagEl) {
-      roleTagEl.textContent = isWorkshop ? 'Live Workshop Login' : (isCreator ? 'Teacher Login' : 'Student Login');
+      roleTagEl.textContent = isWorkshop ? 'Live Webinars & Courses Login' : (isCreator ? 'Teacher Login' : 'Student Login');
       roleTagEl.style.background = isCreator ? 'var(--teal-light)' : 'var(--primary-light)';
       roleTagEl.style.color = isCreator ? 'var(--teal)' : 'var(--primary)';
     }
@@ -354,7 +356,7 @@ export function installCriticalFixes() {
       if (profile) {
         window.APP = window.APP || {};
         window.APP.session = true;
-        const dbRole = normalizeRole(profile.role);
+        const dbRole = normalizeRole(getStoredLoginPortal() || profile?.role) || profileRoles(profile)[0] || ROLE.STUDENT;
         window.APP.role = dbRole;
 
         if (dbRole === ROLE.ADMIN) {
@@ -397,7 +399,7 @@ export function installCriticalFixes() {
       console.log('CURRENT APP ROLE', window.APP?.role);
 
       if (
-        (profile?.role === 'student' || window.APP?.role === 'student') &&
+        (profileHasRole(profile, ROLE.STUDENT) || window.APP?.role === 'student') &&
         typeof window.hydrateLegacyState === 'function'
       ) {
         console.log('[AUTH] Hydrating legacy state for student', authUser.id);
@@ -406,7 +408,7 @@ export function installCriticalFixes() {
         console.log('[AUTH] Skipping legacy hydration', window.APP?.role);
       }
       const portal = getStoredLoginPortal();
-      const routeRole = normalizeRole(profile?.role || portal);
+      const routeRole = normalizeRole(portal || profile?.role) || profileRoles(profile)[0];
 
       window.__aimeasyRoutingInProgress = true;
       try {
@@ -662,7 +664,7 @@ export function installCriticalFixes() {
         if (profile) {
           console.log('Academic data saved');
           console.log('onboarding_completed updated');
-          window.APP.user = profileToLegacyUser(profile);
+          window.APP.user = profileToLegacyUser(profile, dbRole);
         }
         localStorage.setItem('aiiens_session_user', JSON.stringify(window.APP.user));
         await refreshProfileState();
@@ -743,7 +745,7 @@ export function installCriticalFixes() {
       }
 
       console.log('Academic data saved');
-      window.APP.user = profileToLegacyUser(profile);
+      window.APP.user = profileToLegacyUser(profile, dbRole);
       setCurrentBranch(window.APP.user.branch || window.APP.user.branch_name);
       if (!window.APP.user.onboarding_completed) {
         window.showToast?.('Could not complete onboarding. Please try again.', 'red');
@@ -1125,8 +1127,8 @@ if (!/^[0-9]{10}$/.test(phone)) {
     ?.on('postgres_changes', { event: '*', schema: 'public', table: 'topic_videos' }, () => notifyCurriculumChanged({ type: 'video' }))
     ?.on('postgres_changes', { event: '*', schema: 'public', table: 'content_items' }, () => notifyCurriculumChanged({ type: 'content' }))
     ?.on('postgres_changes', { event: '*', schema: 'public', table: 'live_workshop_registrations' }, () => window.updateLandingStats?.())
-    ?.on('postgres_changes', { event: '*', schema: 'public', table: 'role_profiles' }, () => {
-      notifyCurriculumChanged({ type: 'role_profile' });
+    ?.on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+      notifyCurriculumChanged({ type: 'profile' });
     })
     ?.subscribe?.();
 

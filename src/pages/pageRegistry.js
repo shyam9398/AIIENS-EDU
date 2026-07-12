@@ -113,7 +113,7 @@ export const appPages = [
     id: 'live-workshops',
     path: '/live-workshops',
     screenId: 'screen-live-workshops',
-    title: 'Live Workshops',
+    title: 'Live Webinars & Courses',
     role: 'public',
     html: '',
   },
