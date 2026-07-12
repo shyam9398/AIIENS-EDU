@@ -8,10 +8,10 @@
         <div class="logo-icon" style="width:32px;height:32px;">A</div>
         <span class="sidebar-logo-text">Aim <span>Easy</span></span>
       </div>
-      <button onclick="closeAdminSidebar()"
-        style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text2);padding:4px;">✕</button>
+      <button onclick="toggleAdminSidebarCollapse()" class="sidebar-collapse-toggle" aria-label="Collapse sidebar" title="Collapse sidebar"
+        style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text2);padding:4px;">‹</button>
     </div>
-    <div style="padding:1rem 1.2rem;border-bottom:1px solid var(--border);margin-bottom:0.5rem;">
+    <div class="sidebar-profile-summary" style="padding:1rem 1.2rem;border-bottom:1px solid var(--border);margin-bottom:0.5rem;">
       <div
         style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:6px;">
         Logged in as</div>
@@ -20,31 +20,31 @@
     </div>
     <nav style="padding:0.5rem 0.8rem;flex:1;">
       <div class="admin-nav-item active" id="admin-nav-dashboard" onclick="switchAdminSection('dashboard')">
-        <span>📊</span> Dashboard
+        <span class="sidebar-item-icon">📊</span><span class="sidebar-item-text">Dashboard</span>
       </div>
       <div class="admin-nav-item" id="admin-nav-create" onclick="switchAdminSection('create')">
-        <span>➕</span> Create
+        <span class="sidebar-item-icon">➕</span><span class="sidebar-item-text">Create</span>
       </div>
       <div class="admin-nav-item" id="admin-nav-subjects" onclick="switchAdminSection('subjects')">
-        <span>📚</span> Subjects
+        <span class="sidebar-item-icon">📚</span><span class="sidebar-item-text">Subjects</span>
       </div>
       <div class="admin-nav-item" id="admin-nav-approvals" onclick="switchAdminSection('approvals')">
-        <span>✅</span> Approvals
+        <span class="sidebar-item-icon">✅</span><span class="sidebar-item-text">Approvals</span>
         <span class="admin-nav-badge" id="admin-approval-badge" style="display:none;">0</span>
       </div>
       <div class="admin-nav-item" id="admin-nav-notifications" onclick="switchAdminSection('notifications')">
-        <span>🔔</span> Notifications
+        <span class="sidebar-item-icon">🔔</span><span class="sidebar-item-text">Notifications</span>
       </div>
       <div class="admin-nav-item" id="admin-nav-creatorview" onclick="switchAdminSection('creatorview')">
-        <span>🎨</span> Creator View
+        <span class="sidebar-item-icon">🎨</span><span class="sidebar-item-text">Creator View</span>
       </div>
       <div class="admin-nav-item" id="admin-nav-skillup" onclick="switchAdminSection('skillup')">
-        <span>⚡</span> Skill Up
+        <span class="sidebar-item-icon">⚡</span><span class="sidebar-item-text">Skill Up</span>
       </div>
     </nav>
     <div style="padding:1rem 0.8rem;border-top:1px solid var(--border);">
       <div class="admin-nav-item" onclick="adminLogout()" style="color:var(--red);">
-        <span>🚪</span> Logout
+        <span class="sidebar-item-icon">🚪</span><span class="sidebar-item-text">Logout</span>
       </div>
     </div>
   </aside>

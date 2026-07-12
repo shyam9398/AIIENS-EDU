@@ -9,7 +9,6 @@ const APP = {
   currentUnit: null,
   currentVideoIndex: 0,
   markedReviews: new Set(),
-  backlogSubjects: [],
   calcRows: [],
   chatOpen: false,
   calcSemesters: [],
@@ -27,11 +26,12 @@ function logAuth(msg, data) {
 }
 
 function setLocalLegacySession(user) {
-  // Legacy UI expects `edusync_session_user` and `APP.user`/`APP.session`
+  // Legacy UI uses APP for rendering only. Authentication is restored from
+  // Supabase by the React auth provider; do not persist a duplicate browser
+  // session.
   try {
     const safeUser = user && typeof user === 'object' ? user : null;
     if (safeUser) {
-      localStorage.setItem('edusync_session_user', JSON.stringify(safeUser));
       APP.user = safeUser;
       APP.session = true;
     }
@@ -90,7 +90,7 @@ async function syncSessionFromSupabase({ reason } = {}) {
     // This codebase's profile gating is localStorage-based.
     // AIIENS Edu fixes handle saving/enrichment on submit; here we only decide the screen.
     const user = session.user || session;
-    const legacy = JSON.parse(localStorage.getItem('edusync_session_user') || 'null') || APP.user || {};
+    const legacy = APP.user || {};
     const hasPersonal = !!(legacy.name && legacy.phone);
     const hasAcademic = !!(legacy.university && legacy.regulation && legacy.branch && legacy.semester);
 
@@ -406,14 +406,6 @@ function shouldPreserveStudentRouteOnLaunch() {
 }
 
 function resolveAppUser() {
-  let stored = null;
-  try {
-    stored = JSON.parse(localStorage.getItem('edusync_session_user') || 'null');
-  } catch (e) { }
-  if (stored && typeof stored === 'object') {
-    APP.user = { ...stored, ...(APP.user || {}) };
-    APP.session = true;
-  }
   return APP.user || null;
 }
 
@@ -1672,15 +1664,28 @@ function makeCalcSemester(semKey) {
   return { id: 'sem-' + semKey, semKey, label: semKey, rows: [], sgpa: null, credits: 0 };
 }
 
+function makeClientUuid() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  // UUID-shaped fallback for older embedded browsers. It is only used as the
+  // stable key for a custom calculator row until Supabase returns it on load.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    return (char === 'x' ? random : ((random & 0x3) | 0x8)).toString(16);
+  });
+}
+
 function normalizeCalcRow(row = {}) {
   const name = row.name || row.subjectName || '';
-  const dbId = row.dbId || row.subjectId || row.rawId || null;
-  const isCustom = row.isCustom !== false && !dbId;
+  const suppliedId = row.dbId || row.subjectId || row.rawId || null;
+  const isCustom = row.isCustom !== false && !suppliedId;
+  // Backlog rows are keyed by subject_id. Give custom calculator subjects a
+  // persistent UUID as well so an F grade can be saved and later cleared.
+  const dbId = suppliedId || (isCustom ? makeClientUuid() : null);
   return {
     name,
     credits: String(row.credits || '3'),
     grade: GRADES[row.grade] !== undefined ? row.grade : 'A',
-    isCustom,
+    isCustom: row.isCustom !== false && (!suppliedId || row.isCustom === true),
     dbId,
     code: row.code || '',
   };
@@ -1995,8 +2000,6 @@ function legacyCalculateGPADisabled() {
 
   // Backlogs
   if (failed.length > 0) {
-    APP.backlogSubjects = [...new Set([...APP.backlogSubjects, ...failed])];
-    document.getElementById('backlog-badge').textContent = APP.backlogSubjects.length;
     document.getElementById('backlog-warn').style.display = 'block';
     document.getElementById('backlog-warn-subjects').textContent = `Subjects moved to Backlog: ${failed.join(', ')}`;
     showToast(`⚠️ ${failed.length} backlog subject(s) detected!`, 'red');
@@ -2044,7 +2047,16 @@ const AIIENS_EXISTING_SUPABASE_SCHEMA = {
     'unit_name', 'topic_name', 'title', 'url', 'description', 'status',
     'created_at', 'approved_by', 'approved_at',
   ]),
-  student_cgpa_results: new Set(['id', 'user_id', 'semester_key', 'sgpa', 'cgpa', 'percentage', 'payload', 'calculated_at']),
+  student_cgpa: new Set(['id', 'student_id', 'semester', 'semester_key', 'sgpa', 'cgpa', 'percentage', 'payload', 'calculated_at']),
+  // These two tables already exist in the deployed project. Keep this list
+  // aligned to their deployed columns rather than the retired browser shape.
+  student_progress: new Set(['id', 'student_id', 'subject_id', 'unit_id', 'topic_id', 'completed', 'created_at']),
+  student_bookmarks: new Set(['id', 'student_id', 'subject_id', 'unit_id', 'topic_id', 'created_at']),
+  student_backlog_subjects: new Set([
+    'id', 'student_id', 'student_name', 'email', 'subject_id', 'subject_name',
+    'subject_code', 'semester', 'branch', 'regulation', 'credits', 'status',
+    'completion_percentage', 'created_at', 'updated_at',
+  ]),
   subject_syllabus: new Set(['id', 'subject_id', 'subject_name', 'drive_url', 'created_by', 'created_at', 'updated_at']),
   content_items: new Set(['id', 'subject_id', 'unit_id', 'content_type', 'title', 'body', 'url', 'metadata', 'created_by', 'created_at', 'updated_at']),
   subjects: new Set(['id', 'name', 'code', 'branch', 'regulation_code', 'semester', 'university_name', 'created_by', 'created_at']),
@@ -2081,6 +2093,182 @@ async function studentTableRequest(tableName, columns, run, scope = tableName) {
   return run(supabase.from(tableName), tableName);
 }
 
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+}
+
+async function studentBacklogContext() {
+  const supabase = window.__AIMEASY_SUPABASE__;
+  const id = await studentSupabaseUserId();
+  if (!supabase || !id) return null;
+  if (!isUuidLike(id)) {
+    console.warn('[Backlog] Authenticated student UUID is required for Supabase backlog storage.');
+    return null;
+  }
+  let authUser = null;
+  let profile = null;
+  try {
+    authUser = (await supabase.auth.getUser())?.data?.user || null;
+    if (authUser?.id) {
+      const { data } = await supabase.from('profiles')
+        .select('full_name,name,student_name,email,branch_name,branch,regulation_code,regulation')
+        .eq('id', authUser.id)
+        .maybeSingle();
+      profile = data || null;
+    }
+  } catch (error) {
+    console.warn('[Backlog] Profile context unavailable', error?.message || error);
+  }
+  const appUser = APP.user || {};
+  return {
+    student_id: id,
+    student_name: profile?.student_name || profile?.full_name || profile?.name || appUser.name || appUser.full_name || '',
+    email: authUser?.email || profile?.email || appUser.email || '',
+    branch: profile?.branch_name || profile?.branch || appUser.branch_name || appUser.branch || '',
+    regulation: profile?.regulation_code || profile?.regulation || appUser.regulation_code || appUser.regulation || '',
+  };
+}
+
+function collectBacklogItemsFromCalcSemesters() {
+  const items = [];
+  const seen = new Set();
+  (APP.calcSemesters || []).forEach((sem) => {
+    (sem.rows || []).map(normalizeCalcRow).forEach((row) => {
+      if (row.grade !== 'F') return;
+      const subjectId = row.dbId || row.subjectId || null;
+      if (!isUuidLike(subjectId)) return;
+      const key = `${sem.semKey}:${subjectId}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      items.push({
+        subject_id: subjectId,
+        subject_name: row.name || 'Unknown Subject',
+        subject_code: row.code || '',
+        semester: sem.semKey,
+        credits: Number(row.credits || 0) || 0,
+        completion_percentage: 0,
+        status: 'backlog',
+      });
+    });
+  });
+  return items;
+}
+
+function collectKnownCalcSubjectIds() {
+  return (APP.calcSemesters || []).flatMap(sem =>
+    (sem.rows || []).map(normalizeCalcRow).map(row => row.dbId || row.subjectId).filter(isUuidLike)
+  );
+}
+
+function mapBacklogRow(row = {}) {
+  return {
+    id: row.id,
+    key: row.id || `${row.semester}:${row.subject_id}`,
+    name: row.subject_name || 'Unknown Subject',
+    semKey: row.semester || '',
+    subjectId: row.subject_id || '',
+    dbId: row.subject_id || '',
+    code: row.subject_code || '',
+    credits: String(row.credits || '0'),
+    status: row.status || 'backlog',
+    completion_percentage: Number(row.completion_percentage || 0),
+    branch: row.branch || '',
+    regulation: row.regulation || '',
+  };
+}
+
+async function fetchStudentBacklogSubjects() {
+  const ctx = await studentBacklogContext();
+  if (!ctx) return [];
+  verifyStudentSupabaseAccess('student_backlog_subjects', [], 'Backlog load');
+  const { data, error } = await window.__AIMEASY_SUPABASE__
+    .from('student_backlog_subjects')
+    .select('id,student_id,student_name,email,subject_id,subject_name,subject_code,semester,branch,regulation,credits,status,completion_percentage,created_at,updated_at')
+    .eq('student_id', ctx.student_id)
+    .eq('status', 'backlog')
+    .order('semester', { ascending: true })
+    .order('updated_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapBacklogRow);
+}
+
+async function refreshBacklogBadgeFromSupabase() {
+  try {
+    const rows = await fetchStudentBacklogSubjects();
+    const badge = document.getElementById('backlog-badge');
+    if (badge) badge.textContent = String(rows.length);
+    return rows;
+  } catch (error) {
+    console.warn('[Backlog] Badge refresh failed', error?.message || error);
+    return [];
+  }
+}
+
+function currentBacklogCompletionPercentage(subjectId) {
+  const sid = String(subjectId || APP.currentSubject?.id || APP.currentSubject?.rawId || '').replace(/^custom_/, '');
+  if (!sid) return 0;
+  const unitId = APP.currentUnit || 1;
+  const total = Math.max(1, (APP._videoItems || []).filter(item => item.topicIndex !== undefined && item.topicIndex !== null).length);
+  const completed = [...(APP.__studentCompletedTopics || new Set())]
+    .filter(key => key.startsWith(`${sid}-${unitId}-`) || key.startsWith(`custom_${sid}-${unitId}-`)).length;
+  return Math.max(0, Math.min(100, Math.round((completed / total) * 100)));
+}
+
+async function updateStudentBacklogProgress(subjectId, completionPercentage, status) {
+  const ctx = await studentBacklogContext();
+  const rawSubjectId = String(subjectId || '').replace(/^custom_/, '');
+  if (!ctx || !isUuidLike(rawSubjectId)) return;
+  const patch = {
+    completion_percentage: Math.max(0, Math.min(100, Number(completionPercentage || 0))),
+    updated_at: new Date().toISOString(),
+  };
+  if (status) patch.status = status;
+  const { error } = await window.__AIMEASY_SUPABASE__
+    .from('student_backlog_subjects')
+    .update(patch)
+    .eq('student_id', ctx.student_id)
+    .eq('subject_id', rawSubjectId);
+  if (error) throw error;
+  const currentPage = document.getElementById('page-backlog');
+  if (currentPage?.style.display !== 'none') renderBacklog();
+}
+
+async function syncBacklogFromCalcSemesters(updateBadge = true) {
+  const ctx = await studentBacklogContext();
+  if (!ctx) return [];
+  verifyStudentSupabaseAccess('student_backlog_subjects', ['student_id', 'student_name', 'email', 'subject_id', 'subject_name', 'subject_code', 'semester', 'branch', 'regulation', 'credits', 'status', 'completion_percentage', 'updated_at'], 'Backlog save');
+  const supabase = window.__AIMEASY_SUPABASE__;
+  const failedItems = collectBacklogItemsFromCalcSemesters();
+  const failedIds = new Set(failedItems.map(item => item.subject_id));
+  const now = new Date().toISOString();
+  for (const item of failedItems) {
+    const row = {
+      ...ctx,
+      ...item,
+      status: 'backlog',
+      completion_percentage: item.completion_percentage ?? 0,
+      updated_at: now,
+    };
+    const { error } = await supabase
+      .from('student_backlog_subjects')
+      .upsert(row, { onConflict: 'student_id,subject_id' });
+    if (error) throw error;
+  }
+  const clearedIds = [...new Set(collectKnownCalcSubjectIds())].filter(id => !failedIds.has(id));
+  for (const subjectId of clearedIds) {
+    const { error } = await supabase
+      .from('student_backlog_subjects')
+      .delete()
+      .eq('student_id', ctx.student_id)
+      .eq('subject_id', subjectId);
+    if (error) throw error;
+  }
+  const rows = updateBadge ? await refreshBacklogBadgeFromSupabase() : failedItems.map(item => mapBacklogRow({ ...item, student_id: ctx.student_id }));
+  const currentPage = document.getElementById('page-backlog');
+  if (currentPage?.style.display !== 'none') renderBacklog();
+  return rows;
+}
+
 function normalizeCgpaPayload(row = {}) {
   const payload = row.payload || row.data || {};
   const semesters = Array.isArray(payload.semesters)
@@ -2091,7 +2279,6 @@ function normalizeCgpaPayload(row = {}) {
   return {
     currentSemId: payload.currentSemId || semesters[0]?.id || '',
     calcSemesters: semesters,
-    backlogSubjects: Array.isArray(payload.backlogSubjects) ? payload.backlogSubjects : [],
   };
 }
 
@@ -2100,10 +2287,10 @@ async function loadCalcState() {
   const id = await studentSupabaseUserId();
   if (!supabase || !id) return false;
   try {
-    verifyStudentSupabaseAccess('student_cgpa_results', [], 'CGPA load');
-    const { data, error } = await studentTableRequest('student_cgpa_results', [], (table) =>
-      table.select('id,user_id,semester_key,sgpa,cgpa,percentage,payload,calculated_at')
-        .eq('user_id', id)
+    verifyStudentSupabaseAccess('student_cgpa', [], 'CGPA load');
+    const { data, error } = await studentTableRequest('student_cgpa', [], (table) =>
+      table.select('id,student_id,semester,semester_key,sgpa,cgpa,percentage,payload,calculated_at')
+        .eq('student_id', id)
         .order('calculated_at', { ascending: false })
         .limit(1)
     , 'CGPA load');
@@ -2113,9 +2300,7 @@ async function loadCalcState() {
     if (parsed.calcSemesters.length) {
       APP.calcSemesters = parsed.calcSemesters;
       APP.currentSemId = parsed.currentSemId || parsed.calcSemesters[0].id;
-      APP.backlogSubjects = parsed.backlogSubjects || [];
       migrateCalcState();
-      syncBacklogFromCalcSemesters();
       return true;
     }
   } catch (error) {
@@ -2124,7 +2309,9 @@ async function loadCalcState() {
   return false;
 }
 
-async function saveCalcState() {
+let calcStateSaveQueue = Promise.resolve();
+
+async function saveCalcStateNow() {
   const supabase = window.__AIMEASY_SUPABASE__;
   const id = await studentSupabaseUserId();
   if (!supabase || !id) return;
@@ -2134,11 +2321,12 @@ async function saveCalcState() {
   const cgpa = calcdSems.length ? Number(calculateWeightedCgpa(calcdSems).toFixed(2)) : Number(latest.sgpa || 0);
   const sgpa = Number(latest.sgpa || 0);
   const percentage = Number(Math.max(0, Math.min(100, (cgpa - 0.75) * 10)).toFixed(2));
-  const payload = { currentSemId: APP.currentSemId || null, semesters, backlogSubjects: syncBacklogFromCalcSemesters(false) };
+  const payload = { currentSemId: APP.currentSemId || null, semesters };
   try {
-    verifyStudentSupabaseAccess('student_cgpa_results', ['user_id', 'semester_key', 'sgpa', 'cgpa', 'percentage', 'payload', 'calculated_at'], 'CGPA save');
+    verifyStudentSupabaseAccess('student_cgpa', ['student_id', 'semester_key', 'sgpa', 'cgpa', 'percentage', 'payload', 'calculated_at'], 'CGPA save');
     const row = {
-      user_id: id,
+      student_id: id,
+      semester: latest.semKey || normalizeCalcSemLabel(latest.label),
       semester_key: latest.semKey || normalizeCalcSemLabel(latest.label),
       sgpa,
       cgpa,
@@ -2147,22 +2335,34 @@ async function saveCalcState() {
       calculated_at: new Date().toISOString(),
     };
     const { data: existing, error: lookupError } = await supabase
-      .from('student_cgpa_results')
+      .from('student_cgpa')
       .select('id')
-      .eq('user_id', id)
+      .eq('student_id', id)
       .order('calculated_at', { ascending: false })
       .limit(1);
     if (lookupError) throw lookupError;
     const latestId = existing?.[0]?.id;
     const { error } = latestId
-      ? await supabase.from('student_cgpa_results').update(row).eq('id', latestId).eq('user_id', id)
-      : await supabase.from('student_cgpa_results').insert(row);
+      ? await supabase.from('student_cgpa').update(row).eq('id', latestId).eq('student_id', id)
+      : await supabase.from('student_cgpa').insert(row);
     if (error) throw error;
-    window.aiiensProgressService?.track?.('gpa_calculated', { cgpa, sgpa });
+    // The calculator record retains the full semester/subject payload; the
+    // dashboard record intentionally receives only the summary metrics.
+    await window.aiiensProgressService?.track?.('gpa_calculated', { cgpa, sgpa });
   } catch (error) {
     reportSupabaseSchemaGap('CGPA save skipped', error?.message || String(error));
     window.aiiensProgressService?.track?.('gpa_calculated', { cgpa, sgpa });
   }
+}
+
+function saveCalcState() {
+  // Edits, grade changes and automatic subject loading can happen in rapid
+  // succession. Serialize writes so an older snapshot cannot overwrite a
+  // newer semester/subject state in Supabase.
+  calcStateSaveQueue = calcStateSaveQueue
+    .catch(() => undefined)
+    .then(() => saveCalcStateNow());
+  return calcStateSaveQueue;
 }
 
 function saveCurrentSemRows() {
@@ -2176,38 +2376,8 @@ function saveCurrentSemRows() {
     dbId: row.dataset.dbId || null,
     code: row.dataset.code || '',
   })).filter(row => row.name || row.isCustom || row.dbId);
-  syncBacklogFromCalcSemesters();
+  syncBacklogFromCalcSemesters().catch(error => studentStorageError('Backlog sync', error, 'Unable to save backlog subjects'));
   saveCalcState();
-}
-
-function syncBacklogFromCalcSemesters(updateBadge = true) {
-  const backlog = [];
-  const seen = new Set();
-  (APP.calcSemesters || []).forEach((sem) => {
-    (sem.rows || []).map(normalizeCalcRow).forEach((row) => {
-      if (row.grade !== 'F') return;
-      const name = row.name || 'Unknown Subject';
-      const key = [sem.semKey, row.dbId || row.code || name].join(':');
-      if (seen.has(key)) return;
-      seen.add(key);
-      backlog.push({
-        key,
-        name,
-        semKey: sem.semKey,
-        label: sem.label || sem.semKey,
-        subjectId: row.dbId || null,
-        dbId: row.dbId || null,
-        code: row.code || '',
-        credits: row.credits || '0',
-      });
-    });
-  });
-  APP.backlogSubjects = backlog;
-  if (updateBadge) {
-    const badge = document.getElementById('backlog-badge');
-    if (badge) badge.textContent = String(backlog.length);
-  }
-  return backlog;
 }
 
 function renderCalcRowsForSemester(sem) {
@@ -2324,7 +2494,12 @@ async function loadSubjectsForCurrentSemester() {
 
 async function initCalc() {
   if (window.__aiiensHydrationPromise) await window.__aiiensHydrationPromise;
-  await loadCalcState();
+  const loaded = await loadCalcState();
+  const userId = await studentSupabaseUserId();
+  // The legacy shell is initialized on the landing page as well. Do not
+  // create an in-memory/default calculator before Supabase authentication is
+  // available; it would otherwise mask the student's saved state after login.
+  if (!userId && !loaded) return;
   migrateCalcState();
   if (!APP.calcSemesters.length) {
     const first = makeCalcSemester(JNTUK_SEMESTERS[0]);
@@ -2358,7 +2533,7 @@ async function addSemester() {
   APP.calcRows = [];
   renderSemTabs();
   renderCalcSemTitle();
-  saveCalcState();
+  await saveCalcState();
   await loadSubjectsForCurrentSemester();
   showToast('Semester ' + nextSem + ' added!', 'green');
 }
@@ -2436,7 +2611,14 @@ function addCalcRow(rowOrName, credits, defaultGrade) {
   saveCurrentSemRows();
 }
 
-function clearCalc() {
+function removeCalcRow(id) {
+  document.getElementById('row-' + id)?.remove();
+  APP.calcRows = APP.calcRows.filter(rowId => String(rowId) !== String(id));
+  saveCurrentSemRows();
+  calculateGPA({ silent: true });
+}
+
+async function clearCalc() {
   document.getElementById('calc-tbody').innerHTML = '';
   APP.calcRows = [];
   document.getElementById('sgpa-result').textContent = 'â€“';
@@ -2446,7 +2628,10 @@ function clearCalc() {
   if (sem) { sem.rows = []; sem.sgpa = null; sem.credits = 0; }
   renderSemTabs();
   updateAddSemesterState();
-  saveCalcState();
+  await Promise.all([
+    saveCalcState(),
+    syncBacklogFromCalcSemesters(),
+  ]);
   showToast('Semester cleared', 'blue');
 }
 
@@ -2484,14 +2669,12 @@ function calculateGPA(options = {}) {
   });
   if (!totalCredits) {
     saveCurrentSemRows();
-    const backlog = syncBacklogFromCalcSemesters();
     const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
-    const failedThisSem = backlog.filter(item => item.semKey === sem?.semKey);
-    const badge = document.getElementById('backlog-badge');
-    if (badge) badge.textContent = String(backlog.length);
+    const failedThisSem = collectBacklogItemsFromCalcSemesters().filter(item => item.semester === sem?.semKey);
+    syncBacklogFromCalcSemesters().catch(error => studentStorageError('Backlog sync', error, 'Unable to save backlog subjects'));
     if (failedThisSem.length) {
       document.getElementById('backlog-warn').style.display = 'block';
-      document.getElementById('backlog-warn-subjects').textContent = `Subjects moved to Backlog: ${failedThisSem.map(item => `${item.semKey} ${item.name}`).join(', ')}`;
+      document.getElementById('backlog-warn-subjects').textContent = `Subjects moved to Backlog: ${failedThisSem.map(item => `${item.semester} ${item.subject_name}`).join(', ')}`;
     }
     if (!options.silent) showToast('Add credit-bearing subjects first', 'red');
     return;
@@ -2500,8 +2683,8 @@ function calculateGPA(options = {}) {
   const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
   if (sem) { sem.sgpa = sgpa; sem.credits = totalCredits; }
   saveCurrentSemRows();
-  const backlog = syncBacklogFromCalcSemesters();
-  const failedThisSem = backlog.filter(item => item.semKey === sem?.semKey);
+  const failedThisSem = collectBacklogItemsFromCalcSemesters().filter(item => item.semester === sem?.semKey);
+  syncBacklogFromCalcSemesters().catch(error => studentStorageError('Backlog sync', error, 'Unable to save backlog subjects'));
   renderSemTabs();
   document.getElementById('sgpa-result').textContent = sgpa.toFixed(2);
   document.getElementById('sgpa-grade').textContent = sgpa >= 9 ? 'Outstanding' : sgpa >= 8 ? 'Excellent' : sgpa >= 7 ? 'Very Good' : sgpa >= 6 ? 'Good' : sgpa >= 5 ? 'Pass' : 'Needs Improvement';
@@ -2533,10 +2716,8 @@ function calculateGPA(options = {}) {
         '<div style="font-size:0.65rem;font-weight:700;color:var(--text3);text-align:center;">' + calcHtml(g) + '</div></div>';
     }).join('') + '</div>';
   if (failedThisSem.length > 0) {
-    const badge = document.getElementById('backlog-badge');
-    if (badge) badge.textContent = String(backlog.length);
     document.getElementById('backlog-warn').style.display = 'block';
-    document.getElementById('backlog-warn-subjects').textContent = `Subjects moved to Backlog: ${failedThisSem.map(item => `${item.semKey} ${item.name}`).join(', ')}`;
+    document.getElementById('backlog-warn-subjects').textContent = `Subjects moved to Backlog: ${failedThisSem.map(item => `${item.semester} ${item.subject_name}`).join(', ')}`;
     if (!options.silent) showToast(`${failedThisSem.length} backlog subject(s) detected!`, 'red');
   } else {
     document.getElementById('backlog-warn').style.display = 'none';
@@ -2765,10 +2946,15 @@ function openSkillCourse(id) {
 // ═══════════════════════════════════════════════════
 //  BACKLOG
 // ═══════════════════════════════════════════════════
-function renderBacklog() {
+async function renderBacklog() {
   const grid = document.getElementById('backlog-grid');
-  syncBacklogFromCalcSemesters();
-  if (!APP.backlogSubjects.length) {
+  let rows = [];
+  try {
+    rows = await fetchStudentBacklogSubjects();
+  } catch (error) {
+    studentStorageError('Backlog load', error, 'Unable to load backlog subjects');
+  }
+  if (!rows.length) {
     grid.innerHTML = `<div class="backlog-empty">
       <div class="empty-icon">🎉</div>
       <h3>No Backlogs!</h3>
@@ -2776,7 +2962,7 @@ function renderBacklog() {
     </div>`;
     return;
   }
-  const backlogCards = APP.backlogSubjects.map((item, i) => {
+  const backlogCards = rows.map((item, i) => {
     const s = typeof item === 'string' ? { key: item, name: item, semKey: '', code: '', credits: '3' } : item;
     const semBadge = s.semKey ? '<span class="badge badge-red" style="margin-left:8px;">' + calcHtml(s.semKey) + '</span>' : '';
     return `
@@ -2801,7 +2987,7 @@ function renderBacklog() {
   }).join('');
   grid.innerHTML = `<div class="subject-grid">${backlogCards}</div>`;
   return;
-  grid.innerHTML = `<div class="subject-grid">${APP.backlogSubjects.map((s, i) => `
+  grid.innerHTML = `<div class="subject-grid">${rows.map((s, i) => `
     <div class="subject-card" onclick="openBacklogSubject('${s}')" style="animation-delay:${i * 0.07}s">
       <div class="subject-card-header" style="background:linear-gradient(135deg,var(--red-light),#fff);">
         <div class="subject-icon">⚠️</div>
@@ -2822,11 +3008,23 @@ function renderBacklog() {
     </div>`).join('')}</div>`;
 }
 
-function openBacklogSubject(name) {
-  const item = (APP.backlogSubjects || []).find(s => {
-    if (typeof s === 'string') return s === name;
-    return s.key === name || s.name === name;
-  });
+async function openBacklogSubject(name) {
+  let item = null;
+  try {
+    const ctx = await studentBacklogContext();
+    if (ctx && name) {
+      const { data, error } = await window.__AIMEASY_SUPABASE__
+        .from('student_backlog_subjects')
+        .select('id,student_id,student_name,email,subject_id,subject_name,subject_code,semester,branch,regulation,credits,status,completion_percentage,created_at,updated_at')
+        .eq('student_id', ctx.student_id)
+        .eq('id', name)
+        .maybeSingle();
+      if (error) throw error;
+      item = data ? mapBacklogRow(data) : null;
+    }
+  } catch (error) {
+    studentStorageError('Backlog open', error, 'Unable to open backlog subject');
+  }
   if (item && typeof item === 'object') {
     const rawId = item.subjectId || item.dbId || '';
     APP.currentSubject = {
@@ -7325,6 +7523,7 @@ async function v10SASubjects(forceRefresh) {
   }
 
   const allSubs = window._v10SaSubjectsCached || [];
+  const selectedSemester = window._v10SaSemesterFilter || '';
   const currentUsername = sa.username || 'subadmin';
 
   // Partition subjects
@@ -7339,6 +7538,9 @@ async function v10SASubjects(forceRefresh) {
     const curr = String(currentUsername).trim().toLowerCase();
     return createdBy !== curr && (s.created_by || curr !== 'subadmin');
   });
+  const semesterMatches = (subject) => !selectedSemester || String(subject.semester || subject.sem || '') === selectedSemester;
+  const filteredMySubs = mySubs.filter(semesterMatches);
+  const filteredOtherSubs = otherSubs.filter(semesterMatches);
 
   const createForm = `
   <div class="v10-create-form" id="v10-sa-create-form" style="display:none;">
@@ -7415,7 +7617,7 @@ async function v10SASubjects(forceRefresh) {
     </div>
   </div>`;
 
-  const cards = mySubs.map(s => {
+  const cards = filteredMySubs.map(s => {
     const safeName = (s.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const safeId = s.id;
     return `
@@ -7438,7 +7640,7 @@ async function v10SASubjects(forceRefresh) {
     </div>`;
   }).join('');
 
-  const otherCards = otherSubs.map(s => {
+  const otherCards = filteredOtherSubs.map(s => {
     const safeId = s.id;
     return `
     <div class="v10-subj-card" onclick="v10SAOpenUnits('${safeId}')" style="border: 1.5px dashed var(--border); background: var(--surface2); cursor: pointer;">
@@ -7458,7 +7660,7 @@ async function v10SASubjects(forceRefresh) {
     </div>`;
   }).join('');
 
-  const otherSubsSection = otherSubs.length ? `
+  const otherSubsSection = filteredOtherSubs.length ? `
     <div style="margin-top: 2.5rem; border-top: 1px dashed var(--border); padding-top: 1.8rem;">
       <h2 style="font-size:1.3rem;font-weight:800;letter-spacing:-.02em;margin-bottom:1.2rem;color:var(--text2);">👥 Shared Subjects (${otherSubs.length})</h2>
       <div class="v10-subj-grid">${otherCards}</div>
@@ -7469,12 +7671,17 @@ async function v10SASubjects(forceRefresh) {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:10px;">
       <h2 style="font-size:1.4rem;font-weight:800;letter-spacing:-.02em;">📚 My Subjects (${mySubs.length})</h2>
       <div style="display:flex;gap:8px;">
+        <select class="select" aria-label="Filter subjects by semester" onchange="window._v10SaSemesterFilter=this.value;v10SASubjects(false)" style="min-width:145px;">
+          <option value=""${selectedSemester ? '' : ' selected'}>All Semesters</option>
+          <option value="">ALL</option>
+          ${allSems.map(sem => `<option value="${sem}"${selectedSemester === sem ? ' selected' : ''}>${sem}</option>`).join('')}
+        </select>
         <button class="btn btn-ghost btn-sm" onclick="v10SASubjects()">🔄 Refresh</button>
         <button class="btn btn-primary" onclick="window.v10SAOpenCreateSubjectForm ? window.v10SAOpenCreateSubjectForm() : (document.getElementById('v10-sa-create-form').style.display='block', document.getElementById('v10-sa-create-form').scrollIntoView({behavior:'smooth'}))">+ Add Subject</button>
       </div>
     </div>
     ${createForm}
-    ${mySubs.length
+    ${filteredMySubs.length
       ? `<div class="v10-subj-grid">${cards}</div>`
       : `<div style="text-align:center;padding:4rem;color:var(--text3);">
           <div style="font-size:3rem;margin-bottom:1rem;">📚</div>
@@ -9976,21 +10183,19 @@ async function syncTopicProgressToDb({ subjectId, unitId, topicIndex, topicId, s
     const { data } = await supabase?.auth?.getUser?.();
     userId = data?.user?.id || userId;
   } catch {}
-  if (!supabase || !userId || !subjectId || !unitId || topicIndex === undefined || topicIndex === null) return;
+  if (!supabase || !userId || !subjectId || !topicId) return;
   try {
     const row = {
-        user_id: userId,
-        subject_key: String(subjectId),
-        unit_key: String(unitId),
-        topic_index: Number(topicIndex),
-        topic_id: topicId || null,
-        status,
-        updated_at: new Date().toISOString(),
+        student_id: userId,
+        subject_id: String(subjectId).replace(/^custom_/, ''),
+        unit_id: unitId || null,
+        topic_id: topicId,
+        completed: status === 'completed',
       };
     const request = await studentTableRequest(
       'student_progress',
-      ['user_id', 'subject_key', 'unit_key', 'topic_index', 'topic_id', 'status', 'updated_at'],
-      (table) => table.upsert(row, { onConflict: 'user_id,subject_key,unit_key,topic_index' }),
+      ['student_id', 'subject_id', 'unit_id', 'topic_id', 'completed'],
+      (table) => table.upsert(row, { onConflict: 'student_id,topic_id' }),
       'Progress sync'
     );
     if (request.error) throw request.error;
@@ -10010,18 +10215,19 @@ async function hydrateStudentProgressFromDb(subjectId, unitId) {
   try {
     const { data, error } = await studentTableRequest(
       'student_progress',
-      ['user_id', 'subject_key', 'unit_key', 'topic_index', 'status'],
+      ['student_id', 'subject_id', 'unit_id', 'topic_id', 'completed'],
       (table) => table.select('*')
-        .eq('user_id', userId)
-        .eq('subject_key', String(subjectId))
-        .eq('unit_key', String(unitId)),
+        .eq('student_id', userId)
+        .eq('subject_id', String(subjectId).replace(/^custom_/, ''))
+        .eq('unit_id', unitId),
       'Progress load'
     );
     if (error) throw error;
     (data || []).forEach((row) => {
-      const key = topicReviewKey(subjectId, unitId, row.topic_index);
-      if (row.status === 'completed') APP.__studentCompletedTopics.add(key);
-      if (row.status === 'review') APP.markedReviews.add(key);
+      const itemIndex = (APP._videoItems || []).findIndex((item) => String(item.id || item.topicId) === String(row.topic_id));
+      if (itemIndex < 0) return;
+      const key = topicReviewKey(subjectId, unitId, itemIndex);
+      if (row.completed) APP.__studentCompletedTopics.add(key);
     });
   } catch (error) {
     reportSupabaseSchemaGap('Progress load skipped', error?.message || String(error));
@@ -12572,6 +12778,7 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       const { data, error } = await supabase
         .from('student_bookmarks')
         .select('*')
+        .eq('student_id', id)
         .limit(50);
       if (error) throw error;
       window.dispatchEvent(new CustomEvent('aiiens:student-bookmarks-changed', { detail: data || [] }));
@@ -12592,13 +12799,12 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
       const table = supabase.from('student_bookmarks');
       const { error } = bookmarked
         ? await table.upsert({
-            user_id: id,
+            student_id: id,
             subject_id: subjectId,
-            subject_name: subject?.name || subject?.subjectName || 'Subject',
-            subject_code: subject?.code || '',
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id,subject_id' })
-        : await table.delete().eq('user_id', id).eq('subject_id', subjectId);
+            unit_id: subject?.unit_id || null,
+            topic_id: subject?.topic_id || null,
+          }, { onConflict: 'student_id,subject_id' })
+        : await table.delete().eq('student_id', id).eq('subject_id', subjectId);
       if (error) throw error;
       await refreshStudentBookmarks();
       window.showToast?.(bookmarked ? 'Bookmark saved' : 'Bookmark removed', bookmarked ? 'green' : 'amber');
@@ -12922,11 +13128,11 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     try {
       const { data, error } = await studentTableRequest(
         'student_progress',
-        ['id', 'subject_key', 'unit_key', 'topic_index', 'topic_id', 'updated_at', 'user_id', 'status'],
+        ['id', 'student_id', 'subject_id', 'unit_id', 'topic_id', 'completed'],
         (table) => table
-          .select('id, subject_key, unit_key, topic_index, topic_id, updated_at')
-          .eq('user_id', id)
-          .eq('status', 'completed'),
+          .select('id, subject_id, unit_id, topic_id, completed')
+          .eq('student_id', id)
+          .eq('completed', true),
         'Progress count'
       );
       if (error) throw error;

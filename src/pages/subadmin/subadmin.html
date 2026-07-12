@@ -8,33 +8,33 @@
         <div class="logo-icon" style="width:30px;height:30px;font-size:0.75rem;background:linear-gradient(135deg,var(--teal),var(--primary));">S</div>
         <span style="font-weight:800;font-size:0.95rem;letter-spacing:-0.02em;">Sub Admin</span>
       </div>
-      <button onclick="closeSASidebar()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text2);padding:4px;">✕</button>
+      <button onclick="toggleSASidebarCollapse()" class="sidebar-collapse-toggle" aria-label="Collapse sidebar" title="Collapse sidebar" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text2);padding:4px;">‹</button>
     </div>
-    <div style="padding:1rem 1.2rem;border-bottom:1px solid var(--border);margin-bottom:0.5rem;">
+    <div class="sidebar-profile-summary" style="padding:1rem 1.2rem;border-bottom:1px solid var(--border);margin-bottom:0.5rem;">
       <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:6px;">Logged in as</div>
       <div style="font-weight:700;font-size:0.9rem;" id="sa-sidebar-name">Sub Admin</div>
       <div style="font-size:0.75rem;color:var(--text3);" id="sa-sidebar-info">Content Manager</div>
     </div>
     <nav style="padding:0.5rem 0.8rem;flex:1;">
       <div class="admin-nav-item active" id="sa-nav-dashboard" onclick="switchSASection('dashboard')">
-        <span>📊</span> Dashboard
+        <span class="sidebar-item-icon">🏠</span><span class="sidebar-item-text">Dashboard</span>
       </div>
       <div class="admin-nav-item" id="sa-nav-subjects" onclick="switchSASection('subjects')">
-        <span>📚</span> Create Subject
+        <span class="sidebar-item-icon">📚</span><span class="sidebar-item-text">Create Subject</span>
       </div>
       <div class="admin-nav-item" id="sa-nav-view" onclick="switchSASection('view')">
-        <span>👁️</span> View Subjects
+        <span class="sidebar-item-icon">📖</span><span class="sidebar-item-text">View Content</span>
       </div>
       <div class="admin-nav-item" id="sa-nav-skillup" onclick="switchSASection('skillup')">
-        <span>⚡</span> Skill Up
+        <span class="sidebar-item-icon">⚡</span><span class="sidebar-item-text">Skill Up</span>
       </div>
       <div class="admin-nav-item" id="sa-nav-curriculum" onclick="switchSASection('curriculum')">
-        <span>🗂️</span> Curriculum
+        <span class="sidebar-item-icon">📂</span><span class="sidebar-item-text">Curriculum</span>
       </div>
     </nav>
     <div style="padding:1rem 0.8rem;border-top:1px solid var(--border);">
       <div class="admin-nav-item" onclick="subAdminLogout()" style="color:var(--red);">
-        <span>🚪</span> Logout
+        <span class="sidebar-item-icon">🚪</span><span class="sidebar-item-text">Logout</span>
       </div>
     </div>
   </aside>

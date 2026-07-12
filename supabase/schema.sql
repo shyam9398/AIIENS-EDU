@@ -565,9 +565,10 @@ create table if not exists public.student_recent_subjects (
   unique (user_id, subject_id)
 );
 
-create table if not exists public.student_cgpa_results (
+create table if not exists public.student_cgpa (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
+  student_id uuid not null references auth.users(id) on delete cascade,
+  semester text,
   semester_key text,
   sgpa numeric(4,2),
   cgpa numeric(4,2) not null,
@@ -689,7 +690,7 @@ create table if not exists public.live_workshop_registrations (
 );
 
 create index if not exists idx_student_recent_subjects_user on public.student_recent_subjects(user_id, last_opened_at desc);
-create index if not exists idx_student_cgpa_results_user on public.student_cgpa_results(user_id, calculated_at desc);
+create index if not exists idx_student_cgpa_user on public.student_cgpa(student_id, calculated_at desc);
 create index if not exists idx_student_dashboard_progress_student on public.student_dashboard_progress(student_id, updated_at desc);
 create index if not exists idx_live_workshops_published on public.live_workshops(status, workshop_date, workshop_time);
 create index if not exists idx_live_workshop_banners_active on public.live_workshop_banners(is_active, created_at desc);
@@ -707,7 +708,7 @@ $$;
 grant execute on function public.get_live_workshop_participant_count() to anon, authenticated;
 
 alter table public.student_recent_subjects enable row level security;
-alter table public.student_cgpa_results enable row level security;
+alter table public.student_cgpa enable row level security;
 alter table public.student_learning_summaries enable row level security;
 alter table public.student_dashboard_progress enable row level security;
 alter table public.student_streaks enable row level security;
@@ -721,10 +722,10 @@ drop policy if exists "student recent own write" on public.student_recent_subjec
 create policy "student recent own read" on public.student_recent_subjects for select to authenticated using (user_id = auth.uid());
 create policy "student recent own write" on public.student_recent_subjects for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
-drop policy if exists "student cgpa own read" on public.student_cgpa_results;
-drop policy if exists "student cgpa own write" on public.student_cgpa_results;
-create policy "student cgpa own read" on public.student_cgpa_results for select to authenticated using (user_id = auth.uid());
-create policy "student cgpa own write" on public.student_cgpa_results for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "student cgpa own read" on public.student_cgpa;
+drop policy if exists "student cgpa own write" on public.student_cgpa;
+create policy "student cgpa own read" on public.student_cgpa for select to authenticated using (student_id = auth.uid());
+create policy "student cgpa own write" on public.student_cgpa for all to authenticated using (student_id = auth.uid()) with check (student_id = auth.uid());
 
 drop policy if exists "student summary own read" on public.student_learning_summaries;
 drop policy if exists "student summary own write" on public.student_learning_summaries;

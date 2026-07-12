@@ -692,7 +692,9 @@ window.v10Esc = window.v10Esc || function(str) {
     };
     document.querySelectorAll('.admin-nav-item[id]').forEach((item) => {
       const span = item.querySelector('span:first-child');
-      if (!span || span.querySelector('svg')) return;
+      // Portal sidebars provide their own stable emoji/icon markup. Do not
+      // replace it with a second SVG layer.
+      if (!span || span.classList.contains('sidebar-item-icon') || span.querySelector('svg')) return;
       const key = item.id.replace(/^(admin|sa|cr)-nav-/, '');
       span.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[key] || 'M4 6h16M4 12h16M4 18h16'}"></path></svg>`;
       span.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:20px;';
@@ -1501,6 +1503,7 @@ window.v10Esc = window.v10Esc || function(str) {
     popup.dataset.unitId = item?.unitId || '';
     popup.innerHTML = `
       <button type="button" class="adm-popup-item" data-action="edit"><span aria-hidden="true">&#9998;</span> Edit</button>
+      ${item?.contentType === 'roadmap' ? '<button type="button" class="adm-popup-item" data-action="add-below">&#10133; Add Topic Below</button>' : ''}
       <button type="button" class="adm-popup-item red" data-action="delete"><span aria-hidden="true">&#128465;</span> Delete</button>
     `;
     card.appendChild(popup);
@@ -1821,6 +1824,7 @@ window.v10Esc = window.v10Esc || function(str) {
       </div>
       <div class="v10-panel-body">
         <div id="v10-topics-${unitId}">${rows}</div>
+        ${actionsHtml}
         ${submitHtml}
         <div id="v10-saved-roadmap-${unitId}" style="margin-top:1rem;">${window.v10SavedRoadmapTree(list, subjId, unitId)}</div>
       </div>
@@ -1903,7 +1907,12 @@ window.v10Esc = window.v10Esc || function(str) {
       saveButton.innerHTML = '<span class="v10-button-spinner" aria-hidden="true"></span><span>Saving...</span>';
     }
     try {
-      const orderedTopics = [...savedTopics, ...topics].map((topic, index) => ({
+      const insertAfterTopicId = container.dataset.insertAfterTopicId || '';
+      const insertAt = savedTopics.findIndex((topic) => String(topic.id || topic.dbTopicId || topic.topicId) === String(insertAfterTopicId));
+      const combinedTopics = insertAt >= 0
+        ? [...savedTopics.slice(0, insertAt + 1), ...topics, ...savedTopics.slice(insertAt + 1)]
+        : [...savedTopics, ...topics];
+      const orderedTopics = combinedTopics.map((topic, index) => ({
         ...topic,
         displayOrder: index + 1,
         display_order: index + 1,
@@ -1911,6 +1920,7 @@ window.v10Esc = window.v10Esc || function(str) {
       const { data, error } = await window.aimeasySaveUnitRoadmap({ subject, unit, topics: orderedTopics });
       if (error) throw error;
       v10PersistSubjectDbIds(subjId, unitId, data);
+      delete container.dataset.insertAfterTopicId;
       container.innerHTML = window.v10TopicRowHTML(subjId, unitId, 0, '', [''], 1, '');
       window.v10RenderRoadmapBuilderFlow?.(unitId);
       await window.v10RefreshRoadmapListInPlace(subjId, unitId);
@@ -2333,6 +2343,10 @@ window.v10Esc = window.v10Esc || function(str) {
     }
     if (action === 'delete') {
       window.v10OpenUnifiedDeleteModal?.({ contentType: normalized, itemId, subjectId, unitId });
+      return;
+    }
+    if (action === 'add-below' && normalized === 'roadmap') {
+      window.v10OpenAddTopicBelowModal?.(subjectId, unitId, itemId);
       return;
     }
     showToast('This action is not available.', 'red');
@@ -3989,3 +4003,49 @@ window.v10Esc = window.v10Esc || function(str) {
     replaceUnitButtons();
   }, 0);
 })();
+
+// Insert a saved roadmap topic directly below another saved topic. This uses
+// the existing topics/topic_videos tables and preserves display_order.
+window.v10OpenAddTopicBelowModal = function v10OpenAddTopicBelowModal(subjectId, unitId, afterTopicId) {
+  // Reuse the normal Add Topic card, its validation, and Save Learning
+  // Roadmap workflow. Only the requested insertion point is carried along.
+  const container = document.getElementById('v10-topics-' + unitId);
+  if (!container) return;
+  container.dataset.insertAfterTopicId = String(afterTopicId);
+  window.v10AddTopic?.(subjectId, unitId);
+  window.v10RenderRoadmapBuilderFlow?.(unitId);
+};
+
+window.v10SaveTopicBelow = async function v10SaveTopicBelow(subjectId, unitId, afterTopicId, button) {
+  const name = document.getElementById('v10-add-below-name')?.value.trim();
+  const url = document.getElementById('v10-add-below-url')?.value.trim();
+  const description = document.getElementById('v10-add-below-desc')?.value.trim() || '';
+  if (!name || !url) { window.showToast?.('Topic name and video URL are required.', 'red'); return; }
+  try { new URL(url); } catch { window.showToast?.('Please enter a valid video URL.', 'red'); return; }
+  const supabase = window.__AIMEASY_SUPABASE__;
+  if (!supabase) return;
+  button.disabled = true;
+  try {
+    const { data: topics, error: loadError } = await supabase.from('topics').select('id,display_order').eq('subject_id', subjectId).eq('unit_id', unitId).order('display_order', { ascending: true });
+    if (loadError) throw loadError;
+    const index = (topics || []).findIndex((topic) => String(topic.id) === String(afterTopicId));
+    if (index < 0) throw new Error('The selected topic no longer exists.');
+    const insertOrder = Number(topics[index].display_order || index) + 1;
+    // Update from the end so the new order is immediately stable even when
+    // display_order is constrained to unique values.
+    for (const topic of [...topics].slice(index + 1).reverse()) {
+      const { error } = await supabase.from('topics').update({ display_order: Number(topic.display_order || 0) + 1 }).eq('id', topic.id);
+      if (error) throw error;
+    }
+    const { data: inserted, error: insertError } = await supabase.from('topics').insert({ subject_id: subjectId, unit_id: unitId, topic_name: name, display_order: insertOrder }).select('id').single();
+    if (insertError) throw insertError;
+    const { error: videoError } = await supabase.from('topic_videos').insert({ topic_id: inserted.id, video_url: url, description, display_order: 0 });
+    if (videoError) throw videoError;
+    document.querySelector('.v11-confirm-modal')?.remove();
+    await window.v10RefreshRoadmapListInPlace?.(subjectId, unitId);
+    window.showToast?.('Topic added below the selected topic.', 'green');
+  } catch (error) {
+    button.disabled = false;
+    window.showToast?.(`Unable to add topic: ${error.message || error}`, 'red');
+  }
+};

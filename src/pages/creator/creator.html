@@ -7,30 +7,33 @@
         <div class="logo-icon" style="width:30px;height:30px;font-size:0.75rem;background:linear-gradient(135deg,var(--teal),var(--lavender));">C</div>
         <span style="font-weight:800;font-size:0.95rem;letter-spacing:-0.02em;">Creator</span>
       </div>
-      <button onclick="closeCRSidebar()" style="background:none;border:none;cursor:pointer;font-size:1rem;color:var(--text2);padding:4px;">x</button>
+      <button onclick="toggleCRSidebarCollapse()" class="sidebar-collapse-toggle" aria-label="Collapse sidebar" title="Collapse sidebar" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text2);padding:4px;">‹</button>
     </div>
-    <div style="padding:1rem 1.2rem;border-bottom:1px solid var(--border);margin-bottom:0.5rem;">
+    <div class="sidebar-profile-summary" style="padding:1rem 1.2rem;border-bottom:1px solid var(--border);margin-bottom:0.5rem;">
       <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:6px;">Logged in as</div>
       <div style="font-weight:700;font-size:0.9rem;" id="cr-sidebar-name">Creator</div>
       <div style="font-size:0.75rem;color:var(--text3);" id="cr-sidebar-info">Content Creator</div>
     </div>
     <nav style="padding:0.5rem 0.8rem;flex:1;">
       <div class="admin-nav-item active" id="cr-nav-dashboard" onclick="switchCRSection('dashboard')">
-        <span>📊 Dashboard</span>
+        <span class="sidebar-item-icon">📊</span><span class="sidebar-item-text">Dashboard</span>
       </div>
       <div class="admin-nav-item" id="cr-nav-choosing" onclick="switchCRSection('choosing')">
-        <span>➕ Choose</span>
+        <span class="sidebar-item-icon">➕</span><span class="sidebar-item-text">Choose</span>
       </div>
       <div class="admin-nav-item" id="cr-nav-addcontent" onclick="switchCRSection('addcontent')">
-        <span>✅ Added</span>
+        <span class="sidebar-item-icon">✅</span><span class="sidebar-item-text">Added</span>
+      </div>
+      <div class="admin-nav-item" id="cr-nav-explorer" onclick="switchCRSection('explorer')">
+        <span class="sidebar-item-icon">🧭</span><span class="sidebar-item-text">Explorer</span>
       </div>
     </nav>
     <div style="padding:1rem 0.8rem;border-top:1px solid var(--border);">
       <div class="admin-nav-item" onclick="window.showScreen?.('screen-profile');closeCRSidebar()">
-        <span>👤 Profile Settings</span>
+        <span class="sidebar-item-icon">👤</span><span class="sidebar-item-text">Profile Settings</span>
       </div>
       <div class="admin-nav-item" onclick="creatorLogout()" style="color:var(--red);">
-        <span>Logout</span>
+        <span class="sidebar-item-icon">🚪</span><span class="sidebar-item-text">Logout</span>
       </div>
     </div>
   </aside>

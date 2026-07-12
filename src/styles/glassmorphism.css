@@ -21,7 +21,7 @@ html, body {
 }
 
 /* 2. RESPONSIVE ARCHITECTURE & AUTO-FIT FLEX LAYOUT */
-@media (min-width: 768px) {
+@media (min-width: 600px) {
   /* Enforce horizontal layout for active portal screens */
   .screen.active[id="screen-app"],
   .screen.active[id="screen-admin"],
@@ -76,6 +76,32 @@ html, body {
     background: transparent !important;
   }
 
+  /* The portal screens are already flex rows. Let flex allocate the remaining
+     space instead of adding a second sidebar-width margin to internal pages. */
+  .sidebar.collapsed,
+  .admin-sidebar.collapsed {
+    width: 88px !important;
+    min-width: 88px !important;
+    transition: width 280ms ease !important;
+  }
+
+  .sidebar,
+  .admin-sidebar {
+    transition: width 280ms ease !important;
+  }
+
+  #screen-app.active > .main,
+  #screen-admin.active > .admin-main-wrap,
+  #screen-subadmin.active > .admin-main-wrap,
+  #screen-creator.active > .admin-main-wrap,
+  #screen-superadmin.active > .admin-main-wrap {
+    margin-left: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    flex: 1 1 auto !important;
+    transition: flex-basis 280ms ease, width 280ms ease, padding 280ms ease !important;
+  }
+
   /* Hide mobile elements on desktop */
   .hamburger-btn,
   #hamburger-btn,
@@ -89,7 +115,7 @@ html, body {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 599px) {
   .screen.active[id="screen-app"],
   .screen.active[id="screen-admin"],
   .screen.active[id="screen-subadmin"],
@@ -420,6 +446,167 @@ textarea:focus {
 .nav-item.active .nav-icon,
 .admin-nav-item.active span {
   filter: brightness(0) invert(1) drop-shadow(0 0 6px rgba(139, 92, 246, 0.9)) opacity(1) !important;
+}
+
+/* Portal sidebars now use an explicit icon span plus label span. The older
+   rule above styled every span as an SVG icon, which turned labels into a
+   duplicate icon. Keep that legacy treatment out of the new structure. */
+.admin-nav-item .sidebar-item-icon {
+  display: inline-flex !important;
+  width: 24px !important;
+  min-width: 24px !important;
+  height: 24px !important;
+  margin: 0 !important;
+  background: none !important;
+  filter: none !important;
+  font-size: 1.1rem !important;
+  line-height: 1 !important;
+}
+
+.admin-nav-item .sidebar-item-text {
+  display: inline-block !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  background: none !important;
+  filter: none !important;
+  font-size: 0.88rem !important;
+  line-height: inherit !important;
+  white-space: nowrap !important;
+}
+
+.admin-nav-item.active .sidebar-item-icon,
+.admin-nav-item.active .sidebar-item-text {
+  filter: none !important;
+}
+
+.admin-sidebar.collapsed .sidebar-item-text {
+  display: none !important;
+}
+
+/* Disable the old per-item SVG backgrounds for the explicit SubAdmin menu.
+   Those selectors target every span and were drawing an icon over each label. */
+#sa-nav-dashboard .sidebar-item-icon,
+#sa-nav-dashboard .sidebar-item-text,
+#sa-nav-subjects .sidebar-item-icon,
+#sa-nav-subjects .sidebar-item-text,
+#sa-nav-view .sidebar-item-icon,
+#sa-nav-view .sidebar-item-text,
+#sa-nav-skillup .sidebar-item-icon,
+#sa-nav-skillup .sidebar-item-text,
+#sa-nav-curriculum .sidebar-item-icon,
+#sa-nav-curriculum .sidebar-item-text {
+  background-image: none !important;
+  background: none !important;
+  filter: none !important;
+}
+
+#sa-nav-dashboard .sidebar-item-text,
+#sa-nav-subjects .sidebar-item-text,
+#sa-nav-view .sidebar-item-text,
+#sa-nav-skillup .sidebar-item-text,
+#sa-nav-curriculum .sidebar-item-text {
+  font-size: 0.88rem !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+#sa-nav-dashboard .sidebar-item-icon,
+#sa-nav-subjects .sidebar-item-icon,
+#sa-nav-view .sidebar-item-icon,
+#sa-nav-skillup .sidebar-item-icon,
+#sa-nav-curriculum .sidebar-item-icon {
+  font-size: 1.2rem !important;
+  width: 24px !important;
+  height: 24px !important;
+}
+
+/* Keep the two book/folder actions unmistakably visible in icon-only mode. */
+#sa-nav-subjects .sidebar-item-icon {
+  background: var(--teal-light) !important;
+  color: var(--teal) !important;
+  border-radius: 7px;
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+  font-size: 1.25rem !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+#sa-nav-curriculum .sidebar-item-icon {
+  background: var(--lavender-light) !important;
+  color: var(--lavender) !important;
+  border-radius: 7px;
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+  font-size: 1.25rem !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Student and Creator application shells ------------------------------------------------
+   These two portals used to retain an older fixed-sidebar rule at tablet and
+   desktop widths.  A fixed panel is removed from normal layout flow, which is
+   why dashboard cards could render below it.  Keep both direct children in the
+   flex row so the sidebar always reserves its own column. */
+@media (min-width: 600px) {
+  #screen-app.active,
+  #screen-creator.active {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    overflow: hidden !important;
+    background: var(--bg) !important;
+  }
+
+  #screen-app.active > .sidebar,
+  #screen-creator.active > .admin-sidebar {
+    position: relative !important;
+    inset: auto !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    flex: 0 0 300px !important;
+    width: 300px !important;
+    min-width: 300px !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    z-index: 1 !important;
+    background: #0b0a12 !important;
+    box-shadow: none !important;
+    transition: flex-basis 280ms ease, width 280ms ease, min-width 280ms ease !important;
+  }
+
+  #screen-app.active > .sidebar.collapsed,
+  #screen-creator.active > .admin-sidebar.collapsed {
+    flex-basis: 88px !important;
+    width: 88px !important;
+    min-width: 88px !important;
+  }
+
+  #screen-app.active > .main,
+  #screen-creator.active > .admin-main-wrap {
+    position: relative !important;
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    transition: padding 280ms ease !important;
+  }
+
+  #screen-app.active > .sidebar-backdrop,
+  #screen-creator.active > .admin-sidebar-backdrop {
+    display: none !important;
+  }
 }
 
 /* Custom adjustment to make sure scrollbars look dark and sleek too */

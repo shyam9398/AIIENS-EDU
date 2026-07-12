@@ -1995,6 +1995,103 @@ body.intro-playing .screen:not(#screen-intro) {
   gap: 1rem;
   margin-top: 0.8rem;
 }
+
+/* Shared expanded/collapsed sidebar layout. */
+.sidebar.collapsed,
+.admin-sidebar.collapsed {
+  left: 0 !important;
+  width: 88px !important;
+  min-width: 88px !important;
+  overflow: hidden;
+}
+.sidebar.collapsed { transform: translateX(0) !important; }
+.sidebar.collapsed .sidebar-logo-text,
+.admin-sidebar.collapsed .sidebar-logo-text,
+.sidebar.collapsed .profile-info,
+.sidebar.collapsed .nav-section-label,
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .nav-badge,
+.admin-sidebar.collapsed .sidebar-profile-summary,
+.admin-sidebar.collapsed .admin-sidebar-header > div > span,
+.admin-sidebar.collapsed .sidebar-item-text,
+.sidebar.collapsed .sidebar-item-text {
+  display: none;
+}
+.sidebar.collapsed .sidebar-header { justify-content:center; }
+.sidebar:not(.collapsed) .nav-item,
+.admin-sidebar:not(.collapsed) .admin-nav-item { justify-content:flex-start; padding-left:16px; padding-right:16px; }
+.sidebar.collapsed .nav-item,
+.admin-sidebar.collapsed .admin-nav-item { justify-content:center; padding-left:8px; padding-right:8px; gap:0; }
+.sidebar.collapsed .sidebar-profile { justify-content:flex-start; padding-left:8px; padding-right:8px; }
+.sidebar-item-icon {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 24px;
+  width:24px;
+  min-width:24px;
+  font-size:1.1rem;
+  line-height:1;
+}
+.sidebar-item-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.admin-sidebar.collapsed .admin-sidebar-header,
+.sidebar.collapsed .sidebar-header { padding-left:8px; padding-right:8px; }
+.admin-sidebar.collapsed .sidebar-profile-summary { display:none; }
+.admin-sidebar.collapsed .admin-nav-item,
+.sidebar.collapsed .nav-item { min-height:48px; }
+.admin-sidebar.collapsed .admin-nav-badge { display:none !important; }
+.sidebar-collapse-toggle { transition: transform 260ms ease; }
+.sidebar.collapsed .sidebar-collapse-toggle,
+.admin-sidebar.collapsed .sidebar-collapse-toggle { transform: rotate(180deg); }
+.student-sidebar-collapse-toggle { margin-left:auto; color:#fff; background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.28); border-radius:50%; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
+.student-sidebar-collapse-toggle:hover { background:rgba(255,255,255,.24); }
+
+@media (min-width: 769px) {
+  /* Student main area follows the actual sidebar width. */
+  #screen-app.active > .sidebar,
+  #screen-app.active > .main {
+    transition: width 280ms ease, margin-left 280ms ease, max-width 280ms ease;
+  }
+  #screen-app.active > .sidebar.collapsed { width:88px !important; min-width:88px !important; }
+  #screen-app.active > .sidebar.collapsed + .main {
+    margin-left:88px;
+    width:calc(100% - 88px);
+    max-width:calc(100% - 88px);
+  }
+
+  /* Admin, SubAdmin, Creator, and Super Admin use the same fixed/sidebar
+     layout at desktop widths. */
+  #screen-admin.active > .admin-sidebar,
+  #screen-subadmin.active > .admin-sidebar,
+  #screen-creator.active > .admin-sidebar,
+  #screen-superadmin.active > .admin-sidebar {
+    left:0;
+    width:260px;
+    transition:width 280ms ease, left 280ms ease;
+  }
+  #screen-admin.active > .admin-main-wrap,
+  #screen-subadmin.active > .admin-main-wrap,
+  #screen-creator.active > .admin-main-wrap,
+  #screen-superadmin.active > .admin-main-wrap {
+    margin-left:260px;
+    width:calc(100% - 260px);
+    transition:width 280ms ease, margin-left 280ms ease;
+  }
+  #screen-admin.active > .admin-sidebar.collapsed,
+  #screen-subadmin.active > .admin-sidebar.collapsed,
+  #screen-creator.active > .admin-sidebar.collapsed,
+  #screen-superadmin.active > .admin-sidebar.collapsed {
+    width:88px !important;
+    min-width:88px !important;
+  }
+  #screen-admin.active > .admin-sidebar.collapsed + .admin-main-wrap,
+  #screen-subadmin.active > .admin-sidebar.collapsed + .admin-main-wrap,
+  #screen-creator.active > .admin-sidebar.collapsed + .admin-main-wrap,
+  #screen-superadmin.active > .admin-sidebar.collapsed + .admin-main-wrap {
+    margin-left:88px;
+    width:calc(100% - 88px);
+  }
+}
 .question-card-meta {
   display: flex;
   align-items: center;

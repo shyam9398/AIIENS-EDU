@@ -16,6 +16,8 @@ import legacyScript from './legacy/legacy-app.js?raw';
 import legacyPatchScript from './legacy/legacy-patches.js?raw';
 import aimeasyFixScript from './legacy/aimeasy-fixes.js?raw';
 import { installBackButtonFixes } from './legacy/installBackButtonFixes.js';
+import { installExplorer } from './legacy/installExplorer.js';
+import { installSidebarCollapse } from './legacy/installSidebarCollapse.js';
 import { runLegacyScripts } from './legacy/runLegacyScripts.js';
 import {
   hydrateLegacyState,
@@ -38,14 +40,9 @@ function currentHashRoute() {
 }
 
 function isLiveWorkshopSession() {
-  try {
-    return sessionStorage.getItem('aimeasy_login_portal') === 'live_workshop' ||
-      localStorage.getItem('aimeasy_login_portal_backup') === 'live_workshop' ||
-      sessionStorage.getItem('aiiens_live_workshop_auth') === '1' ||
-      currentHashRoute().includes('live-workshops');
-  } catch {
-    return currentHashRoute().includes('live-workshops');
-  }
+  // Supabase authentication is the session source of truth. The route is
+  // sufficient to identify the workshop surface without a browser cache.
+  return currentHashRoute().includes('live-workshops');
 }
 
 function hydrateLegacyAuth(session, profile) {
@@ -76,7 +73,6 @@ function hydrateLegacyAuth(session, profile) {
   window.APP.role = role;
   window.APP.session = true;
   if (role === 'student') window.APP.adminType = null;
-  localStorage.setItem('aiiens_session_user', JSON.stringify(window.APP.user));
   console.log('[AUTH] Legacy APP hydrated', { userId: session.user.id, role });
   return role;
 }
@@ -111,6 +107,8 @@ function AuthenticatedLegacyApp() {
       { name: 'legacy-patches.js', source: legacyPatchScript },
       { name: 'aimeasy-fixes.js', source: aimeasyFixScript },
     ]);
+    installExplorer();
+    installSidebarCollapse();
     installCriticalFixes();
     installSupabaseAdminSync();
     if (session?.user && profile) {

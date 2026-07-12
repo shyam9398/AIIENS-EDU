@@ -11,7 +11,6 @@
         <span class="sidebar-logo-text">AIIENS <span>Edu</span></span>
       </div>
       <!-- Close X button inside sidebar -->
-      <button class="sidebar-close-btn" onclick="closeSidebar()" aria-label="Close menu">✕</button>
     </div>
 
     <div class="sidebar-profile">
@@ -20,6 +19,7 @@
         <div class="profile-name" id="sidebar-name">Student</div>
         <div class="profile-year" id="sidebar-info"></div>
       </div>
+      <button class="sidebar-collapse-toggle student-sidebar-collapse-toggle" onclick="toggleStudentSidebarCollapse()" aria-label="Collapse sidebar" title="Collapse sidebar">‹</button>
     </div>
 
     <nav class="sidebar-nav">
@@ -41,6 +41,9 @@
       <div class="nav-item" onclick="navigateTo('skills');closeSidebar()">
         <span class="nav-icon">⚡</span><span class="nav-label">Skills Up</span>
         <span class="nav-badge" style="background:var(--teal);">NEW</span>
+      </div>
+      <div class="nav-item" onclick="navigateTo('explorer');closeSidebar()">
+        <span class="nav-icon">🧭</span><span class="nav-label">Explorer</span>
       </div>
     </nav>
 
@@ -358,6 +361,8 @@
         </div>
         <div id="backlog-grid"></div>
       </div>
+
+      <div id="page-explorer" style="display:none;"></div>
 
       <!-- ── SKILLS ── -->
       <div id="page-skills" style="display:none;">

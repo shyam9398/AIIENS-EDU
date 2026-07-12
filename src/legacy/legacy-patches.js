@@ -1683,8 +1683,15 @@ function launchCreatorScreen() {
   switchCRSection(section || 'dashboard');
 }
 
-function creatorLogout() {
-  localStorage.removeItem('edusync_session_user');
+async function creatorLogout() {
+  try {
+    await window.__AIMEASY_SUPABASE__?.auth?.signOut?.();
+  } catch (error) {
+    console.warn('[AUTH] Creator Supabase logout failed', error);
+  }
+  APP.user = null;
+  APP.session = false;
+  APP.role = 'student';
   APP.adminType = null;
   APP.subAdminData = null;
   window._crSelectedSubj = null;
