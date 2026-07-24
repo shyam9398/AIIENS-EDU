@@ -1,225 +1,58 @@
-const EXPLORER_FIELDS = 'id,title,description,category,company_name,banner_url,apply_url,start_date,end_date,eligibility,tags,status,is_published,created_by,created_at,updated_at';
-const EXPLORER_CATEGORIES = ['Internships', 'Hackathons', 'Free Certifications', 'Workshops', 'Competitions', 'Bootcamps', 'Tech Events', 'Scholarships'];
+const EXPLORER_FIELDS = 'id,title,description,category,company_name,banner_url,apply_url,start_date,end_date,eligibility,location,tags,status,is_published,created_by,created_at,updated_at';
+const CATEGORIES = ['Internships', 'Hackathons', 'Free Certifications', 'Workshops', 'Competitions', 'Bootcamps', 'Tech Events', 'Scholarships'];
+const STATUSES = ['pending', 'approved', 'rejected'];
+const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+const dateLabel = (date) => date ? new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'No Deadline';
+const statusLabel = (status) => `${String(status || 'pending')[0].toUpperCase()}${String(status || 'pending').slice(1)}`;
 
-const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-const escapeAttr = escapeHtml;
-
-async function explorerClientAndUser() {
-  const supabase = window.__AIMEASY_SUPABASE__;
-  const { data } = await supabase?.auth?.getUser?.() || {};
-  return { supabase, user: data?.user || null };
+function fallbackBanner(post) {
+  const content = `${post.title || ''} ${post.category || ''}`.toLowerCase();
+  const kind = content.includes('hack') || content.includes('coding') ? ['#5737c9', '#1596d1', '⌘'] : content.includes('scholar') || content.includes('certif') ? ['#147a6e', '#52b788', '✦'] : content.includes('workshop') || content.includes('event') ? ['#c45d18', '#eea849', '◌'] : ['#284cb8', '#8a57db', '✺'];
+  const title = esc(post.title || 'Opportunity').slice(0, 42);
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="${kind[0]}"/><stop offset="1" stop-color="${kind[1]}"/></linearGradient></defs><rect width="900" height="520" fill="url(#g)"/><circle cx="760" cy="92" r="180" fill="white" opacity=".1"/><circle cx="100" cy="480" r="175" fill="white" opacity=".08"/><text x="65" y="160" fill="white" opacity=".9" font-size="100">${kind[2]}</text><text x="65" y="390" fill="white" font-family="Arial, sans-serif" font-weight="700" font-size="48">${title}</text></svg>`)}`;
 }
+const banner = (post) => post.banner_url || fallbackBanner(post);
+const tagList = (post) => (Array.isArray(post.tags) ? post.tags : []).map((tag) => `<span class="xp-tag">${esc(tag)}</span>`).join('');
 
-function timeAgo(iso) {
-  if (!iso) return '';
-  const then = new Date(iso);
-  const diff = Math.floor((Date.now() - then.getTime()) / 1000);
-  if (diff < 60) return `Posted ${diff} seconds ago`;
-  if (diff < 3600) return `Posted ${Math.floor(diff / 60)} minutes ago`;
-  if (diff < 86400) return `Posted ${Math.floor(diff / 3600)} hours ago`;
-  const days = Math.floor(diff / 86400);
-  if (days === 1) return 'Posted yesterday';
-  return `Posted ${days} days ago`;
-}
-
-function explorerCard(post, creator = false) {
-  const published = Boolean(post.is_published) || post.status === 'published';
-  const deadline = post.end_date ? `Ends: ${escapeHtml(post.end_date)}` : '';
-  const posted = timeAgo(post.created_at);
-  const action = creator
-    ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"><button class="btn btn-ghost btn-sm" onclick="editExplorerPost('${post.id}')">Edit</button><button class="btn btn-ghost btn-sm" onclick="toggleExplorerPost('${post.id}',${!published})">${published ? 'Unpublish' : 'Publish'}</button><button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="deleteExplorerPost('${post.id}')">Delete</button></div>`
-    : `<div style="display:flex;gap:8px;margin-top:12px;"><button class="btn btn-ghost btn-sm" onclick="viewExplorerPost('${post.id}')">Details</button><a class="btn btn-primary btn-sm" href="${escapeAttr(post.apply_url || '#')}" target="_blank" rel="noreferrer">Apply</a></div>`;
-  return `<article class="explore-card" data-explorer-id="${post.id}" style="overflow:hidden;border-radius:10px;">
-    ${post.banner_url ? `<div style="height:140px;background-image:url('${escapeAttr(post.banner_url)}');background-size:cover;background-position:center;border-radius:10px 10px 0 0;"></div>` : ''}
-    <div style="padding:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-        <div style="flex:1;">
-          <div style="font-weight:700;margin-bottom:6px;">${escapeHtml(post.title)}</div>
-          <div style="font-size:0.85rem;color:var(--text3);">${escapeHtml(post.company_name || 'Opportunity')} · <span style="font-weight:600;">${escapeHtml(post.category)}</span></div>
-        </div>
-        <div style="text-align:right;font-size:0.82rem;color:var(--text3);">${escapeHtml(deadline)}<div style="margin-top:6px;color:var(--text2);font-size:0.78rem;">${escapeHtml(posted)}</div></div>
-      </div>
-      <p style="font-size:.86rem;color:var(--text2);margin:10px 0 0 0;line-height:1.4;">${escapeHtml(post.description || '').slice(0, 220)}</p>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
-        <div><span class="badge badge-teal">${escapeHtml(post.category)}</span> ${published ? '<span class="badge badge-green">Published</span>' : '<span class="badge badge-amber">Unpublished</span>'}</div>
-        ${action}
-      </div>
-    </div>
-  </article>`;
-}
-
-async function fetchExplorerPosts({ mine = false, published = false } = {}) {
-  const { supabase, user } = await explorerClientAndUser();
-  if (!supabase) return [];
+async function clientAndUser() { const supabase = window.__AIMEASY_SUPABASE__; const { data } = await supabase?.auth?.getUser?.() || {}; return { supabase, user: data?.user }; }
+async function cleanupExpired(supabase) { if (supabase?.rpc) await supabase.rpc('cleanup_expired_explorer_posts'); }
+async function fetchPosts({ mine = false, publicOnly = false } = {}) {
+  const { supabase, user } = await clientAndUser();
+  if (!supabase) throw new Error('Database connection is unavailable.');
+  await cleanupExpired(supabase);
   let query = supabase.from('explorer_posts').select(EXPLORER_FIELDS).order('created_at', { ascending: false });
   if (mine) query = query.eq('created_by', user?.id || '');
-  if (published) query = query.eq('is_published', true);
-  const { data, error } = await query;
-  if (error) throw error;
-  const now = new Date();
-  // Filter out expired posts (end_date before today)
-  return (data || []).filter((p) => {
-    if (!p.end_date) return true;
-    const end = new Date(p.end_date + 'T23:59:59');
-    return end >= now;
-  });
+  if (publicOnly) query = query.or('status.eq.approved,is_published.eq.true');
+  const { data, error } = await query; if (error) throw error; return data || [];
 }
 
-function creatorExplorerForm(post = {}) {
-  const categoryOptions = EXPLORER_CATEGORIES.map((category) => `<option ${post.category === category ? 'selected' : ''}>${category}</option>`).join('');
-  return `<form id="explorer-post-form" class="card" style="padding:1rem;margin-bottom:1rem;">
-    <input type="hidden" name="id" value="${escapeAttr(post.id || '')}"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;">
-    <input class="input" required name="title" placeholder="Title" value="${escapeAttr(post.title || '')}"><select class="select" name="category">${categoryOptions}</select><input class="input" name="company_name" placeholder="Company / Organizer" value="${escapeAttr(post.company_name || '')}"><input class="input" type="url" name="apply_url" required placeholder="Apply URL" value="${escapeAttr(post.apply_url || '')}"><input class="input" type="url" name="banner_url" placeholder="Banner image URL" value="${escapeAttr(post.banner_url || '')}"><input class="input" type="date" name="start_date" value="${escapeAttr(post.start_date || '')}"><input class="input" type="date" name="end_date" value="${escapeAttr(post.end_date || '')}"><input class="input" name="eligibility" placeholder="Eligibility" value="${escapeAttr(post.eligibility || '')}"><input class="input" name="tags" placeholder="Tags (comma separated)" value="${escapeAttr(Array.isArray(post.tags) ? post.tags.join(', ') : post.tags || '')}"></div><textarea class="input" style="width:100%;min-height:80px;margin-top:10px;" name="description" placeholder="Description">${escapeHtml(post.description || '')}</textarea><div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-primary" type="submit">${post.id ? 'Save changes' : 'Create post'}</button>${post.id ? '<button class="btn btn-ghost" type="button" onclick="renderCreatorExplorer()">Cancel</button>' : ''}</div></form>`;
+function explorerCss() { return `<style>
+  .xp-shell{max-width:1180px;margin:0 auto;padding:8px 0 32px}.xp-hero{display:flex;justify-content:space-between;gap:20px;align-items:end;padding:28px;border:1px solid rgba(132,148,255,.22);border-radius:24px;background:radial-gradient(circle at 80% 10%,rgba(117,83,255,.26),transparent 35%),linear-gradient(125deg,rgba(28,38,80,.94),rgba(15,20,39,.9));box-shadow:0 22px 60px rgba(0,0,0,.22)}.xp-eyebrow{color:#aeb9ff;text-transform:uppercase;letter-spacing:.14em;font-size:.7rem;font-weight:800}.xp-hero h2{font-size:clamp(1.7rem,3vw,2.6rem);margin:6px 0}.xp-hero p{margin:0;color:var(--text2)}.xp-form{margin-top:18px;padding:24px;border:1px solid var(--glass-border);border-radius:22px;background:rgba(18,25,48,.72);box-shadow:var(--glass-shadow)}.xp-section{padding:20px 0;border-bottom:1px solid rgba(255,255,255,.08)}.xp-section:last-child{border:0;padding-bottom:0}.xp-section h3{margin:0 0 4px;font-size:1.05rem}.xp-help{margin:0 0 16px;color:var(--text3);font-size:.82rem}.xp-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.xp-fields .wide{grid-column:1/-1}.xp-field label{display:block;font-size:.78rem;font-weight:750;margin:0 0 7px;color:var(--text2)}.xp-field .input,.xp-field .select{width:100%;box-sizing:border-box;min-height:45px}.xp-deadline{display:flex;gap:10px;flex-wrap:wrap}.xp-radio{padding:10px 14px;border:1px solid var(--glass-border);border-radius:12px;cursor:pointer;color:var(--text2)}.xp-radio:has(input:checked){background:rgba(91,117,255,.18);border-color:#738bff;color:#fff}.xp-added{margin-top:24px}.xp-added h3{font-size:1.3rem}.xp-creator-card,.xp-student-card{display:grid;grid-template-columns:220px 1fr;gap:0;margin:14px 0;overflow:hidden;border:1px solid rgba(255,255,255,.1);border-radius:20px;background:rgba(21,29,54,.76);box-shadow:0 14px 36px rgba(0,0,0,.19);transition:transform .22s,box-shadow .22s,border-color .22s}.xp-student-card{grid-template-columns:300px 1fr}.xp-creator-card:hover,.xp-student-card:hover{transform:translateY(-4px);box-shadow:0 24px 48px rgba(0,0,0,.3);border-color:rgba(130,148,255,.45)}.xp-image{height:100%;min-height:220px;width:100%;object-fit:cover;background:#1c2547}.xp-card-body{min-width:0;padding:21px;position:relative}.xp-card-top{display:flex;justify-content:space-between;gap:14px}.xp-card-title{margin:7px 0 5px;font-size:1.25rem;letter-spacing:-.02em}.xp-company{color:var(--text2);font-size:.9rem}.xp-description{color:var(--text2);line-height:1.55;margin:14px 0}.xp-meta{display:flex;flex-wrap:wrap;gap:8px 16px;color:var(--text2);font-size:.82rem}.xp-meta strong{color:var(--text3);font-weight:700}.xp-tag{display:inline-block;margin:10px 6px 0 0;padding:4px 9px;border:1px solid rgba(129,146,255,.25);border-radius:99px;color:#c9d2ff;background:rgba(100,120,255,.1);font-size:.72rem}.xp-actions{display:flex;gap:9px;align-items:end;justify-content:flex-end}.xp-student-actions{position:absolute;right:21px;bottom:20px}.xp-status{padding:5px 9px;border-radius:99px;background:rgba(255,190,77,.14);color:#ffd88a;font-size:.72rem;font-weight:800}.xp-status.approved{background:rgba(61,205,146,.14);color:#8ee8bb}.xp-empty{text-align:center;padding:48px 20px;border:1px dashed rgba(151,163,255,.32);border-radius:22px;background:rgba(22,30,58,.48)}.xp-empty-icon{font-size:3rem;display:block;margin-bottom:8px}.xp-detail{overflow:hidden;margin-top:16px;border-radius:24px;background:rgba(20,28,52,.82);border:1px solid var(--glass-border)}.xp-detail-banner{width:100%;height:min(400px,40vw);object-fit:cover}.xp-detail-inner{padding:clamp(22px,4vw,48px)}.xp-detail h1{font-size:clamp(2rem,4vw,3.4rem);margin:8px 0}.xp-filter-row{display:flex;gap:12px;align-items:center;margin:20px 0 12px}.xp-filter-row .input{max-width:440px;flex:1}.xp-category-pills{margin-bottom:18px}@media(max-width:700px){.xp-hero{align-items:start;flex-direction:column;padding:22px}.xp-fields{grid-template-columns:1fr}.xp-creator-card,.xp-student-card{grid-template-columns:1fr}.xp-image{height:190px;min-height:0}.xp-card-body{padding:18px}.xp-student-actions{position:static;justify-content:flex-start;margin-top:17px}.xp-card-top{display:block}.xp-actions{justify-content:flex-start;margin-top:16px}.xp-detail-banner{height:220px}}
+</style>`; }
+
+function form(post = {}) {
+  const hasDeadline = Boolean(post.end_date);
+  const options = CATEGORIES.map((item) => `<option ${post.category === item ? 'selected' : ''}>${esc(item)}</option>`).join('');
+  return `<form id="explorer-post-form" class="xp-form"><input type="hidden" name="id" value="${esc(post.id || '')}"><section class="xp-section"><h3>Basic Information</h3><p class="xp-help">Make the first impression count.</p><div class="xp-fields"><div class="xp-field"><label>Opportunity Title *</label><input required class="input" name="title" value="${esc(post.title || '')}" placeholder="e.g. AI Research Internship"></div><div class="xp-field"><label>Category *</label><select required class="select" name="category">${options}</select></div><div class="xp-field"><label>Organization *</label><input required class="input" name="company_name" value="${esc(post.company_name || '')}" placeholder="Organization name"></div><div class="xp-field"><label>Image URL <small>(optional)</small></label><input class="input" type="url" name="banner_url" value="${esc(post.banner_url || '')}" placeholder="https://…"></div></div></section><section class="xp-section"><h3>Opportunity Details</h3><p class="xp-help">Everything a student needs before applying.</p><div class="xp-fields"><div class="xp-field wide"><label>Description *</label><textarea required class="input" name="description" style="min-height:120px">${esc(post.description || '')}</textarea></div><div class="xp-field"><label>Eligibility</label><input class="input" name="eligibility" value="${esc(post.eligibility || '')}" placeholder="Who can apply?"></div><div class="xp-field"><label>Location</label><input class="input" name="location" value="${esc(post.location || '')}" placeholder="Remote, Hyderabad, etc."></div><div class="xp-field"><label>Apply URL *</label><input required class="input" type="url" name="apply_url" value="${esc(post.apply_url || '')}" placeholder="https://…"></div><div class="xp-field"><label>Tags</label><input class="input" name="tags" value="${esc(Array.isArray(post.tags) ? post.tags.join(', ') : '')}" placeholder="AI, Python, Paid"></div></div></section><section class="xp-section"><h3>Dates</h3><p class="xp-help">Opportunities with a deadline are automatically removed once it passes.</p><div class="xp-deadline"><label class="xp-radio"><input type="radio" name="deadline_type" value="has" ${hasDeadline ? 'checked' : ''}> Has Deadline</label><label class="xp-radio"><input type="radio" name="deadline_type" value="none" ${hasDeadline ? '' : 'checked'}> No Deadline</label></div><div class="xp-field" id="xp-date-field" style="margin-top:14px;max-width:300px;${hasDeadline ? '' : 'display:none'}"><label>Deadline *</label><input class="input" type="date" name="end_date" value="${esc(post.end_date || '')}"></div></section><section class="xp-section"><div class="xp-fields"><div class="xp-field"><label>Publication Status</label><select class="select" name="status">${STATUSES.map((item) => `<option value="${item}" ${(post.status || 'pending') === item ? 'selected' : ''}>${statusLabel(item)}</option>`).join('')}</select></div></div><div class="xp-actions" style="margin-top:20px"><button type="button" class="btn btn-ghost" data-xp="cancel">Cancel</button><button class="btn btn-primary" type="submit">${post.id ? 'Save Changes' : 'Create Opportunity'}</button></div></section></form>`;
 }
+
+function creatorCard(post) { return `<article class="xp-creator-card"><img class="xp-image" src="${esc(banner(post))}" alt=""><div class="xp-card-body"><div class="xp-card-top"><div><span class="xp-eyebrow">${esc(post.category)}</span><h3 class="xp-card-title">${esc(post.title)}</h3><div class="xp-company">${esc(post.company_name)}</div></div><span class="xp-status ${post.status === 'approved' ? 'approved' : ''}">${statusLabel(post.status)}</span></div><p class="xp-description">${esc(post.description).slice(0, 230)}${post.description?.length > 230 ? '…' : ''}</p><div class="xp-meta"><span><strong>Eligibility:</strong> ${esc(post.eligibility || 'Open to all')}</span><span><strong>Deadline:</strong> ${esc(dateLabel(post.end_date))}</span><span><strong>Created:</strong> ${esc(dateLabel(post.created_at?.slice(0, 10)))}</span></div>${tagList(post)}<div class="xp-actions"><button class="btn btn-ghost btn-sm" data-xp="edit" data-id="${esc(post.id)}">Edit</button><button class="btn btn-ghost btn-sm" style="color:var(--red)" data-xp="delete" data-id="${esc(post.id)}">Delete</button></div></div></article>`; }
+function studentCard(post) { return `<article class="xp-student-card"><img class="xp-image" src="${esc(banner(post))}" alt="${esc(post.title)}"><div class="xp-card-body"><span class="xp-eyebrow">${esc(post.category)}</span><h3 class="xp-card-title">${esc(post.title)}</h3><div class="xp-company">${esc(post.company_name)}</div><p class="xp-description">${esc(post.description)}</p><div class="xp-meta"><span><strong>Eligibility:</strong> ${esc(post.eligibility || 'Open to all')}</span><span><strong>Location:</strong> ${esc(post.location || 'Not specified')}</span><span><strong>Deadline:</strong> ${esc(dateLabel(post.end_date))}</span></div>${tagList(post)}<div class="xp-actions xp-student-actions"><button class="btn btn-ghost btn-sm" data-xp="details" data-id="${esc(post.id)}">Details</button><a class="btn btn-primary btn-sm" href="${esc(post.apply_url)}" target="_blank" rel="noopener noreferrer">Apply Now</a></div></div></article>`; }
+function emptyState() { return `<div class="xp-empty"><span class="xp-empty-icon">🧭</span><h3>No opportunities found</h3><p style="color:var(--text3)">Try another search or explore every category.</p><button class="btn btn-ghost" data-xp="reset">Reset Filters</button></div>`; }
 
 export function installExplorer() {
-  let explorerChannel = null;
-  const subscribeExplorerUpdates = async () => {
-    const { supabase } = await explorerClientAndUser();
-    if (!supabase || explorerChannel) return;
-    explorerChannel = supabase.channel('explorer-posts')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'explorer_posts' }, () => {
-        if (document.getElementById('page-explorer')?.style.display !== 'none') window.renderStudentExplorer();
-        if (document.getElementById('cr-nav-explorer')?.classList.contains('active')) window.renderCreatorExplorer();
-      })
-      .subscribe();
-  };
-  subscribeExplorerUpdates();
-  const originalCreatorSwitch = window.switchCRSection;
-  window.switchCRSection = globalThis.switchCRSection = function explorerCreatorSwitch(section) {
-    if (section !== 'explorer') return originalCreatorSwitch?.(section);
-    window.closeCRSidebar?.();
-    document.querySelectorAll('[id^="cr-nav-"]').forEach((item) => item.classList.remove('active'));
-    document.getElementById('cr-nav-explorer')?.classList.add('active');
-    const title = document.getElementById('cr-topbar-title');
-    if (title) title.textContent = 'Explorer';
-    return window.renderCreatorExplorer();
-  };
+  let mine = []; let publicPosts = []; let channel = null;
+  const refreshMine = async () => (mine = await fetchPosts({ mine: true })); const refreshPublic = async () => (publicPosts = await fetchPosts({ publicOnly: true }));
+  const originalCreatorSwitch = window.switchCRSection; window.switchCRSection = globalThis.switchCRSection = (section) => { if (section !== 'explorer') return originalCreatorSwitch?.(section); window.closeCRSidebar?.(); document.querySelectorAll('[id^="cr-nav-"]').forEach((item) => item.classList.remove('active')); document.getElementById('cr-nav-explorer')?.classList.add('active'); const title = document.getElementById('cr-topbar-title'); if (title) title.textContent = 'Explorer'; return window.renderCreatorExplorer(); };
+  const originalNavigate = window.navigateTo; window.navigateTo = globalThis.navigateTo = (page) => { const result = originalNavigate?.(page); if (page === 'explorer') window.renderStudentExplorer(); return result; };
+  (async () => { const { supabase } = await clientAndUser(); if (!supabase || channel) return; channel = supabase.channel('explorer-live').on('postgres_changes', { event: '*', schema: 'public', table: 'explorer_posts' }, () => { if (document.getElementById('cr-nav-explorer')?.classList.contains('active')) window.renderCreatorExplorer(); if (document.getElementById('page-explorer')?.style.display !== 'none') window.renderStudentExplorer(); }).subscribe(); })();
+  // Deadlines are also checked while a user keeps Explorer open, not only on navigation.
+  window.setInterval(async () => { const { supabase } = await clientAndUser(); await cleanupExpired(supabase); }, 60_000);
 
-  const originalNavigate = window.navigateTo;
-  window.navigateTo = globalThis.navigateTo = function explorerNavigate(page) {
-    const result = originalNavigate?.(page);
-    if (page === 'explorer') window.renderStudentExplorer();
-    return result;
-  };
+  window.renderCreatorExplorer = async (editing = null) => { const root = document.getElementById('cr-content'); if (!root) return; root.innerHTML = `${explorerCss()}<div class="xp-shell"><div class="xp-hero"><div><div class="xp-eyebrow">Creator studio</div><h2>Build your next opportunity.</h2><p>Present it beautifully. Reach the right students.</p></div><button class="btn btn-primary" data-xp="create">+ Create Post</button></div>${editing !== null ? form(editing) : ''}<section class="xp-added"><h3>Your added opportunities</h3><div id="xp-creator-list">${mine.length ? mine.map(creatorCard).join('') : emptyState()}</div></section></div>`; root.querySelector('#explorer-post-form')?.addEventListener('submit', save); root.addEventListener('click', creatorClick); root.querySelectorAll('input[name="deadline_type"]').forEach((input) => input.addEventListener('change', () => { root.querySelector('#xp-date-field').style.display = input.value === 'has' && input.checked ? '' : 'none'; })); try { mine = await refreshMine(); const list = root.querySelector('#xp-creator-list'); if (list) list.innerHTML = mine.length ? mine.map(creatorCard).join('') : emptyState(); } catch (error) { window.showToast?.(`Unable to load Explorer: ${error.message}`, 'red'); } };
+  async function creatorClick(event) { const action = event.target.closest('[data-xp]')?.dataset.xp; const id = event.target.closest('[data-id]')?.dataset.id; if (!action) return; if (action === 'create') return window.renderCreatorExplorer({}); if (action === 'cancel') return window.renderCreatorExplorer(); if (action === 'edit') return window.renderCreatorExplorer(mine.find((item) => item.id === id)); if (action === 'delete') { if (!window.confirm('Delete this opportunity? This cannot be undone.')) return; const { supabase, user } = await clientAndUser(); const { error } = await supabase.from('explorer_posts').delete().eq('id', id).eq('created_by', user.id); if (error) return window.showToast?.(error.message, 'red'); mine = mine.filter((item) => item.id !== id); publicPosts = publicPosts.filter((item) => item.id !== id); window.renderCreatorExplorer(); window.showToast?.('Opportunity deleted.', 'green'); } }
+  async function save(event) { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); const { supabase, user } = await clientAndUser(); if (!user) return window.showToast?.('Please sign in again.', 'red'); const deadline = values.deadline_type === 'has' ? values.end_date : null; if (values.deadline_type === 'has' && !deadline) return window.showToast?.('Choose a deadline or select No Deadline.', 'red'); const status = STATUSES.includes(values.status) ? values.status : 'pending'; const row = { title: values.title.trim(), category: values.category, company_name: values.company_name.trim(), banner_url: values.banner_url.trim() || null, description: values.description.trim(), eligibility: values.eligibility.trim() || null, location: values.location.trim() || null, apply_url: values.apply_url.trim(), tags: values.tags.split(',').map((tag) => tag.trim()).filter(Boolean), end_date: deadline, status, is_published: status === 'approved', updated_at: new Date().toISOString() }; const query = values.id ? supabase.from('explorer_posts').update(row).eq('id', values.id).eq('created_by', user.id) : supabase.from('explorer_posts').insert({ ...row, created_by: user.id }); const { data, error } = await query.select(EXPLORER_FIELDS).single(); if (error) return window.showToast?.(`Unable to save: ${error.message}`, 'red'); mine = values.id ? mine.map((item) => item.id === data.id ? data : item) : [data, ...mine]; publicPosts = data.is_published ? [data, ...publicPosts.filter((item) => item.id !== data.id)] : publicPosts.filter((item) => item.id !== data.id); window.showToast?.(values.id ? 'Opportunity updated.' : 'Opportunity created.', 'green'); window.renderCreatorExplorer(); if (document.getElementById('page-explorer')?.style.display !== 'none') window.renderStudentExplorer(); }
 
-  window.renderCreatorExplorer = async function renderCreatorExplorer(editing = null) {
-    const root = document.getElementById('cr-content');
-    if (!root) return;
-    root.innerHTML = `<div class="admin-section-head" style="margin-bottom:1rem;"><div><h2>Explorer</h2><p>Publish opportunities for students.</p></div><button class="btn btn-primary" onclick="renderCreatorExplorer({})">Create opportunity</button></div>${editing !== null ? creatorExplorerForm(editing) : ''}<div id="creator-explorer-list" class="subject-grid">Loading…</div>`;
-    // Bind directly to the rendered form before awaiting the list request.
-    // This guarantees that submit currentTarget is the HTMLFormElement.
-    document.getElementById('explorer-post-form')?.addEventListener('submit', saveExplorerPost);
-    try {
-      const posts = await fetchExplorerPosts({ mine: true });
-      const list = document.getElementById('creator-explorer-list');
-      if (list) list.innerHTML = posts.length ? posts.map((post) => explorerCard(post, true)).join('') : '<div class="empty-state-card">No Explorer posts yet.</div>';
-    } catch (error) { window.showToast?.(`Unable to load Explorer: ${error.message}`, 'red'); }
-  };
-
-  window.editExplorerPost = async (id) => {
-    const posts = await fetchExplorerPosts({ mine: true });
-    window.renderCreatorExplorer(posts.find((post) => post.id === id) || {});
-  };
-  window.deleteExplorerPost = async (id) => {
-    const { supabase, user } = await explorerClientAndUser();
-    if (!supabase || !user) return window.showToast?.('Please sign in again to manage posts.', 'red');
-    const { error } = await supabase.from('explorer_posts').delete().eq('id', id).eq('created_by', user.id);
-    if (error) return window.showToast?.(`Unable to delete post: ${error.message}`, 'red');
-    window.renderCreatorExplorer();
-    if (document.getElementById('page-explorer')?.style.display !== 'none') window.renderStudentExplorer();
-  };
-  window.toggleExplorerPost = async (id, publish) => {
-    const { supabase, user } = await explorerClientAndUser();
-    if (!supabase || !user) return window.showToast?.('Please sign in again to manage posts.', 'red');
-    const { error } = await supabase.from('explorer_posts').update({ is_published: publish, status: publish ? 'published' : 'unpublished', updated_at: new Date().toISOString() }).eq('id', id).eq('created_by', user.id);
-    if (error) return window.showToast?.(`Unable to update post: ${error.message}`, 'red');
-    window.renderCreatorExplorer();
-    if (document.getElementById('page-explorer')?.style.display !== 'none') window.renderStudentExplorer();
-  };
-
-  async function saveExplorerPost(event) {
-    event?.preventDefault?.();
-    const form = event?.currentTarget instanceof HTMLFormElement
-      ? event.currentTarget
-      : event?.target?.closest?.('form') || document.getElementById('explorer-post-form');
-    if (!(form instanceof HTMLFormElement)) {
-      const message = 'Explorer post form is unavailable. Please reopen Create Post and try again.';
-      console.error('[EXPLORER] Save aborted:', message, event);
-      window.showToast?.(message, 'red');
-      return;
-    }
-    const { supabase, user } = await explorerClientAndUser();
-    if (!supabase || !user) return window.showToast?.('Please sign in again to save a post.', 'red');
-    console.log('[EXPLORER] Creating FormData from form', { formId: form.id, editing: Boolean(form.elements.id?.value) });
-    const values = Object.fromEntries(new FormData(form));
-    const row = { title: values.title.trim(), description: values.description.trim(), category: values.category, company_name: values.company_name.trim() || null, banner_url: values.banner_url.trim() || null, apply_url: values.apply_url.trim(), start_date: values.start_date || null, end_date: values.end_date || null, eligibility: values.eligibility.trim() || null, tags: values.tags.split(',').map((tag) => tag.trim()).filter(Boolean), updated_at: new Date().toISOString() };
-    const isEditing = Boolean(values.id);
-    console.log(`[EXPLORER] Before Supabase ${isEditing ? 'update' : 'insert'}`, row);
-    const request = isEditing
-      ? supabase.from('explorer_posts').update(row).eq('id', values.id).eq('created_by', user.id).select().single()
-      : supabase.from('explorer_posts').insert({ ...row, created_by: user.id, created_at: new Date().toISOString(), status: 'published', is_published: true }).select().single();
-    const { data, error } = await request;
-    if (error) {
-      console.error('[EXPLORER] Supabase save failed:', error);
-      window.showToast?.(`Unable to save post: ${error.message}`, 'red');
-      return;
-    }
-    console.log('[EXPLORER] Post saved successfully:', data);
-    window.showToast?.(isEditing ? 'Explorer post updated successfully.' : 'Explorer post created successfully.', 'green');
-    // Re-rendering closes the inline form and fetches both views from Supabase.
-    await window.renderCreatorExplorer();
-    await window.renderStudentExplorer?.();
-  }
-
-  window.renderStudentExplorer = async function renderStudentExplorer() {
-    const root = document.getElementById('page-explorer');
-    if (!root) return;
-    root.innerHTML = `
-      <div style="margin-bottom:1rem;">
-        <h2 class="explorer-title"><span aria-hidden="true">🧭</span> Explorer</h2>
-        <p style="font-size:.82rem;color:var(--text3);">Discover published opportunities.</p>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
-        <input id="explorer-search" class="input" style="flex:1;max-width:420px;" placeholder="Search opportunities">
-      </div>
-      <div id="explorer-categories" class="explorer-category-pills">
-        ${['All', ...EXPLORER_CATEGORIES].map(cat => `<button class="explorer-category-pill" data-category="${cat}">${cat}</button>`).join('')}
-      </div>
-      <div id="student-explorer-list" class="explorer-grid">Loading…</div>`;
-    try {
-      const posts = await fetchExplorerPosts({ published: true });
-      const searchEl = document.getElementById('explorer-search');
-      const categoryContainer = document.getElementById('explorer-categories');
-      const draw = () => {
-        const search = searchEl?.value.toLowerCase() || '';
-        const active = categoryContainer?.querySelector('.explorer-category-pill.active')?.dataset?.category || 'All';
-        const filtered = posts.filter((post) => {
-          if (active && active !== 'All' && post.category !== active) return false;
-          return `${post.title} ${post.description} ${post.company_name}`.toLowerCase().includes(search);
-        });
-        const list = document.getElementById('student-explorer-list');
-        if (list) list.innerHTML = filtered.length ? filtered.map((post) => explorerCard(post)).join('') : '<div class="empty-state-card">No matching opportunities.</div>';
-      };
-      searchEl?.addEventListener('input', draw);
-      categoryContainer?.addEventListener('click', (e) => {
-        const btn = e.target.closest('.explorer-category-pill');
-        if (!btn) return;
-        categoryContainer.querySelectorAll('.explorer-category-pill').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        draw();
-      });
-      // Activate first chip
-      const first = categoryContainer.querySelector('.explorer-category-pill'); if (first) first.classList.add('active');
-      draw();
-    } catch (error) { window.showToast?.(`Unable to load Explorer: ${error.message}`, 'red'); }
-  };
-  window.viewExplorerPost = async (id) => {
-    const posts = await fetchExplorerPosts({ published: true });
-    const post = posts.find((item) => item.id === id);
-    const root = document.getElementById('page-explorer');
-    if (!post || !root) return;
-      const posted = timeAgo(post.created_at);
-      root.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="renderStudentExplorer()">← Back to Explorer</button><article class="card" style="padding:1.25rem;margin-top:1rem;">${post.banner_url ? `<img src="${escapeAttr(post.banner_url)}" alt="" style="width:100%;max-height:260px;object-fit:cover;border-radius:10px;margin-bottom:1rem;">` : ''}<h2>${escapeHtml(post.title)}</h2><p style="color:var(--text3);">${escapeHtml(post.company_name || '')} · ${escapeHtml(post.category)}</p><p style="line-height:1.6;">${escapeHtml(post.description || '')}</p><p><strong>Eligibility:</strong> ${escapeHtml(post.eligibility || 'Not specified')}</p><p><strong>Dates:</strong> ${escapeHtml(post.start_date || 'TBA')} – ${escapeHtml(post.end_date || 'TBA')}</p><p style="color:var(--text3);font-size:0.9rem;margin-top:8px;">${escapeHtml(posted)}</p><a class="btn btn-primary" href="${escapeAttr(post.apply_url || '#')}" target="_blank" rel="noreferrer">Apply</a></article>`;
-  };
+  window.renderStudentExplorer = async () => { const root = document.getElementById('page-explorer'); if (!root) return; root.innerHTML = `${explorerCss()}<div class="xp-shell"><div class="xp-hero"><div><div class="xp-eyebrow">Opportunity discovery</div><h2>Find your next big move.</h2><p>Curated internships, scholarships, events and more.</p></div></div><div class="xp-filter-row"><input id="xp-search" class="input" placeholder="Search opportunities, organizations, tags…"></div><div id="xp-categories" class="explorer-category-pills xp-category-pills">${['All', ...CATEGORIES].map((item) => `<button class="explorer-category-pill" data-category="${esc(item)}">${esc(item)}</button>`).join('')}</div><div id="xp-student-list">${publicPosts.length ? publicPosts.map(studentCard).join('') : emptyState()}</div></div>`; const search = root.querySelector('#xp-search'); const cats = root.querySelector('#xp-categories'); const draw = () => { const term = search.value.toLowerCase(); const category = cats.querySelector('.active')?.dataset.category || 'All'; const posts = publicPosts.filter((post) => (category === 'All' || post.category === category) && `${post.title} ${post.company_name} ${post.description} ${post.eligibility} ${(post.tags || []).join(' ')}`.toLowerCase().includes(term)); root.querySelector('#xp-student-list').innerHTML = posts.length ? posts.map(studentCard).join('') : emptyState(); }; search.addEventListener('input', draw); cats.addEventListener('click', (event) => { const button = event.target.closest('[data-category]'); if (!button) return; cats.querySelectorAll('button').forEach((item) => item.classList.remove('active')); button.classList.add('active'); draw(); }); root.addEventListener('click', (event) => { const action = event.target.closest('[data-xp]')?.dataset.xp; if (action === 'details') window.viewExplorerPost(event.target.closest('[data-id]')?.dataset.id); if (action === 'reset') { search.value = ''; cats.querySelectorAll('button').forEach((item) => item.classList.remove('active')); cats.querySelector('button')?.classList.add('active'); draw(); } }); cats.querySelector('button')?.classList.add('active'); try { publicPosts = await refreshPublic(); draw(); } catch (error) { root.querySelector('#xp-student-list').innerHTML = emptyState(); } };
+  window.viewExplorerPost = (id) => { const post = publicPosts.find((item) => item.id === id); const root = document.getElementById('page-explorer'); if (!post || !root) return; root.innerHTML = `${explorerCss()}<div class="xp-shell"><button class="btn btn-ghost btn-sm" onclick="renderStudentExplorer()">← Back to Explorer</button><article class="xp-detail"><img class="xp-detail-banner" src="${esc(banner(post))}" alt="${esc(post.title)}"><div class="xp-detail-inner"><div class="xp-eyebrow">${esc(post.category)}</div><h1>${esc(post.title)}</h1><div class="xp-company">${esc(post.company_name)} · ${esc(post.location || 'Location not specified')}</div><p class="xp-description" style="font-size:1rem;white-space:pre-line">${esc(post.description)}</p><div class="xp-meta" style="font-size:.9rem"><span><strong>Eligibility:</strong> ${esc(post.eligibility || 'Open to all')}</span><span><strong>Deadline:</strong> ${esc(dateLabel(post.end_date))}</span></div>${tagList(post)}<div class="xp-actions" style="margin-top:30px;justify-content:flex-start"><button class="btn btn-ghost" data-xp="share">Share</button><a class="btn btn-primary" href="${esc(post.apply_url)}" target="_blank" rel="noopener noreferrer">Apply Now</a></div></div></article></div>`; root.addEventListener('click', async (event) => { if (event.target.closest('[data-xp="share"]')) { try { await navigator.share?.({ title: post.title, text: post.description, url: post.apply_url }); } catch { navigator.clipboard?.writeText(post.apply_url); window.showToast?.('Application link copied.', 'green'); } } }); };
 }
