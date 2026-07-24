@@ -13817,7 +13817,13 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     if (roleCards && !document.getElementById('role-live-workshops')) {
       roleCards.insertAdjacentHTML('beforeend', `
         <div class="role-card live-workshops" id="role-live-workshops" onclick="openLiveWorkshops()">
-          <div class="role-icon">Live</div>
+          <div class="role-icon professional-icon live-professional-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="4" y="5.5" width="16" height="13" rx="3" />
+              <path d="m10 9 5 3-5 3V9Z" />
+              <path d="M8.5 20.5h7" />
+            </svg>
+          </div>
           <div class="role-label">Live Webinars & Courses</div>
           <div class="role-desc">Join expert-led live sessions</div>
         </div>`);

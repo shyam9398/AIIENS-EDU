@@ -765,6 +765,20 @@ function patchVideoApproval() {
   };
 
   window.setTimeout(() => updateApprovalBadge(), 0);
+
+  // Realtime is the fast path. This keeps an already-open approval page in
+  // sync even on a deployment where Realtime was not enabled yet.
+  window.setInterval(() => {
+    const activeScreen = document.querySelector('.screen.active')?.id;
+    const adminSection = document.querySelector('#screen-admin .admin-nav-item.active')?.id?.replace('admin-nav-', '');
+    const subadminSection = document.querySelector('#screen-subadmin .admin-nav-item.active')?.id?.replace('sa-nav-', '');
+    if (activeScreen === 'screen-admin' && ['approvals', 'url-approvals', 'urls'].includes(adminSection)) {
+      window.renderApprovalLinksProduction?.('admin');
+    }
+    if (activeScreen === 'screen-subadmin' && ['urls', 'approvals', 'url-approvals'].includes(subadminSection)) {
+      window.renderApprovalLinksProduction?.('subadmin');
+    }
+  }, 15000);
 }
 
 function patchVideoSuggestionSubmit() {
