@@ -3257,18 +3257,13 @@ async function sendChat() {
   }
   showTyping();
   try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg }),
-    });
-    const data = await response.json().catch(() => ({}));
-    removeTyping();
-    addChatMsg(data.answer || "Sorry, I'm unable to answer right now. Please try again later.", 'bot');
+    const answer = await requestGeminiChat(msg);
+    addChatMsg(answer, 'bot');
   } catch (error) {
-    removeTyping();
-    addChatMsg("Sorry, I'm unable to answer right now. Please try again later.", 'bot');
+    console.error('[CHAT] Gemini request failed:', error);
+    addChatMsg(getChatErrorMessage(error), 'bot');
   } finally {
+    removeTyping();
     window.__aiiensChatPending = false;
     if (sendBtn) {
       sendBtn.disabled = false;
@@ -3276,6 +3271,81 @@ async function sendChat() {
     }
     input.focus();
   }
+}
+
+function getGeminiChatKey() {
+  return String(window.__AIIENS_GEMINI_API_KEY__ || '').trim();
+}
+
+function getChatHistory() {
+  if (!Array.isArray(window.__aiiensChatHistory)) window.__aiiensChatHistory = [];
+  return window.__aiiensChatHistory;
+}
+
+function getChatErrorMessage(error) {
+  const status = Number(error?.status || 0);
+  if (status === 400 || status === 401 || status === 403) return 'The AI service key is invalid or unavailable. Please contact support.';
+  if (status === 429) return 'The AI service is busy or its quota has been reached. Please try again shortly.';
+  if (status >= 500) return 'The AI service is temporarily unavailable. Please try again shortly.';
+  if (error?.name === 'TypeError') return 'Network error. Please check your connection and try again.';
+  return error?.message || 'Unable to get an AI response right now. Please try again.';
+}
+
+async function requestGeminiChat(message) {
+  const apiKey = getGeminiChatKey();
+  if (!apiKey) {
+    const error = new Error('Gemini API key is not configured.');
+    error.status = 401;
+    throw error;
+  }
+  const history = getChatHistory();
+  history.push({ role: 'user', parts: [{ text: message }] });
+  const requestBody = {
+    systemInstruction: {
+      parts: [{ text: 'You are AIIENS Edu AI, a helpful study assistant for engineering students. Answer clearly, accurately, and concisely. Keep conversation context and help with explanations, quizzes, summaries, weak areas, mind maps, and notes.' }],
+    },
+    contents: history,
+    generationConfig: { maxOutputTokens: 900 },
+  };
+  let response;
+  try {
+    response = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify(requestBody),
+      },
+    );
+  } catch (error) {
+    // Do not retain a message Gemini never received; this keeps later context valid.
+    history.pop();
+    console.error('[CHAT] Gemini network error:', error);
+    throw error;
+  }
+  const raw = await response.text();
+  let payload = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (error) {
+    console.error('[CHAT] Gemini returned invalid JSON:', error, raw);
+  }
+  if (!response.ok) {
+    history.pop();
+    const error = new Error(payload?.error?.message || raw || `Gemini request failed (${response.status}).`);
+    error.status = response.status;
+    console.error('[CHAT] Gemini API error:', { status: response.status, statusText: response.statusText, payload });
+    throw error;
+  }
+  const answer = (payload.candidates?.[0]?.content?.parts || []).map(part => part.text || '').join('\n').trim();
+  if (!answer) {
+    history.pop();
+    const error = new Error(payload?.promptFeedback?.blockReason ? `Gemini blocked this request: ${payload.promptFeedback.blockReason}.` : 'Gemini returned an empty response.');
+    console.error('[CHAT] Gemini empty response:', payload);
+    throw error;
+  }
+  history.push({ role: 'model', parts: [{ text: answer }] });
+  // Keep context useful without allowing an unbounded browser-session payload.
+  if (history.length > 24) history.splice(0, history.length - 24);
+  return answer;
 }
 
 function quickChat(msg) {

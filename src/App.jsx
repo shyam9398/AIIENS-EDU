@@ -101,6 +101,9 @@ function AuthenticatedLegacyApp() {
     let cancelled = false;
 
     window.__AIMEASY_SUPABASE__ = supabase;
+    // legacy-app.js is executed as a classic injected script, so expose the
+    // Vite-resolved public Gemini key after the application has started.
+    window.__AIIENS_GEMINI_API_KEY__ = import.meta.env.VITE_GEMINI_API_KEY || '';
     installBackButtonFixes();
     installBrowserNavigation();
     const cleanupLegacyScripts = runLegacyScripts([

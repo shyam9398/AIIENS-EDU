@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const FRIENDLY_ERROR = "Sorry, I'm unable to answer right now. Please try again later.";
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
 function parseBody(req) {
@@ -162,18 +162,15 @@ export default async function handler(req, res) {
     }
     const requestBody = {
       contents: [{ role: 'user', parts: [{ text: buildPrompt(cleanMessage, context) }] }],
-      generationConfig: {
-        temperature: 0.45,
-        maxOutputTokens: 900,
-      },
+      generationConfig: { maxOutputTokens: 900 },
     };
     console.log('[CHAT] Gemini request start:', { model: MODEL, bodySize: JSON.stringify(requestBody).length });
     console.log('[CHAT] Gemini request body:', JSON.stringify(requestBody));
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(requestBody),
       },
     );
