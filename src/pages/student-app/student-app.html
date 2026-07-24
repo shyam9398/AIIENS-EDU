@@ -240,8 +240,10 @@
                 <div class="video-suggest-title">💡 Suggest a Video URL</div>
                 <div class="video-suggest-desc">Found a great educational video? Submit the URL for admin review.</div>
                 <div class="video-suggest-grid">
-                  <input class="video-suggest-input" id="suggest-title-input"
-                    placeholder="Topic Name" type="text">
+                  <input class="video-suggest-input" id="suggest-topic-input" list="suggest-topic-options"
+                    placeholder="Search and select a topic..." type="search" autocomplete="off" aria-label="Topic">
+                  <datalist id="suggest-topic-options"></datalist>
+                  <div id="suggest-topic-status" class="video-suggest-topic-status" aria-live="polite">Loading topics...</div>
                   <input class="video-suggest-input" id="suggest-url-input"
                     placeholder="Paste YouTube or educational URL here..." type="url">
                   <textarea class="video-suggest-input" id="suggest-desc-input" placeholder="Description (optional)" rows="2"></textarea>

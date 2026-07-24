@@ -1,0 +1,142 @@
+/* Final portal layout layer: keeps legacy visual styles from affecting labels. */
+:is(#admin-sidebar, #sa-sidebar, #cr-sidebar) .admin-nav-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  width: 100%;
+  min-height: 52px;
+  margin: 0 0 4px !important;
+  padding: 12px 16px !important;
+  position: relative !important;
+  text-align: left;
+}
+
+:is(#admin-sidebar, #sa-sidebar, #cr-sidebar) .admin-nav-item > .sidebar-item-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 24px !important;
+  width: 24px !important;
+  min-width: 24px !important;
+  height: 24px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  background-image: none !important;
+  filter: none !important;
+  font-size: 22px !important;
+  line-height: 1 !important;
+}
+
+:is(#admin-sidebar, #sa-sidebar, #cr-sidebar) .admin-nav-item > .sidebar-item-text {
+  display: block !important;
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  color: inherit !important;
+  background: none !important;
+  background-image: none !important;
+  filter: none !important;
+  font-size: 0.9rem !important;
+  line-height: 1.25 !important;
+  text-overflow: ellipsis;
+  text-shadow: none !important;
+  white-space: nowrap !important;
+}
+
+/* A badge is a third flex child, never an icon or an absolutely-positioned item. */
+#admin-sidebar .admin-nav-badge {
+  display: inline-flex !important;
+  position: static !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 auto !important;
+  width: 20px !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  margin: 0 0 0 auto !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background-image: none !important;
+  filter: none !important;
+  font-size: 0.68rem !important;
+  line-height: 1 !important;
+}
+
+/* Logout uses the same three-column row as every other portal item. */
+:is(#admin-sidebar, #sa-sidebar, #cr-sidebar) .admin-nav-item[onclick*="Logout"],
+:is(#admin-sidebar, #sa-sidebar, #cr-sidebar) .admin-nav-item[onclick*="logout"] {
+  gap: 16px !important;
+}
+
+/* Collapsing only hides text; icons retain their fixed 24px hit area. */
+:is(#admin-sidebar, #sa-sidebar, #cr-sidebar).collapsed .admin-nav-item {
+  justify-content: center !important;
+  gap: 0 !important;
+  padding-inline: 12px !important;
+}
+
+:is(#admin-sidebar, #sa-sidebar, #cr-sidebar).collapsed .sidebar-item-text,
+:is(#admin-sidebar, #sa-sidebar, #cr-sidebar).collapsed .admin-nav-badge {
+  display: none !important;
+}
+
+/* Cross-portal responsive foundation. It deliberately preserves content logic. */
+@media (max-width: 768px) {
+  .aiiens-global-header { padding-inline: 14px; }
+
+  :is(#screen-admin, #screen-subadmin, #screen-creator, #screen-app, #screen-live-workshops) {
+    width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+  }
+
+  :is(#screen-admin, #screen-subadmin, #screen-creator) .admin-content,
+  #screen-app .page-content,
+  #screen-live-workshops .live-workshop-content {
+    width: 100%;
+    min-width: 0;
+    padding: 16px;
+  }
+
+  :is(#screen-admin, #screen-subadmin, #screen-creator) .admin-topbar,
+  #screen-app .topbar,
+  #screen-live-workshops .live-workshop-topbar {
+    min-width: 0;
+    padding-inline: 16px;
+  }
+
+  :is(#screen-admin, #screen-subadmin, #screen-creator) .admin-content [style*="grid-template-columns"],
+  #screen-app .main [style*="grid-template-columns"],
+  #screen-live-workshops [style*="grid-template-columns"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  :is(#screen-admin, #screen-subadmin, #screen-creator, #screen-app, #screen-live-workshops) :is(.card, .admin-stat-card, .subject-card, .unit-card, .modal) {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  :is(#screen-admin, #screen-subadmin, #screen-creator, #screen-app, #screen-live-workshops) :is(table, iframe, video, img) {
+    max-width: 100%;
+  }
+
+  :is(#screen-admin, #screen-subadmin, #screen-creator, #screen-app, #screen-live-workshops) :is(.table-wrap, .admin-pending-list, .calc-table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  :is(#screen-admin, #screen-subadmin, #screen-creator) .admin-content,
+  #screen-app .page-content,
+  #screen-live-workshops .live-workshop-content { padding: 12px; }
+
+  :is(#screen-admin, #screen-subadmin, #screen-creator, #screen-app, #screen-live-workshops) .btn {
+    min-height: 42px;
+  }
+}

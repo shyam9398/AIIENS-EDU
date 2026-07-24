@@ -548,7 +548,10 @@ function patchVideoApproval() {
     const { data, error } = await supabase
       .from('student_url_suggestions')
       .select('status');
-    if (error) return counts;
+    if (error) {
+      console.error('[URL APPROVALS] Failed to load approval counts:', error);
+      return counts;
+    }
     (data || []).forEach((row) => {
       const status = normalizeStatus(row.status);
       if (counts[status] !== undefined) counts[status] += 1;
@@ -563,6 +566,7 @@ function patchVideoApproval() {
     const { data, error } = await supabase
       .from('student_url_suggestions')
       .select('id, status');
+    if (error) console.error('[URL APPROVALS] Failed to refresh pending badge:', error);
     const pending = error ? 0 : (data || []).filter((row) => normalizeStatus(row.status) === 'pending').length;
     badge.textContent = String(pending);
     badge.style.display = pending ? 'inline-flex' : 'none';
@@ -579,18 +583,27 @@ function patchVideoApproval() {
       return;
     }
 
-    let result = await supabase
+    // Return the table's real deployed columns only. `select('*')` avoids a
+    // failed approval queue when an older deployment lacks optional metadata
+    // such as title, subject_name, or relationship definitions.
+    const result = await supabase
       .from('student_url_suggestions')
-      .select('id, topic_name, url, description, status, created_at, student_id, subject_id, unit_id, topic_id, subject_name, unit_name, subjects(name, branch, regulation_code, university_name), units(title, sort_order), topics(topic_name)')
+      .select('*')
+      .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
     if (result.error) {
-      console.warn('[SUGGESTIONS] Approval load failed:', result.error.message || result.error);
+      console.error('[URL APPROVALS] Failed to load pending requests from student_url_suggestions:', {
+        message: result.error.message,
+        code: result.error.code,
+        details: result.error.details,
+        hint: result.error.hint,
+      });
       content.innerHTML = '<div class="empty-state-card">Unable to load pending URL requests from Supabase.</div>';
       return;
     }
 
-    const requests = (result.data || []).filter((request) => normalizeStatus(request.status) === 'pending');
+    const requests = result.data || [];
     const counts = await fetchSuggestionCounts(supabase);
     await updateApprovalBadge();
 
@@ -621,23 +634,17 @@ function patchVideoApproval() {
             const student = request.student_name || request.student_id || 'Student';
             return `<div class="approval-card approval-pending">
               <div class="approval-card-top">
-                <div class="approval-card-title">
-                  <span>Topic</span>
-                  <h3>${esc(topic)}</h3>
-                </div>
+                <div class="approval-card-title"><span>Pending video suggestion</span><h3>${esc(topic)}</h3></div>
                 <span class="badge badge-amber">${esc(request.status || 'pending')}</span>
               </div>
               <div class="approval-detail-grid approval-meta-grid">
+                <div><span>Student Name</span><strong>${esc(student)}</strong></div>
                 <div><span>Subject</span><strong>${esc(subjectName)}</strong></div>
                 <div><span>Unit</span><strong>${esc(unitName)}</strong></div>
-                <div><span>Branch</span><strong>${esc(branch)}</strong></div>
-                <div><span>Regulation</span><strong>${esc(regulation)}</strong></div>
-                <div><span>University</span><strong>${esc(university)}</strong></div>
-                <div><span>Student</span><strong>${esc(student)}</strong></div>
-                <div><span>Submitted Time</span><strong>${esc(formatSubmittedAt(request.created_at))}</strong></div>
-                <div><span>Status</span><strong>${esc(request.status || 'pending')}</strong></div>
+                <div><span>Topic</span><strong>${esc(topic)}</strong></div>
+                <div><span>Submitted Date</span><strong>${esc(formatSubmittedAt(request.created_at))}</strong></div>
               </div>
-              ${request.description ? `<p class="approval-description">${esc(request.description)}</p>` : ''}
+              <p class="approval-description"><strong>Description</strong><br>${esc(request.description || 'No description provided.')}</p>
               <div class="approval-url-row ${valid ? '' : 'invalid'}">
                 <span class="approval-url-label">Suggested URL</span>
                 ${valid
@@ -645,8 +652,8 @@ function patchVideoApproval() {
                   : `<span class="approval-url-text invalid">Invalid URL: ${esc(url || '-')}</span>`}
               </div>
               <div class="approval-actions">
-                <button class="icon-action-btn approval-icon-approve" onclick="adminApproveUrl('${esc(request.id)}')" title="Approve" aria-label="Approve URL">&#10003;</button>
-                <button class="icon-action-btn danger approval-icon-reject" onclick="adminRejectUrl('${esc(request.id)}')" title="Reject" aria-label="Reject URL">&times;</button>
+                <button class="btn btn-primary btn-sm" data-suggestion-action="${esc(request.id)}" onclick="adminApproveUrl('${esc(request.id)}')">Approve</button>
+                <button class="btn btn-danger btn-sm" data-suggestion-action="${esc(request.id)}" onclick="adminRejectUrl('${esc(request.id)}')">Reject</button>
               </div>
             </div>`;
           }).join('') : '<div class="empty-state-card">No pending URL requests.</div>'}
@@ -710,47 +717,15 @@ function patchVideoApproval() {
     const supabase = sb();
     if (!supabase) return;
     const suggestionId = String(idOrIndex);
-    const { data: suggestion, error: fetchErr } = await supabase
-      .from('student_url_suggestions')
-      .select('id, topic_id, url, description, topic_name')
-      .eq('id', suggestionId)
-      .maybeSingle();
-    if (fetchErr || !suggestion) {
-      window.showToast?.('Suggestion not found', 'red');
-      return;
-    }
-
-    const authUser = supabase.auth?.getUser ? (await supabase.auth.getUser())?.data?.user : null;
-    const { error: updateErr } = await supabase
-      .from('student_url_suggestions')
-      .update({
-        status: 'approved',
-        approved_by: authUser?.id || null,
-        approved_at: new Date().toISOString(),
-      })
-      .eq('id', suggestionId);
-    if (updateErr) {
-      window.showToast?.('Approval failed: ' + updateErr.message, 'red');
-      return;
-    }
-
-    const { data: existingVideos } = await supabase
-      .from('topic_videos')
-      .select('display_order')
-      .eq('topic_id', suggestion.topic_id)
-      .order('display_order', { ascending: false })
-      .limit(1);
-    const nextOrder = (existingVideos?.[0]?.display_order ?? -1) + 1;
-
-    const { error: videoErr } = await supabase.from('topic_videos').insert({
-      topic_id: suggestion.topic_id,
-      sub_topic_name: suggestion.topic_name || 'Student Suggested Video',
-      video_url: suggestion.url,
-      description: suggestion.description || 'Approved student suggestion',
-      display_order: nextOrder,
+    document.querySelectorAll(`[data-suggestion-action="${suggestionId}"]`).forEach((button) => { button.disabled = true; });
+    const { error: approveErr } = await supabase.rpc('approve_student_url_suggestion', {
+      suggestion_id: suggestionId,
     });
-    if (videoErr) {
-      console.warn('[APPROVE] topic_videos insert:', videoErr.message);
+    if (approveErr) {
+      console.error('[URL APPROVALS] Approval and permanent video save failed:', approveErr);
+      window.showToast?.('Approval failed: ' + approveErr.message, 'red');
+      document.querySelectorAll(`[data-suggestion-action="${suggestionId}"]`).forEach((button) => { button.disabled = false; });
+      return;
     }
 
     await window.renderApprovalLinksProduction?.(
@@ -760,12 +735,14 @@ function patchVideoApproval() {
     if (document.querySelector('.screen.active')?.id === 'screen-app' && window.APP?.currentSubject && window.APP?.currentUnit) {
       window.renderVideoList?.(window.APP.currentSubject.id || window.APP.currentSubject.rawId, window.APP.currentUnit);
     }
-    window.showToast?.('URL approved and published under topic', 'green');
+    window.showToast?.('URL approved and permanently added under its topic.', 'green');
   };
 
   window.adminRejectUrl = async function adminRejectUrlSupabaseOnly(idOrIndex) {
     const supabase = sb();
     if (!supabase) return;
+    const suggestionId = String(idOrIndex);
+    document.querySelectorAll(`[data-suggestion-action="${suggestionId}"]`).forEach((button) => { button.disabled = true; });
     const { error } = await supabase
       .from('student_url_suggestions')
       .update({
@@ -773,9 +750,11 @@ function patchVideoApproval() {
         approved_by: null,
         approved_at: null,
       })
-      .eq('id', String(idOrIndex));
+      .eq('id', suggestionId);
     if (error) {
+      console.error('[URL APPROVALS] Reject failed:', error);
       window.showToast?.('Reject failed: ' + error.message, 'red');
+      document.querySelectorAll(`[data-suggestion-action="${suggestionId}"]`).forEach((button) => { button.disabled = false; });
       return;
     }
     await window.renderApprovalLinksProduction?.(
@@ -789,6 +768,76 @@ function patchVideoApproval() {
 }
 
 function patchVideoSuggestionSubmit() {
+  let suggestionTopics = [];
+  let topicLoadPromise = null;
+
+  const topicLabel = (topic) => `${topic.subject_name} → ${topic.unit_name} → ${topic.topic_name}`;
+
+  async function loadSuggestionTopics(force = false) {
+    if (suggestionTopics.length && !force) return suggestionTopics;
+    if (topicLoadPromise && !force) return topicLoadPromise;
+    const supabase = sb();
+    const status = document.getElementById('suggest-topic-status');
+    const options = document.getElementById('suggest-topic-options');
+    if (!supabase) {
+      if (status) status.textContent = 'Topics are unavailable until Supabase connects.';
+      return [];
+    }
+    if (status) status.textContent = 'Loading topics...';
+    topicLoadPromise = (async () => {
+      const [topicsResult, unitsResult, subjectsResult] = await Promise.all([
+        supabase.from('topics').select('id, subject_id, unit_id, topic_name, display_order').order('display_order'),
+        supabase.from('units').select('id, subject_id, title, sort_order').order('sort_order'),
+        supabase.from('subjects').select('id, name').order('name'),
+      ]);
+      const error = topicsResult.error || unitsResult.error || subjectsResult.error;
+      if (error) {
+        console.error('[SUGGESTIONS] Failed to load topics:', error);
+        if (status) status.textContent = 'Could not load topics. Please try again.';
+        return [];
+      }
+      const units = new Map((unitsResult.data || []).map((unit) => [unit.id, unit]));
+      const subjects = new Map((subjectsResult.data || []).map((subject) => [subject.id, subject]));
+      suggestionTopics = (topicsResult.data || []).map((topic) => {
+        const unit = units.get(topic.unit_id);
+        const subject = subjects.get(topic.subject_id || unit?.subject_id);
+        return {
+          id: topic.id,
+          topic_name: topic.topic_name,
+          unit_id: topic.unit_id,
+          unit_name: unit?.title || 'Untitled unit',
+          subject_id: topic.subject_id || unit?.subject_id,
+          subject_name: subject?.name || 'Untitled subject',
+        };
+      }).filter((topic) => topic.id && topic.subject_id && topic.unit_id);
+      if (options) options.innerHTML = suggestionTopics.map((topic) => `<option value="${esc(topicLabel(topic))}"></option>`).join('');
+      if (status) status.textContent = suggestionTopics.length
+        ? `${suggestionTopics.length} topics available. Search by subject, unit, or topic.`
+        : 'No topics are available yet.';
+      return suggestionTopics;
+    })();
+    try {
+      return await topicLoadPromise;
+    } finally {
+      topicLoadPromise = null;
+    }
+  }
+
+  window.aiiensLoadSuggestionTopics = loadSuggestionTopics;
+  document.addEventListener('focusin', (event) => {
+    if (event.target?.id === 'suggest-topic-input') loadSuggestionTopics();
+  });
+  document.addEventListener('input', (event) => {
+    if (event.target?.id === 'suggest-topic-input') delete event.target.dataset.topicId;
+  });
+  document.addEventListener('change', (event) => {
+    const input = event.target;
+    if (input?.id !== 'suggest-topic-input') return;
+    const selected = suggestionTopics.find((topic) => topicLabel(topic) === input.value);
+    if (selected) input.dataset.topicId = selected.id;
+  });
+  window.setTimeout(() => loadSuggestionTopics(), 0);
+
   window.renderPendingUrls = async function renderPendingUrlsSupabaseOnly() {
     const list = document.getElementById('suggest-pending-list');
     if (!list) return;
@@ -841,7 +890,7 @@ function patchVideoSuggestionSubmit() {
 
   window.submitVideoSuggestion = async function submitVideoSuggestionWithMeta() {
     const supabase = sb();
-    const titleInput = document.getElementById('suggest-title-input');
+    const topicInput = document.getElementById('suggest-topic-input');
     const urlInput = document.getElementById('suggest-url-input');
     const url = urlInput?.value.trim();
     if (!url) {
@@ -856,47 +905,52 @@ function patchVideoSuggestionSubmit() {
     }
     if (!supabase) return;
 
-    const user = window.APP?.user || {};
-    const currentItem = window.APP?._videoItems?.[window.APP.currentVideoIndex];
-    const subject = window.APP?.currentSubject;
-    const unitNum = window.APP?.currentUnit || 1;
-    if (!subject || !currentItem?.topicId) {
-      window.showToast?.('Open a roadmap topic before suggesting a URL.', 'red');
-      return;
-    }
-
-    const roadmap = await window.aimeasyFetchUnitRoadmap?.({
-      subject,
-      unit: { id: unitNum, name: `Unit ${unitNum}` },
-    });
-    const subjectId = roadmap?.data?.subjectId;
-    const unitId = roadmap?.data?.unitId;
-    const topicId = currentItem.topicId || currentItem.id;
-    const topicName = titleInput?.value.trim() || currentItem.title || currentItem.topicName || 'Suggested Topic';
-    if (!subjectId || !unitId || !topicId) {
-      window.showToast?.('Unable to map this suggestion to the current unit/topic.', 'red');
+    const topics = await loadSuggestionTopics();
+    const selectedTopic = topics.find((topic) => topic.id === topicInput?.dataset.topicId)
+      || topics.find((topic) => topicLabel(topic) === topicInput?.value.trim());
+    if (!selectedTopic) {
+      window.showToast?.('Search for and select a topic from the list.', 'red');
       return;
     }
 
     const authUser = supabase.auth?.getUser ? (await supabase.auth.getUser())?.data?.user : null;
+    if (!authUser?.id) {
+      console.error('[URL APPROVALS] URL submission blocked: no authenticated student session.');
+      window.showToast?.('Please sign in again before submitting a URL.', 'red');
+      return;
+    }
+    const { data: profile } = await supabase.from('profiles').select('full_name, name').eq('id', authUser.id).maybeSingle();
+    const appUser = window.APP?.user || {};
+    const studentName = profile?.full_name || profile?.name || appUser.full_name || appUser.name || authUser.user_metadata?.full_name || authUser.email || 'Student';
     const payload = {
-      student_id: authUser?.id || user.id || user.googleId || null,
-      subject_id: subjectId,
-      unit_id: unitId,
-      topic_id: topicId,
-      subject_name: subject.name || subject.title || '',
-      unit_name: roadmap?.data?.unitName || `Unit ${unitNum}`,
-      topic_name: topicName,
+      student_id: authUser.id,
+      student_name: studentName,
+      subject_id: selectedTopic.subject_id,
+      unit_id: selectedTopic.unit_id,
+      topic_id: selectedTopic.id,
+      subject_name: selectedTopic.subject_name,
+      unit_name: selectedTopic.unit_name,
+      topic_name: selectedTopic.topic_name,
+      title: selectedTopic.topic_name,
       url,
       description: document.getElementById('suggest-desc-input')?.value.trim() || '',
       status: 'pending',
     };
-    let { error } = await supabase.from('student_url_suggestions').insert(payload);
+    const { data, error } = await supabase.from('student_url_suggestions').insert(payload).select('id, status').single();
     if (error) {
+      console.error('[URL APPROVALS] Student URL insert failed:', { error, payload });
       window.showToast?.('Suggestion save failed: ' + error.message, 'red');
       return;
     }
-    if (titleInput) titleInput.value = '';
+    if (data?.status !== 'pending') {
+      console.error('[URL APPROVALS] Insert returned an unexpected status:', data);
+      window.showToast?.('Suggestion was not saved as pending. Please try again.', 'red');
+      return;
+    }
+    if (topicInput) {
+      topicInput.value = '';
+      delete topicInput.dataset.topicId;
+    }
     if (urlInput) urlInput.value = '';
     document.getElementById('suggest-desc-input') && (document.getElementById('suggest-desc-input').value = '');
     await window.renderPendingUrls?.();
@@ -1381,6 +1435,14 @@ function setupRealtimeChannels() {
       if (activeScreen === 'screen-subadmin' && ['urls', 'approvals', 'url-approvals'].includes(subadminSection)) {
         await window.renderApprovalLinksProduction?.('subadmin');
       }
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'topic_videos' }, async (payload) => {
+      // An approved suggestion is inserted here by the approval RPC. Refresh an
+      // open student topic so the new video is visible without a page reload.
+      if (document.querySelector('.screen.active')?.id !== 'screen-app' || !window.APP?.currentSubject || !window.APP?.currentUnit) return;
+      const currentTopic = window.APP?._videoItems?.[window.APP.currentVideoIndex]?.topicId;
+      if (!currentTopic || currentTopic !== payload?.new?.topic_id) return;
+      await window.renderVideoList?.(window.APP.currentSubject.id || window.APP.currentSubject.rawId, window.APP.currentUnit);
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'regulations' }, () => {
       window.aimeasyRefreshRegulationUI?.();
