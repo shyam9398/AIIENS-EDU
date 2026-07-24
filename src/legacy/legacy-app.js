@@ -1703,7 +1703,7 @@ function migrateCalcState() {
     if (!JNTUK_SEMESTERS.includes(sem.semKey) || seen.has(sem.semKey)) return false;
     seen.add(sem.semKey);
     return true;
-  }).sort((a, b) => JNTUK_SEMESTERS.indexOf(a.semKey) - JNTUK_SEMESTERS.indexOf(b.semKey));
+  });
 
   if (APP.currentSemId) {
     const current = APP.calcSemesters.find(s => s.id === APP.currentSemId);
@@ -1714,6 +1714,21 @@ function migrateCalcState() {
 function getNextCalcSemesterKey() {
   const existing = new Set((APP.calcSemesters || []).map(s => s.semKey || normalizeCalcSemLabel(s.label)));
   return JNTUK_SEMESTERS.find(sem => !existing.has(sem)) || null;
+}
+
+async function getNextCalcSemesterKeyFromSupabase() {
+  const supabase = window.__AIMEASY_SUPABASE__;
+  const userId = await studentSupabaseUserId();
+  if (!supabase || !userId) return null;
+  verifyStudentSupabaseAccess('student_cgpa_results', ['user_id', 'calculator_data'], 'Calculator semester lookup');
+  const { data, error } = await supabase.from('student_cgpa_results')
+    .select('calculator_data')
+    .eq('user_id', userId)
+    .limit(1);
+  if (error) throw error;
+  const semesters = data?.[0]?.calculator_data?.semesters || [];
+  const existing = new Set(semesters.map(sem => normalizeCalcSemLabel(sem.semKey || sem.label)));
+  return JNTUK_SEMESTERS.find(semester => !existing.has(semester)) || null;
 }
 
 function ensurePrecedingCalcSemesters() {
@@ -2046,7 +2061,7 @@ const AIIENS_EXISTING_SUPABASE_SCHEMA = {
     'unit_name', 'topic_name', 'title', 'url', 'description', 'status',
     'created_at', 'approved_by', 'approved_at',
   ]),
-  student_cgpa: new Set(['id', 'student_id', 'semester', 'semester_key', 'sgpa', 'cgpa', 'percentage', 'payload', 'calculated_at']),
+  student_cgpa_results: new Set(['user_id', 'semester_key', 'calculator_data', 'latest_sgpa', 'cgpa', 'created_at', 'updated_at']),
   // These two tables already exist in the deployed project. Keep this list
   // aligned to their deployed columns rather than the retired browser shape.
   student_progress: new Set(['id', 'student_id', 'subject_id', 'unit_id', 'topic_id', 'completed', 'created_at']),
@@ -2283,74 +2298,87 @@ function normalizeCgpaPayload(row = {}) {
 
 async function loadCalcState() {
   const supabase = window.__AIMEASY_SUPABASE__;
-  const id = await studentSupabaseUserId();
-  if (!supabase || !id) return false;
+  const userId = await studentSupabaseUserId();
+  if (!supabase || !userId) return false;
   try {
-    verifyStudentSupabaseAccess('student_cgpa', [], 'CGPA load');
-    const { data, error } = await studentTableRequest('student_cgpa', [], (table) =>
-      table.select('id,student_id,semester,semester_key,sgpa,cgpa,percentage,payload,calculated_at')
-        .eq('student_id', id)
-        .order('calculated_at', { ascending: false })
+    verifyStudentSupabaseAccess('student_cgpa_results', [], 'Calculator load');
+    const { data, error } = await studentTableRequest('student_cgpa_results', [], (table) =>
+      table.select('user_id,semester_key,calculator_data,latest_sgpa,cgpa,created_at,updated_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true })
         .limit(1)
-    , 'CGPA load');
+    , 'Calculator load');
     if (error) throw error;
-    const row = data?.[0] || null;
-    const parsed = normalizeCgpaPayload(row || {});
-    if (parsed.calcSemesters.length) {
-      APP.calcSemesters = parsed.calcSemesters;
-      APP.currentSemId = parsed.currentSemId || parsed.calcSemesters[0].id;
-      migrateCalcState();
-      return true;
-    }
+    const calculatorData = data?.[0]?.calculator_data || {};
+    APP.calcSemesters = (calculatorData.semesters || []).map((semester) => {
+      const semKey = normalizeCalcSemLabel(semester.semKey || semester.label);
+      return {
+        ...makeCalcSemester(semKey),
+        ...semester,
+        id: 'sem-' + semKey,
+        semKey,
+        label: semKey,
+        rows: (semester.rows || semester.subjects || []).map(normalizeCalcRow),
+        sgpa: semester.sgpa === null || semester.sgpa === undefined ? null : Number(semester.sgpa),
+        credits: Number(semester.credits || 0),
+      };
+    });
+    APP.currentSemId = calculatorData.currentSemId || APP.calcSemesters[0]?.id || '';
+    migrateCalcState();
+    return true;
   } catch (error) {
-    reportSupabaseSchemaGap('CGPA load skipped', error?.message || String(error));
+    reportSupabaseSchemaGap('Calculator load skipped', error?.message || String(error));
   }
   return false;
 }
 
 let calcStateSaveQueue = Promise.resolve();
+let calcSemesterCreateInProgress = false;
 
 async function saveCalcStateNow() {
   const supabase = window.__AIMEASY_SUPABASE__;
-  const id = await studentSupabaseUserId();
-  if (!supabase || !id) return;
+  const userId = await studentSupabaseUserId();
+  if (!supabase || !userId) return false;
   const semesters = APP.calcSemesters || [];
+  const current = semesters.find(s => s.id === APP.currentSemId);
+  if (!current) return false;
   const calcdSems = semesters.filter(s => s.sgpa !== null && s.sgpa !== undefined && Number(s.credits || 0) > 0);
-  const latest = semesters.find(s => s.id === APP.currentSemId) || calcdSems[calcdSems.length - 1] || semesters[0] || {};
-  const cgpa = calcdSems.length ? Number(calculateWeightedCgpa(calcdSems).toFixed(2)) : Number(latest.sgpa || 0);
-  const sgpa = Number(latest.sgpa || 0);
-  const percentage = Number(Math.max(0, Math.min(100, (cgpa - 0.75) * 10)).toFixed(2));
-  const payload = { currentSemId: APP.currentSemId || null, semesters };
+  const cgpa = calcdSems.length ? Number(calculateWeightedCgpa(calcdSems).toFixed(2)) : Number(current.sgpa || 0);
+  const sgpa = Number(current.sgpa || 0);
+  const calculatorData = {
+    currentSemId: APP.currentSemId || null,
+    semesters: semesters.map(semester => ({
+      semKey: semester.semKey,
+      label: semester.label,
+      rows: (semester.rows || []).map(normalizeCalcRow),
+      sgpa: semester.sgpa,
+      credits: Number(semester.credits || 0),
+    })),
+  };
   try {
-    verifyStudentSupabaseAccess('student_cgpa', ['student_id', 'semester_key', 'sgpa', 'cgpa', 'percentage', 'payload', 'calculated_at'], 'CGPA save');
+    verifyStudentSupabaseAccess('student_cgpa_results', ['user_id', 'semester_key', 'calculator_data', 'latest_sgpa', 'cgpa', 'updated_at'], 'Calculator save');
     const row = {
-      student_id: id,
-      semester: latest.semKey || normalizeCalcSemLabel(latest.label),
-      semester_key: latest.semKey || normalizeCalcSemLabel(latest.label),
-      sgpa,
+      semester_key: current.semKey || normalizeCalcSemLabel(current.label),
+      calculator_data: calculatorData,
+      latest_sgpa: sgpa,
       cgpa,
-      percentage,
-      payload,
-      calculated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
-    const { data: existing, error: lookupError } = await supabase
-      .from('student_cgpa')
-      .select('id')
-      .eq('student_id', id)
-      .order('calculated_at', { ascending: false })
+    const { data: existing, error: lookupError } = await supabase.from('student_cgpa_results')
+      .select('user_id')
+      .eq('user_id', userId)
       .limit(1);
     if (lookupError) throw lookupError;
-    const latestId = existing?.[0]?.id;
-    const { error } = latestId
-      ? await supabase.from('student_cgpa').update(row).eq('id', latestId).eq('student_id', id)
-      : await supabase.from('student_cgpa').insert(row);
+    const { error } = existing?.length
+      ? await supabase.from('student_cgpa_results').update(row).eq('user_id', userId)
+      : await supabase.from('student_cgpa_results').insert({ ...row, user_id: userId, created_at: new Date().toISOString() });
     if (error) throw error;
-    // The calculator record retains the full semester/subject payload; the
-    // dashboard record intentionally receives only the summary metrics.
     await window.aiiensProgressService?.track?.('gpa_calculated', { cgpa, sgpa });
+    return true;
   } catch (error) {
-    reportSupabaseSchemaGap('CGPA save skipped', error?.message || String(error));
+    reportSupabaseSchemaGap('Calculator save skipped', error?.message || String(error));
     window.aiiensProgressService?.track?.('gpa_calculated', { cgpa, sgpa });
+    return false;
   }
 }
 
@@ -2438,6 +2466,19 @@ function isPublishedSubject(row) {
   return !['inactive', 'deleted', 'draft', 'unpublished'].includes(status);
 }
 
+function calcFilterValue(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function subjectMatchesCalcProfile(subject, filters) {
+  // Keep this client-side guard even when the database query is filtered. It
+  // prevents a broad upstream fetch from ever showing another branch's papers.
+  if (!filters.branch || calcFilterValue(subject.branch) !== calcFilterValue(filters.branch)) return false;
+  if (filters.regulation_code && calcFilterValue(subject.regulation_code) !== calcFilterValue(filters.regulation_code)) return false;
+  if (filters.university_name && calcFilterValue(subject.university_name) !== calcFilterValue(filters.university_name)) return false;
+  return calcFilterValue(subject.semester) === calcFilterValue(filters.semester);
+}
+
 async function loadSubjectsForCurrentSemester() {
   const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
   const tbody = document.getElementById('calc-tbody');
@@ -2447,11 +2488,15 @@ async function loadSubjectsForCurrentSemester() {
   let autoRows = [];
   try {
     const filters = await getCalcProfileFilters();
-    if (window.aimeasyFetchSubjects) {
+    // A missing branch must produce an empty semester, never an unfiltered
+    // catalog that could expose subjects belonging to other branches.
+    if (!filters.branch) {
+      console.warn('[Calculator] Subject load skipped: student branch is unavailable.');
+    } else if (window.aimeasyFetchSubjects) {
       const { data, error } = await window.aimeasyFetchSubjects(filters);
       if (error) throw error;
       const gradeByDbId = new Map((sem.rows || []).filter(row => row.dbId).map(row => [String(row.dbId), row.grade]));
-      autoRows = (data || []).filter(isPublishedSubject).map(subject => ({
+      autoRows = (data || []).filter(subject => isPublishedSubject(subject) && subjectMatchesCalcProfile(subject, filters)).map(subject => ({
         name: subject.name,
         credits: String(subject.credits || '0'),
         grade: gradeByDbId.get(String(subject.id)) || 'A',
@@ -2467,7 +2512,7 @@ async function loadSubjectsForCurrentSemester() {
       const { data, error } = await query.order('name', { ascending: true });
       if (error) throw error;
       const gradeByDbId = new Map((sem.rows || []).filter(row => row.dbId).map(row => [String(row.dbId), row.grade]));
-      autoRows = (data || []).filter(isPublishedSubject).map(subject => ({
+      autoRows = (data || []).filter(subject => isPublishedSubject(subject) && subjectMatchesCalcProfile(subject, filters)).map(subject => ({
         name: subject.name,
         credits: String(subject.credits || '0'),
         grade: gradeByDbId.get(String(subject.id)) || 'A',
@@ -2483,7 +2528,7 @@ async function loadSubjectsForCurrentSemester() {
   tbody.innerHTML = '';
   APP.calcRows = [];
   if (!sem.rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:1.3rem;">No published subjects found for this semester. Use Add Custom Subject for additional papers.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:1.3rem;">No subjects found for this semester.</td></tr>';
   } else {
     sem.rows.forEach(row => addCalcRow(row));
   }
@@ -2519,10 +2564,25 @@ async function initCalc() {
 }
 
 async function addSemester() {
-  const nextSem = getNextCalcSemesterKey();
+  if (calcSemesterCreateInProgress) return;
+  calcSemesterCreateInProgress = true;
+  const addButton = document.getElementById('calc-add-semester-btn');
+  if (addButton) addButton.disabled = true;
+  let nextSem;
+  try {
+    // This query is the source of truth, including after refresh or a login on
+    // another device. Do not derive the next label from browser state.
+    nextSem = await getNextCalcSemesterKeyFromSupabase();
+  } catch (error) {
+    studentStorageError('Calculator semester lookup', error, 'Unable to add semester');
+    calcSemesterCreateInProgress = false;
+    updateAddSemesterState();
+    return;
+  }
   if (!nextSem) {
     updateAddSemesterState();
     showToast('All semesters have already been added.', 'blue');
+    calcSemesterCreateInProgress = false;
     return;
   }
   saveCurrentSemRows();
@@ -2533,16 +2593,55 @@ async function addSemester() {
   APP.calcRows = [];
   renderSemTabs();
   renderCalcSemTitle();
-  await saveCalcState();
+  // The calculator is a single user record. Saving this new array creates the
+  // record on first use and persists the new semester immediately thereafter.
+  const saved = await saveCalcState();
+  if (!saved) {
+    APP.calcSemesters = APP.calcSemesters.filter(item => item.id !== sem.id);
+    APP.currentSemId = APP.calcSemesters[0]?.id || '';
+    renderCalcEmptyState();
+    showToast('Unable to save semester. Please try again.', 'red');
+    calcSemesterCreateInProgress = false;
+    updateAddSemesterState();
+    return;
+  }
+  // Confirm the persisted record before rendering it. This also makes the
+  // newly added semester available immediately after a second-device update.
+  await loadCalcState();
+  APP.currentSemId = APP.calcSemesters.find(item => item.semKey === nextSem)?.id || APP.currentSemId;
+  renderSemTabs();
+  renderCalcSemTitle();
   await loadSubjectsForCurrentSemester();
   showToast('Semester ' + nextSem + ' added!', 'green');
+  calcSemesterCreateInProgress = false;
+  updateAddSemesterState();
 }
 
 async function removeCalcSemester(semId) {
   const semester = APP.calcSemesters.find((item) => item.id === semId);
   if (!semester) return;
+  const priorSemesters = APP.calcSemesters;
+  const priorCurrentSemId = APP.currentSemId;
   APP.calcSemesters = APP.calcSemesters.filter((item) => item.id !== semId);
   APP.currentSemId = APP.calcSemesters[0]?.id || '';
+  if (APP.calcSemesters.length && !(await saveCalcState())) {
+    APP.calcSemesters = priorSemesters;
+    APP.currentSemId = priorCurrentSemId;
+    studentStorageError('Calculator semester delete', new Error('Supabase update failed'), 'Unable to remove semester');
+    return;
+  }
+  if (!APP.calcSemesters.length) {
+    const userId = await studentSupabaseUserId();
+    const { error } = await window.__AIMEASY_SUPABASE__.from('student_cgpa_results')
+      .update({ semester_key: '', calculator_data: { semesters: [], currentSemId: null }, latest_sgpa: 0, cgpa: 0, updated_at: new Date().toISOString() })
+      .eq('user_id', userId);
+    if (error) {
+      APP.calcSemesters = priorSemesters;
+      APP.currentSemId = priorCurrentSemId;
+      studentStorageError('Calculator semester delete', error, 'Unable to remove semester');
+      return;
+    }
+  }
   document.getElementById('calc-tbody').innerHTML = '';
   APP.calcRows = [];
   if (!APP.calcSemesters.length) {
@@ -2555,7 +2654,7 @@ async function removeCalcSemester(semId) {
     else await loadSubjectsForCurrentSemester();
     calculateGPA({ silent: true });
   }
-  await Promise.all([saveCalcState(), syncBacklogFromCalcSemesters()]);
+  await syncBacklogFromCalcSemesters();
   showToast(`Semester ${semester.label} removed.`, 'blue');
 }
 
@@ -2598,7 +2697,7 @@ function renderCalcEmptyState() {
   const tbody = document.getElementById('calc-tbody');
   if (tabs) tabs.innerHTML = '';
   renderCalcSemTitle();
-  if (tbody) tbody.innerHTML = '<tr class="calc-empty-row"><td colspan="5"><div class="calc-empty-state">No semesters added yet</div></td></tr>';
+  if (tbody) tbody.innerHTML = '<tr class="calc-empty-row"><td colspan="5"><div class="calc-empty-state"><span>No semesters added yet</span><button class="btn btn-teal" type="button" onclick="addSemester()">+ Add Semester</button></div></td></tr>';
   document.getElementById('sgpa-result').textContent = '–';
   document.getElementById('cgpa-result').textContent = '–';
   document.getElementById('sgpa-grade').textContent = 'Add a semester to begin';
@@ -2674,21 +2773,23 @@ async function clearCalc() {
 }
 
 async function renderCalc() {
+  // The database is always re-read when the Calculator page is opened. This
+  // prevents a prior login/session's in-memory state from being displayed.
+  await loadCalcState();
   if (!APP.calcSemesters.length) {
-    await initCalc();
-    if (!APP.calcSemesters.length) renderCalcEmptyState();
+    renderCalcEmptyState();
+    updateAddSemesterState();
+    return;
   }
-  else {
-    migrateCalcState();
-    renderSemTabs();
-    renderCalcSemTitle();
-    if (!document.getElementById('calc-tbody').children.length) {
-      const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
-      if (sem?.rows?.length) renderCalcRowsForSemester(sem);
-      else await loadSubjectsForCurrentSemester();
-    }
-    calculateGPA({ silent: true });
-  }
+  migrateCalcState();
+  renderSemTabs();
+  renderCalcSemTitle();
+  const tbody = document.getElementById('calc-tbody');
+  if (tbody) tbody.innerHTML = '';
+  const sem = APP.calcSemesters.find(s => s.id === APP.currentSemId);
+  if (sem?.rows?.length) renderCalcRowsForSemester(sem);
+  else await loadSubjectsForCurrentSemester();
+  calculateGPA({ silent: true });
   updateAddSemesterState();
 }
 
@@ -2762,9 +2863,13 @@ function calculateGPA(options = {}) {
     if (!options.silent) showToast(`${failedThisSem.length} backlog subject(s) detected!`, 'red');
   } else {
     document.getElementById('backlog-warn').style.display = 'none';
-    if (!options.silent) showToast(`SGPA: ${sgpa} - Great work!`, 'green');
   }
-  saveCalcState();
+  const persisted = saveCalcState();
+  if (!options.silent) {
+    persisted.then((saved) => {
+      if (saved) showToast('Calculator data saved successfully.', 'green');
+    });
+  }
 }
 
 async function renderStudentSkillUpPage() {
@@ -13510,6 +13615,13 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
         })
         .subscribe?.();
     }
+    if (!window.__aiiensStudentBacklogChannel) {
+      window.__aiiensStudentBacklogChannel = supabase.channel(`student-dashboard-backlogs-${id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'student_backlog_subjects', filter: `student_id=eq.${id}` }, () => {
+          if (document.getElementById('page-dashboard')?.style.display !== 'none') loadDashboardSupabaseData();
+        })
+        .subscribe?.();
+    }
     subscribeLiveWorkshopUpdates();
     renderStudentDashboardWorkshopCarousel();
     let progress = null;
@@ -13528,7 +13640,18 @@ window.aimSendCurriculumForReview = async function aimSendCurriculumForReview(cu
     const cgpaEl = document.querySelector('#page-dashboard .metric-card.blue .metric-val');
     const cgpaTrend = document.querySelector('#page-dashboard .metric-card.blue .metric-trend');
     if (cgpaEl) cgpaEl.textContent = clampNumber(progress.cgpa).toFixed(2);
-    if (cgpaTrend) cgpaTrend.textContent = `${clampNumber(progress.sgpa).toFixed(2)} latest SGPA`;
+    let backlogCount = 0;
+    try {
+      const { count, error } = await supabase
+        .from('student_backlog_subjects')
+        .select('id', { count: 'exact', head: true })
+        .eq('student_id', id);
+      if (error) throw error;
+      backlogCount = Number(count || 0);
+    } catch (error) {
+      console.warn('[DASHBOARD] Backlog count load failed:', error?.message || error);
+    }
+    if (cgpaTrend) cgpaTrend.innerHTML = `${clampNumber(progress.sgpa).toFixed(2)} latest SGPA <span style="margin-left:6px;font-size:.72rem;color:var(--text3);">Backlogs: ${backlogCount}</span>`;
 
     const progressEl = document.querySelector('#page-dashboard .metric-card.teal .metric-val');
     const progressTrend = document.querySelector('#page-dashboard .metric-card.teal .metric-trend');

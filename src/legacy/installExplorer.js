@@ -107,12 +107,14 @@ export function installExplorer() {
     const root = document.getElementById('cr-content');
     if (!root) return;
     root.innerHTML = `<div class="admin-section-head" style="margin-bottom:1rem;"><div><h2>Explorer</h2><p>Publish opportunities for students.</p></div><button class="btn btn-primary" onclick="renderCreatorExplorer({})">Create opportunity</button></div>${editing !== null ? creatorExplorerForm(editing) : ''}<div id="creator-explorer-list" class="subject-grid">Loading…</div>`;
+    // Bind directly to the rendered form before awaiting the list request.
+    // This guarantees that submit currentTarget is the HTMLFormElement.
+    document.getElementById('explorer-post-form')?.addEventListener('submit', saveExplorerPost);
     try {
       const posts = await fetchExplorerPosts({ mine: true });
       const list = document.getElementById('creator-explorer-list');
       if (list) list.innerHTML = posts.length ? posts.map((post) => explorerCard(post, true)).join('') : '<div class="empty-state-card">No Explorer posts yet.</div>';
     } catch (error) { window.showToast?.(`Unable to load Explorer: ${error.message}`, 'red'); }
-    document.getElementById('explorer-post-form')?.addEventListener('submit', saveExplorerPost);
   };
 
   window.editExplorerPost = async (id) => {
@@ -137,16 +139,37 @@ export function installExplorer() {
   };
 
   async function saveExplorerPost(event) {
-    event.preventDefault();
+    event?.preventDefault?.();
+    const form = event?.currentTarget instanceof HTMLFormElement
+      ? event.currentTarget
+      : event?.target?.closest?.('form') || document.getElementById('explorer-post-form');
+    if (!(form instanceof HTMLFormElement)) {
+      const message = 'Explorer post form is unavailable. Please reopen Create Post and try again.';
+      console.error('[EXPLORER] Save aborted:', message, event);
+      window.showToast?.(message, 'red');
+      return;
+    }
     const { supabase, user } = await explorerClientAndUser();
     if (!supabase || !user) return window.showToast?.('Please sign in again to save a post.', 'red');
-    const values = Object.fromEntries(new FormData(event.currentTarget));
+    console.log('[EXPLORER] Creating FormData from form', { formId: form.id, editing: Boolean(form.elements.id?.value) });
+    const values = Object.fromEntries(new FormData(form));
     const row = { title: values.title.trim(), description: values.description.trim(), category: values.category, company_name: values.company_name.trim() || null, banner_url: values.banner_url.trim() || null, apply_url: values.apply_url.trim(), start_date: values.start_date || null, end_date: values.end_date || null, eligibility: values.eligibility.trim() || null, tags: values.tags.split(',').map((tag) => tag.trim()).filter(Boolean), updated_at: new Date().toISOString() };
-    const request = values.id ? supabase.from('explorer_posts').update(row).eq('id', values.id).eq('created_by', user.id) : supabase.from('explorer_posts').insert({ ...row, created_by: user.id, status: 'unpublished', is_published: false });
-    const { error } = await request;
-    if (error) return window.showToast?.(`Unable to save post: ${error.message}`, 'red');
-    window.renderCreatorExplorer();
-    if (document.getElementById('page-explorer')?.style.display !== 'none') window.renderStudentExplorer();
+    const isEditing = Boolean(values.id);
+    console.log(`[EXPLORER] Before Supabase ${isEditing ? 'update' : 'insert'}`, row);
+    const request = isEditing
+      ? supabase.from('explorer_posts').update(row).eq('id', values.id).eq('created_by', user.id).select().single()
+      : supabase.from('explorer_posts').insert({ ...row, created_by: user.id, created_at: new Date().toISOString(), status: 'published', is_published: true }).select().single();
+    const { data, error } = await request;
+    if (error) {
+      console.error('[EXPLORER] Supabase save failed:', error);
+      window.showToast?.(`Unable to save post: ${error.message}`, 'red');
+      return;
+    }
+    console.log('[EXPLORER] Post saved successfully:', data);
+    window.showToast?.(isEditing ? 'Explorer post updated successfully.' : 'Explorer post created successfully.', 'green');
+    // Re-rendering closes the inline form and fetches both views from Supabase.
+    await window.renderCreatorExplorer();
+    await window.renderStudentExplorer?.();
   }
 
   window.renderStudentExplorer = async function renderStudentExplorer() {

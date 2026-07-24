@@ -596,6 +596,18 @@ create table if not exists public.student_cgpa (
   calculated_at timestamptz not null default now()
 );
 
+-- One persistent calculator record per student semester. The payload stores
+-- the entered subject rows (name, credits, grade and subject identifiers).
+create table if not exists public.student_cgpa_results (
+  user_id uuid not null references auth.users(id) on delete cascade unique,
+  semester_key text,
+  calculator_data jsonb not null default '{"semesters": []}'::jsonb,
+  latest_sgpa numeric(4,2),
+  cgpa numeric(4,2) not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.student_learning_summaries (
   user_id uuid primary key references auth.users(id) on delete cascade,
   total_topics integer not null default 0,
@@ -728,6 +740,7 @@ grant execute on function public.get_live_workshop_participant_count() to anon, 
 
 alter table public.student_recent_subjects enable row level security;
 alter table public.student_cgpa enable row level security;
+alter table public.student_cgpa_results enable row level security;
 alter table public.student_learning_summaries enable row level security;
 alter table public.student_dashboard_progress enable row level security;
 alter table public.student_streaks enable row level security;
@@ -745,6 +758,10 @@ drop policy if exists "student cgpa own read" on public.student_cgpa;
 drop policy if exists "student cgpa own write" on public.student_cgpa;
 create policy "student cgpa own read" on public.student_cgpa for select to authenticated using (student_id = auth.uid());
 create policy "student cgpa own write" on public.student_cgpa for all to authenticated using (student_id = auth.uid()) with check (student_id = auth.uid());
+drop policy if exists "student cgpa results own read" on public.student_cgpa_results;
+drop policy if exists "student cgpa results own write" on public.student_cgpa_results;
+create policy "student cgpa results own read" on public.student_cgpa_results for select to authenticated using (user_id = auth.uid());
+create policy "student cgpa results own write" on public.student_cgpa_results for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 drop policy if exists "student summary own read" on public.student_learning_summaries;
 drop policy if exists "student summary own write" on public.student_learning_summaries;

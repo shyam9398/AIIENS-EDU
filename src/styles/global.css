@@ -2177,7 +2177,8 @@ body.intro-playing .screen:not(#screen-intro) {
 .calc-semester-remove { width:22px; height:22px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--text3); cursor:pointer; font-size:1.1rem; line-height:1; }
 .calc-semester-remove:hover { background:var(--red-light); color:var(--red); }
 .calc-empty-row td { padding:0 !important; }
-.calc-empty-state { min-height:230px; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:0.95rem; font-weight:600; text-align:center; }
+.calc-empty-state { min-height:230px; display:flex; flex-direction:column; gap:16px; align-items:center; justify-content:center; color:var(--text3); font-size:0.95rem; font-weight:600; text-align:center; }
+.calc-empty-state .btn { min-height:44px; padding:0.7rem 1.25rem; font-size:.9rem; }
 
 /* Student Explorer filters */
 .explorer-title { display:flex; align-items:center; gap:8px; font-size:1.3rem; margin-bottom:6px; }
